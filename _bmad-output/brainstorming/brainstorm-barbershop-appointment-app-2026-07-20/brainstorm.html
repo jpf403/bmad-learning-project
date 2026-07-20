@@ -1,0 +1,619 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Close Shave — Brainstorming the Barbershop Appointment App</title>
+<style>
+  /* ---------- tokens ---------- */
+  :root{
+    --bg: #f5efe0;
+    --bg-panel: #fffdf6;
+    --bg-panel-2: #efe4c6;
+    --text: #221c14;
+    --text-muted: #6d6250;
+    --border: #ddcda3;
+    --border-soft: #e9dfc2;
+    --crimson: #a4283a;
+    --crimson-ink: #7c1f2c;
+    --steel: #2e5b68;
+    --brass: #9c6c1c;
+    --shadow: rgba(40,28,12,0.14);
+    --terminal-bg: #14181d;
+    --terminal-text: #d6ecdd;
+    --terminal-dim: #7d8b83;
+    --terminal-border: #2a323a;
+    --focus: #1d6fae;
+
+    --font-display: "Rockwell", "Rockwell Nova", "Roboto Slab", Georgia, "Noto Serif", serif;
+    --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg: #14171d;
+      --bg-panel: #1b1f26;
+      --bg-panel-2: #20262f;
+      --text: #ece4d3;
+      --text-muted: #a49a86;
+      --border: #343d49;
+      --border-soft: #2a323c;
+      --crimson: #e06b78;
+      --crimson-ink: #f2a3ac;
+      --steel: #86c0cf;
+      --brass: #e2ac53;
+      --shadow: rgba(0,0,0,0.45);
+      --terminal-bg: #0e1216;
+      --terminal-border: #2a323a;
+      --focus: #6cb6f2;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg: #14171d; --bg-panel: #1b1f26; --bg-panel-2: #20262f;
+    --text: #ece4d3; --text-muted: #a49a86; --border: #343d49; --border-soft: #2a323c;
+    --crimson: #e06b78; --crimson-ink: #f2a3ac; --steel: #86c0cf; --brass: #e2ac53;
+    --shadow: rgba(0,0,0,0.45); --terminal-bg: #0e1216; --terminal-border: #2a323a; --focus: #6cb6f2;
+  }
+  :root[data-theme="light"]{
+    --bg: #f5efe0; --bg-panel: #fffdf6; --bg-panel-2: #efe4c6;
+    --text: #221c14; --text-muted: #6d6250; --border: #ddcda3; --border-soft: #e9dfc2;
+    --crimson: #a4283a; --crimson-ink: #7c1f2c; --steel: #2e5b68; --brass: #9c6c1c;
+    --shadow: rgba(40,28,12,0.14); --terminal-bg: #14181d; --terminal-border: #2a323a; --focus: #1d6fae;
+  }
+
+  *{ box-sizing: border-box; }
+  html{ scroll-behavior: smooth; }
+  body{
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 17px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  a{ color: var(--steel); }
+  a:focus-visible, button:focus-visible{ outline: 3px solid var(--focus); outline-offset: 3px; }
+  h1,h2,h3{ font-family: var(--font-display); text-wrap: balance; line-height: 1.15; margin: 0; }
+  .wrap{ max-width: 880px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---------- barber pole ribbons ---------- */
+  .ribbon{
+    height: 10px;
+    background: repeating-linear-gradient(45deg,
+      var(--crimson) 0 14px, var(--bg-panel) 14px 28px, var(--steel) 28px 42px, var(--bg-panel) 42px 56px);
+    background-size: 200% 100%;
+  }
+  @media (prefers-reduced-motion: no-preference){
+    .ribbon{ animation: slide 9s linear infinite; }
+  }
+  @keyframes slide{ from{ background-position: 0 0; } to{ background-position: -112px 0; } }
+
+  /* ---------- header ticket ---------- */
+  header.ticket{ padding: 46px 0 34px; }
+  .eyebrow{
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--crimson);
+    margin: 0 0 10px;
+  }
+  header.ticket h1{ font-size: clamp(2rem, 5vw, 2.9rem); letter-spacing: -0.01em; }
+  header.ticket .dek{
+    max-width: 62ch;
+    color: var(--text-muted);
+    font-size: 1.08rem;
+    margin: 14px 0 22px;
+  }
+  .chip-row{ display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+  .chip{
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    padding: 5px 11px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--bg-panel);
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+  .chip.status{ border-color: var(--steel); color: var(--steel); font-weight: 600; }
+  .chip.stack{ color: var(--text); }
+
+  /* ---------- overview board (chalkboard) ---------- */
+  .board{ padding: 30px 0 10px; }
+  .board-panel{
+    background: linear-gradient(180deg, var(--bg-panel-2), var(--bg-panel));
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px 30px;
+    box-shadow: 0 10px 26px -18px var(--shadow);
+  }
+  .board h2{ font-size: 1.5rem; }
+  .board-intro{ color: var(--text-muted); margin: 8px 0 20px; font-size: 0.98rem; max-width: 60ch; }
+  .board-list{ list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0; }
+  .board-list li{
+    display: flex; align-items: baseline; gap: 14px;
+    padding: 12px 0;
+    border-top: 1px dashed var(--border);
+    font-size: 1.02rem;
+  }
+  .board-list li:first-child{ border-top: none; }
+  .board-list .snip{ flex: none; opacity: 0.75; }
+  .board-list a{ color: var(--text); text-decoration: none; font-weight: 600; }
+  .board-list a:hover{ color: var(--crimson); text-decoration: underline; }
+  .board-list .order-note{
+    display: block; font-weight: 400; color: var(--text-muted); font-size: 0.86rem; margin-top: 2px;
+  }
+
+  /* scissors made of shapes, not path data */
+  .scissors{ display: inline-flex; width: 20px; height: 20px; position: relative; flex: none; }
+  .scissors i{
+    position: absolute; width: 11px; height: 11px; border: 2px solid var(--crimson);
+    border-radius: 50%; bottom: 0;
+  }
+  .scissors i.a{ left: 0; }
+  .scissors i.b{ right: 0; }
+  .scissors::before, .scissors::after{
+    content: ""; position: absolute; width: 15px; height: 2px; background: var(--crimson);
+    top: 3px; left: 3px; transform-origin: left center;
+  }
+  .scissors::before{ transform: rotate(28deg); }
+  .scissors::after{ transform: rotate(-28deg); }
+
+  /* ---------- HMW sections ---------- */
+  main.deepdive{ padding: 26px 0 6px; display: flex; flex-direction: column; gap: 30px; }
+  .hmw{
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 30px 32px 32px;
+    box-shadow: 0 14px 30px -22px var(--shadow);
+    position: relative;
+    overflow: hidden;
+  }
+  .hmw::before{
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 6px;
+    background: linear-gradient(180deg, var(--crimson), var(--steel));
+  }
+  .hmw-head{ display:flex; align-items:baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+  .hmw-tag{
+    font-family: var(--font-mono); font-size: 0.76rem; letter-spacing: 0.08em;
+    color: var(--brass); border: 1px solid var(--border); padding: 3px 9px; border-radius: 999px;
+    text-transform: uppercase; white-space: nowrap;
+  }
+  .hmw h3{ font-size: 1.42rem; }
+  .hmw .lede{ color: var(--text-muted); margin: 10px 0 22px; max-width: 66ch; font-size: 0.98rem; }
+  .idea-list{ list-style: none; margin: 0 0 18px; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  .idea-list li{
+    padding: 12px 14px; background: var(--bg-panel-2); border: 1px solid var(--border-soft);
+    border-radius: 10px; font-size: 0.97rem;
+  }
+  .idea-list li b{ font-weight: 700; }
+  .insight{
+    margin-top: 16px; padding: 14px 16px; border-left: 3px solid var(--steel);
+    background: color-mix(in srgb, var(--steel) 10%, transparent);
+    border-radius: 0 10px 10px 0; font-size: 0.95rem;
+  }
+  .insight .k{ font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--steel); display:block; margin-bottom: 4px; }
+  .coach-note{
+    margin-top: 14px; padding: 12px 16px; border: 1px dashed var(--brass);
+    border-radius: 10px; font-size: 0.93rem; background: color-mix(in srgb, var(--brass) 8%, transparent);
+  }
+  .coach-note .k{ font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--brass); display:block; margin-bottom: 4px; }
+  .direction-note{ margin-top: 16px; font-size: 0.85rem; color: var(--text-muted); font-style: italic; }
+
+  /* CI/CD terminal mock */
+  .actions-mock{
+    margin: 18px 0 6px; border-radius: 12px; overflow: hidden; border: 1px solid var(--terminal-border);
+  }
+  .actions-chrome{
+    background: #232830; padding: 8px 12px; display:flex; align-items:center; gap: 8px;
+  }
+  .actions-chrome .dot{ width:9px; height:9px; border-radius:50%; background:#565f6b; }
+  .actions-chrome .tab{
+    margin-left: 8px; font-family: var(--font-mono); font-size: 0.76rem; color: #cfd6dc;
+    background: #14181d; padding: 3px 10px; border-radius: 6px 6px 0 0;
+  }
+  .actions-body{ background: var(--terminal-bg); color: var(--terminal-text); padding: 14px 16px 16px; font-family: var(--font-mono); font-size: 0.86rem; }
+  .actions-caption{ color: var(--terminal-dim); font-size: 0.74rem; margin-bottom: 10px; }
+  .run{ display:flex; align-items:center; gap:10px; padding:7px 0; border-top: 1px solid var(--terminal-border); }
+  .run:first-of-type{ border-top: none; }
+  .run .status{
+    flex:none; width:16px; height:16px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    background:#173625; color:#54d182; font-size:11px; font-weight:700;
+  }
+  @media (prefers-reduced-motion: no-preference){
+    .run.live .status{ animation: pop 1.8s ease-in-out 1; animation-fill-mode: both; }
+  }
+  .run.live .status{ animation-delay: 1.1s; }
+  @keyframes pop{ 0%{ transform: scale(0.4); opacity: 0.2; } 60%{ transform: scale(1.15); } 100%{ transform: scale(1); opacity:1; } }
+  .run .msg{ color: #e7ecef; }
+  .run .meta{ margin-left:auto; color: var(--terminal-dim); font-size: 0.76rem; }
+
+  /* Testing spec card */
+  .test-targets{ display:flex; flex-wrap:wrap; gap: 10px; margin: 4px 0 18px; }
+  .target-chip{
+    font-family: var(--font-mono); font-size: 0.82rem; padding: 6px 12px; border-radius: 8px;
+    background: var(--bg-panel-2); border: 1px solid var(--border-soft);
+  }
+  .spec-card{
+    border: 1px solid var(--border-soft); border-radius: 12px; overflow:hidden; margin-top: 4px;
+  }
+  .spec-row{
+    display:flex; align-items:center; gap: 12px; padding: 12px 16px; font-size: 0.92rem;
+    background: var(--bg-panel-2);
+  }
+  .spec-row + .spec-row{ border-top: 1px solid var(--border-soft); }
+  .badge{ flex:none; font-family: var(--font-mono); font-size: 0.72rem; padding: 3px 8px; border-radius: 6px; font-weight:700; }
+  .badge.fail{ background: color-mix(in srgb, var(--crimson) 22%, transparent); color: var(--crimson-ink); }
+  .badge.pass{ background: color-mix(in srgb, #2f8f57 24%, transparent); color: #2f8f57; }
+  .thread{
+    margin-top: 16px; display:flex; align-items:center; gap: 8px; font-size: 0.86rem; color: var(--text-muted);
+  }
+  .thread .line{ flex:none; width: 34px; height: 1px; background: repeating-linear-gradient(90deg, var(--brass) 0 5px, transparent 5px 9px); }
+
+  /* Dates ledger */
+  .ledger{ display:grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 4px 0 20px; }
+  @media (max-width: 720px){ .ledger{ grid-template-columns: 1fr; } }
+  .opt-card{ border: 1px solid var(--border-soft); border-radius: 12px; padding: 16px; background: var(--bg-panel-2); display:flex; flex-direction:column; gap:8px; }
+  .opt-card.favored{ border-color: var(--steel); box-shadow: 0 0 0 1px var(--steel) inset; }
+  .opt-card h4{ font-family: var(--font-display); font-size: 1.05rem; margin:0; }
+  .opt-card p{ margin: 0; font-size: 0.88rem; color: var(--text-muted); }
+  .meter-row{ font-size: 0.76rem; font-family: var(--font-mono); color: var(--text-muted); display:flex; flex-direction:column; gap:4px; margin-top:4px; }
+  .meter{ display:flex; gap: 4px; }
+  .meter span{ width: 16px; height: 6px; border-radius: 3px; background: var(--border-soft); }
+  .meter span.on{ background: var(--crimson); }
+  .favored-tag{ font-family: var(--font-mono); font-size: 0.7rem; letter-spacing:0.06em; text-transform:uppercase; color: var(--steel); }
+
+  .merge{ display:flex; align-items:center; justify-content:center; gap: 10px; margin: 6px 0 18px; flex-wrap: wrap; }
+  .merge .box{ font-size: 0.86rem; padding: 9px 13px; border-radius: 9px; background: var(--bg-panel-2); border: 1px solid var(--border-soft); }
+  .merge .arrow{ color: var(--text-muted); font-size: 1.1rem; }
+
+  .flow-step{ padding: 12px 14px; border-radius: 10px; background: var(--bg-panel-2); border: 1px solid var(--border-soft); font-size: 0.93rem; margin-bottom: 10px; }
+  .flow-step .k{ font-family: var(--font-mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing:0.08em; color: var(--brass); display:block; margin-bottom: 3px;}
+  .q-card{
+    border: 1px dashed var(--steel); border-radius: 10px; padding: 12px 14px; font-size: 0.93rem;
+    background: color-mix(in srgb, var(--steel) 8%, transparent); margin-bottom: 10px;
+  }
+  .q-card .k{ font-family: var(--font-mono); font-size:0.7rem; text-transform:uppercase; letter-spacing:0.08em; color: var(--steel); display:block; margin-bottom:3px; }
+  .stamp{
+    display:inline-flex; align-items:center; gap:8px; font-family: var(--font-display); font-weight: 700;
+    color: var(--crimson); border: 2px solid var(--crimson); border-radius: 8px; padding: 8px 14px;
+    transform: rotate(-2deg); font-size: 0.95rem; letter-spacing: 0.03em;
+  }
+  .stamp-wrap{ margin-top: 6px; }
+  .stamp-detail{ display:block; font-family: var(--font-body); font-weight: 400; color: var(--text); font-size: 0.86rem; margin-top: 4px; }
+
+  /* Homepage: intentionally small */
+  .hmw-homepage{ padding-bottom: 26px; }
+  .mini-hero{
+    max-width: 380px; border: 1px solid var(--border-soft); border-radius: 12px; padding: 20px;
+    background: linear-gradient(160deg, var(--bg-panel-2), var(--bg-panel));
+    display:flex; flex-direction:column; align-items:flex-start; gap: 10px; margin: 4px 0 14px;
+  }
+  .mini-hero .tag{ font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-muted); }
+  .mini-hero h4{ font-family: var(--font-display); font-size: 1.2rem; margin: 0; }
+  .cta{
+    position: relative; font-family: var(--font-body); font-weight: 700; font-size: 0.86rem;
+    color: #fff; background: var(--crimson); border: none; padding: 9px 16px; border-radius: 8px; cursor: pointer;
+  }
+  .cta-wrap{ position: relative; display:inline-block; }
+  .cta-wrap .pop-scissors{
+    position: absolute; right: -10px; top: -14px; opacity: 0; transform: scale(0.6) rotate(-30deg);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+  }
+  .cta-wrap:hover .pop-scissors{ opacity: 1; transform: scale(1) rotate(8deg); }
+  .homepage-note{ font-size: 0.86rem; color: var(--text-muted); }
+
+  /* Roles */
+  .role-row{ display:grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 4px 0 18px; align-items: stretch; }
+  @media (max-width: 720px){ .role-row{ grid-template-columns: 1fr; } }
+  .role-card{ border: 1px solid var(--border-soft); border-radius: 12px; padding: 16px; background: var(--bg-panel-2); display:flex; flex-direction:column; gap:8px; }
+  .role-card.admin{ border-color: var(--brass); box-shadow: 0 0 0 1px var(--brass) inset; }
+  .role-card h4{ font-family: var(--font-display); font-size: 1.05rem; margin:0; }
+  .role-card ul{ margin:0; padding-left: 18px; font-size: 0.88rem; color: var(--text-muted); }
+  .role-card .plus{ font-family: var(--font-mono); font-size: 0.76rem; color: var(--brass); }
+  .decision-strike{ font-size: 0.86rem; color: var(--text-muted); margin-top: 4px; }
+  .decision-strike s{ opacity: 0.6; }
+
+  /* Climax */
+  section.climax{
+    margin: 44px 0 20px; padding: 44px 34px 40px; border-radius: 20px; position: relative; overflow: hidden;
+    background: radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--crimson) 16%, var(--bg-panel)), var(--bg-panel) 62%);
+    border: 1px solid var(--border);
+    box-shadow: 0 24px 60px -30px var(--shadow);
+  }
+  section.climax::before{
+    content:""; position:absolute; inset: 0 0 auto 0; height: 8px;
+    background: repeating-linear-gradient(45deg, var(--crimson) 0 12px, var(--bg-panel) 12px 24px, var(--steel) 24px 36px, var(--bg-panel) 36px 48px);
+  }
+  .climax-eyebrow{ text-align:center; font-family: var(--font-mono); font-size: 0.8rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--brass); margin: 10px 0 4px; }
+  .climax h2{ text-align:center; font-size: clamp(1.7rem, 4vw, 2.3rem); margin-bottom: 26px; }
+
+  .converge{ display:flex; justify-content:center; align-items:flex-end; gap: 18px; flex-wrap: wrap; margin-bottom: 26px; }
+  .thread-card{
+    width: 190px; padding: 14px 14px 16px; border-radius: 12px; text-align:center;
+    background: var(--bg-panel); border: 1px solid var(--border); font-size: 0.86rem;
+  }
+  .thread-card .n{ font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-muted); display:block; margin-bottom:6px; }
+  .converge-center{
+    width: 210px; padding: 20px 16px; border-radius: 14px; text-align:center; font-family: var(--font-display);
+    font-size: 1.1rem; color: #fff; background: linear-gradient(160deg, var(--crimson), var(--crimson-ink));
+    box-shadow: 0 14px 30px -14px var(--shadow); align-self:center;
+  }
+  .converge-arrow{ font-size: 1.4rem; color: var(--text-muted); align-self:center; }
+
+  .side-note{
+    max-width: 460px; margin: 0 auto 28px; text-align:center; font-size: 0.86rem; color: var(--text-muted);
+    border-top: 1px dashed var(--border); padding-top: 14px;
+  }
+  .side-note b{ color: var(--text); }
+
+  .pull-quote{
+    max-width: 66ch; margin: 0 auto 24px; font-family: var(--font-display); font-size: 1.14rem;
+    line-height: 1.5; text-align: center; color: var(--text);
+  }
+  .medallion{
+    display:flex; gap: 12px; align-items:center; justify-content:center; margin: 0 auto; max-width: 560px;
+    padding: 14px 20px; border-radius: 999px; border: 1px solid var(--brass);
+    background: color-mix(in srgb, var(--brass) 12%, transparent); font-size: 0.92rem;
+  }
+  .medallion .medal-icon{ flex:none; width: 26px; height:26px; border-radius:50%; border:2px solid var(--brass); display:flex; align-items:center; justify-content:center; font-size: 13px; color: var(--brass); font-weight:700; }
+
+  footer{ text-align:center; padding: 30px 0 50px; color: var(--text-muted); font-size: 0.84rem; }
+  footer .ribbon{ margin-bottom: 24px; }
+</style>
+</head>
+<body>
+
+<div class="ribbon" aria-hidden="true"></div>
+
+<div class="wrap">
+
+  <header class="ticket">
+    <p class="eyebrow">BMad Method · Facilitator-Mode Brainstorm</p>
+    <h1>Close Shave: Brainstorming the Barbershop Appointment App</h1>
+    <p class="dek">
+      A portfolio piece built to look like a real business, run to demonstrate DORA principles:
+      a barbershop scheduling app on .NET, React and SQLite &mdash; the goal is to impress reviewers
+      without spending weeks building it.
+    </p>
+    <div class="chip-row">
+      <span class="chip status">Status: Complete</span>
+      <span class="chip">Mode: Facilitator (How Might We)</span>
+      <span class="chip">Session date: 2026&#8209;07&#8209;20</span>
+    </div>
+    <div class="chip-row">
+      <span class="chip stack">.NET backend</span>
+      <span class="chip stack">React frontend</span>
+      <span class="chip stack">SQLite</span>
+      <span class="chip stack">Hashed password auth</span>
+      <span class="chip stack">3 roles: customer / barber / admin</span>
+      <span class="chip stack">Pages: home / about / scheduling</span>
+    </div>
+  </header>
+
+  <section class="board" id="overview">
+    <div class="board-panel">
+      <h2>Five Questions Hit the Table</h2>
+      <p class="board-intro">
+        Facilitator mode means the coach only asked questions &mdash; every idea below came from the human.
+        These five &ldquo;how might we&rdquo; prompts were raised in this order before ideation began in earnest.
+      </p>
+      <ol class="board-list">
+        <li><span class="scissors" aria-hidden="true"><i class="a"></i><i class="b"></i></span>
+          <a href="#hmw-testing">How might we implement autotesting into the app?</a></li>
+        <li><span class="scissors" aria-hidden="true"><i class="a"></i><i class="b"></i></span>
+          <a href="#hmw-dates">How might we have users select dates for an appointment?</a></li>
+        <li><span class="scissors" aria-hidden="true"><i class="a"></i><i class="b"></i></span>
+          <a href="#hmw-homepage">How might we make the homepage interactive and impressive?</a></li>
+        <li><span class="scissors" aria-hidden="true"><i class="a"></i><i class="b"></i></span>
+          <a href="#hmw-roles">How might we make the three permission levels feel different to a reviewer, not just gated pages?</a></li>
+        <li><span class="scissors" aria-hidden="true"><i class="a"></i><i class="b"></i></span>
+          <a href="#hmw-cicd">How might we make the CI/CD pipeline part of the demo?</a>
+          <span class="order-note">Raised last, but chosen as the first one to actually dig into.</span></li>
+      </ol>
+    </div>
+  </section>
+
+  <main class="deepdive">
+
+    <!-- HMW: CI/CD -->
+    <section class="hmw hmw-cicd" id="hmw-cicd" aria-labelledby="h-cicd">
+      <div class="hmw-head">
+        <span class="hmw-tag">First explored</span>
+      </div>
+      <h3 id="h-cicd">How might we make the CI/CD pipeline part of the demo?</h3>
+      <p class="lede">Of the five, this is the one that got dug into first &mdash; the session picked it deliberately over the other four.</p>
+
+      <ul class="idea-list">
+        <li>Show the GitHub repo with frequent, small pushes as visible evidence of deployment frequency.</li>
+        <li>Push a live update mid-presentation and let the automated tests run in front of the reviewer.</li>
+        <li>Keep the pushed change deliberately simple &mdash; e.g. a text update &mdash; so the demo ends cleanly on all-green checkmarks, not a risky live change.</li>
+      </ul>
+
+      <div class="coach-note">
+        <span class="k">Spark from the facilitator</span>
+        Leave the GitHub Actions tab open during the walkthrough, so green checkmarks light up live on a push.
+      </div>
+
+      <div class="actions-mock" aria-hidden="true">
+        <div class="actions-chrome"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="tab">Actions</span></div>
+        <div class="actions-body">
+          <p class="actions-caption">// illustrative mock of the demo moment described above</p>
+          <div class="run"><span class="status">&#10003;</span><span class="msg">fix: seed default barber hours</span><span class="meta">3m ago</span></div>
+          <div class="run"><span class="status">&#10003;</span><span class="msg">chore: tidy scheduling API response</span><span class="meta">42m ago</span></div>
+          <div class="run live"><span class="status">&#10003;</span><span class="msg">docs: tweak hero tagline</span><span class="meta">running now</span></div>
+        </div>
+      </div>
+
+      <div class="insight">
+        <span class="k">Insight</span>
+        The autotesting question and the CI/CD-visibility question are converging: automated tests running in the pipeline is itself part of &ldquo;showing DORA in action.&rdquo;
+      </div>
+      <p class="direction-note">Direction: moving on from CI/CD visibility to the next question in the batch.</p>
+    </section>
+
+    <!-- HMW #2: Autotesting -->
+    <section class="hmw hmw-testing" id="hmw-testing" aria-labelledby="h-testing">
+      <div class="hmw-head"><span class="hmw-tag">HMW #2</span></div>
+      <h3 id="h-testing">How might we implement autotesting into the app?</h3>
+      <p class="lede">Reframed away from the demo-visibility angle (already covered above) and onto the substance and strategy of what actually gets tested.</p>
+
+      <p style="font-size:0.86rem;color:var(--text-muted);margin:0 0 8px;">Highest-value test targets:</p>
+      <div class="test-targets">
+        <span class="target-chip">Database CRUD</span>
+        <span class="target-chip">Login / auth</span>
+        <span class="target-chip">Role-based permissions</span>
+      </div>
+
+      <div class="spec-card">
+        <div class="spec-row">
+          <span class="badge fail">FAILS</span>
+          Booking a barber&rsquo;s already-taken time slot fails with a clear error message &mdash; double-booking prevention.
+        </div>
+        <div class="spec-row">
+          <span class="badge pass">FILTERED</span>
+          Already-booked time slots are filtered out of the available options shown to users during booking.
+        </div>
+      </div>
+
+      <div class="insight">
+        <span class="k">Insight</span>
+        The double-booking test case links this question directly to date/time selection &mdash; booking-conflict logic is a shared core feature.
+      </div>
+      <div class="thread"><span class="line"></span> feeds into the date-selection question below</div>
+    </section>
+
+    <!-- HMW #3: Dates -->
+    <section class="hmw hmw-dates" id="hmw-dates" aria-labelledby="h-dates">
+      <div class="hmw-head"><span class="hmw-tag">HMW #3</span></div>
+      <h3 id="h-dates">How might we have users select dates for an appointment?</h3>
+      <p class="lede">The most thoroughly explored question of the five &mdash; three options weighed, merged into a hybrid, then refined by a decision.</p>
+
+      <div class="ledger">
+        <div class="opt-card">
+          <h4>Option A &mdash; Free text</h4>
+          <p>User types a date/time and gambles on availability. Easiest to build; ugly and impractical.</p>
+          <div class="meter-row">Effort <div class="meter"><span class="on"></span><span></span><span></span></div></div>
+          <div class="meter-row">Finish <div class="meter"><span class="on"></span><span></span><span></span></div></div>
+        </div>
+        <div class="opt-card favored">
+          <span class="favored-tag">Favored middle ground</span>
+          <h4>Option B &mdash; Day dropdown</h4>
+          <p>Day-of-week dropdown auto-resolves to a date (capped ~1 week out), feeding a dropdown of only-available times. No guessing.</p>
+          <div class="meter-row">Effort <div class="meter"><span class="on"></span><span class="on"></span><span></span></div></div>
+          <div class="meter-row">Finish <div class="meter"><span class="on"></span><span class="on"></span><span></span></div></div>
+        </div>
+        <div class="opt-card">
+          <h4>Option C &mdash; Calendar widget</h4>
+          <p>Full interactive calendar for date selection. Best-looking, most polished; needs a calendar library and more build effort.</p>
+          <div class="meter-row">Effort <div class="meter"><span class="on"></span><span class="on"></span><span class="on"></span></div></div>
+          <div class="meter-row">Finish <div class="meter"><span class="on"></span><span class="on"></span><span class="on"></span></div></div>
+        </div>
+      </div>
+
+      <div class="merge">
+        <span class="box">Option B</span><span class="arrow">+</span><span class="box">Option C</span><span class="arrow">&rarr;</span>
+        <span class="box" style="border-color:var(--steel);">Hybrid: calendar restricted to a 7-day window, paired with a dropdown of only-available times for the selected day</span>
+      </div>
+
+      <div class="flow-step">
+        <span class="k">Refinement</span>
+        The calendar disables/darkens past dates rather than restricting the window itself; per-day availability stays in the time dropdown, not shown on the calendar.
+      </div>
+
+      <div class="q-card">
+        <span class="k">Open question</span>
+        Is the 7-day booking window a real business rule for the barbershop, or just an arbitrary simplification worth dropping?
+      </div>
+
+      <div class="stamp-wrap">
+        <span class="stamp">&#9986; Decided</span>
+        <span class="stamp-detail">Drop the 7-day window restriction. The calendar allows any future date; past dates are simply disabled/darkened.</span>
+      </div>
+    </section>
+
+    <!-- HMW #4: Homepage (intentionally thin) -->
+    <section class="hmw hmw-homepage thin" id="hmw-homepage" aria-labelledby="h-homepage">
+      <div class="hmw-head"><span class="hmw-tag">HMW #4</span></div>
+      <h3 id="h-homepage">How might we make the homepage interactive and impressive?</h3>
+      <p class="lede">The lightest of the five questions &mdash; three quick ideas, not pushed much further.</p>
+
+      <div class="mini-hero">
+        <span class="tag">hero section</span>
+        <h4>Stylized scissors graphic + shop tagline</h4>
+        <div class="cta-wrap">
+          <button class="cta" type="button">Schedule an Appointment</button>
+          <span class="pop-scissors scissors" aria-hidden="true"><i class="a"></i><i class="b"></i></span>
+        </div>
+      </div>
+      <p class="homepage-note">Hover the button above &mdash; hovering the CTA was proposed to trigger a scissors graphic animating in behind it. A few other hoverable elements were suggested to add interactivity across the page.</p>
+    </section>
+
+    <!-- HMW #5: Roles -->
+    <section class="hmw hmw-roles" id="hmw-roles" aria-labelledby="h-roles">
+      <div class="hmw-head"><span class="hmw-tag">HMW #5</span></div>
+      <h3 id="h-roles">How might we make the three permission levels feel different to a reviewer, not just gated pages?</h3>
+      <p class="lede">Resolved around a separate staff dashboard with expanding scope by role.</p>
+
+      <div class="role-row">
+        <div class="role-card">
+          <h4>Customer</h4>
+          <ul><li>Books appointments</li><li>Standard site pages only</li></ul>
+        </div>
+        <div class="role-card">
+          <h4>Barber</h4>
+          <ul><li>Separate staff dashboard</li><li>Sees their own scheduled appointments</li></ul>
+        </div>
+        <div class="role-card admin">
+          <h4>Admin</h4>
+          <ul><li>Same staff dashboard</li><li>Sees all appointments across all barbers</li></ul>
+          <span class="plus">+ Manage Accounts: promote a customer to barber, or create new barber accounts directly</span>
+        </div>
+      </div>
+
+      <p class="decision-strike"><s>Extra badge or label marking each role</s> &mdash; decided the separate staff dashboard is sufficient on its own to signal role distinction.</p>
+    </section>
+
+  </main>
+
+  <section class="climax" id="synthesis" aria-labelledby="h-synthesis">
+    <p class="climax-eyebrow">Final Synthesis</p>
+    <h2 id="h-synthesis">One System, Not Three Features</h2>
+
+    <div class="converge">
+      <div class="thread-card"><span class="n">from HMW #2 / #3</span>Booking-conflict validation logic</div>
+      <span class="converge-arrow">&rarr;</span>
+      <div class="thread-card"><span class="n">from HMW #5</span>Role structure: dashboards + admin account management</div>
+      <span class="converge-arrow">&rarr;</span>
+      <div class="converge-center">One System</div>
+      <span class="converge-arrow">&larr;</span>
+      <div class="thread-card"><span class="n">from HMW #1</span>DORA / CI-CD visibility</div>
+    </div>
+
+    <p class="pull-quote">
+      &ldquo;Booking-conflict validation is shared core logic underlying the scheduling UI, both staff dashboards,
+      and the test suite &mdash; one system, not three separate features.&rdquo;
+    </p>
+
+    <div class="side-note">
+      Homepage polish (HMW #4) remains <b>secondary</b> &mdash; it was the thinnest thread and stays that way in priority.
+    </div>
+
+    <div class="medallion">
+      <span class="medal-icon">&#9733;</span>
+      <span>The live push + automated tests + green checkmarks moment demonstrates DORA and autotesting simultaneously &mdash; the strongest single demo moment in the project.</span>
+    </div>
+  </section>
+
+</div>
+
+<div class="ribbon" aria-hidden="true"></div>
+<footer>
+  <div class="wrap">Session status: Complete &middot; Logged 2026-07-20 &middot; Facilitator-mode &ldquo;How Might We&rdquo; brainstorm</div>
+</footer>
+
+</body>
+</html>

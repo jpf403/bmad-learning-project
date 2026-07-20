@@ -1,0 +1,6 @@
+# BMad personal/local-only files — machine-specific, not shared team config
+# (_bmad/custom/*.user.toml is already covered by _bmad/custom/.gitignore)
+_bmad/config.user.toml
+
+# Claude Code personal/local-only settings
+.claude/settings.local.json
