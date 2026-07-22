@@ -63,7 +63,7 @@ Success does not require the app to look polished, scale, or support anything be
 - Email/SMS reminders or notifications of any kind
 - Password reset flow
 - Multi-location support
-- Mobile responsiveness
+- Mobile responsiveness — **superseded during PRD (2026-07-22):** reversed after further discovery; the PRD now requires responsive layout across mobile and desktop. See `prds/prd-bmad-learning-project-2026-07-21/prd.md` FR22/NFR3, which is current source of truth on this point. Left as originally written here for historical record.
 - An actual deploy target or public hosting — the app runs locally only. "Continuous delivery" here means the pipeline keeps the codebase always deployable, not that it is deployed anywhere.
 
 ## Who This Serves

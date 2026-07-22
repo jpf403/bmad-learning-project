@@ -15,7 +15,8 @@ Detail carried over from the brainstorming phase and this brief's conversation t
 
 ### Options Considered — Booking Window Cap
 
-- Considered capping bookable dates to a 7-day window, paired with the calendar UI. Dropped as an arbitrary simplification with no real business justification. Final decision: calendar allows any future date; only past dates are disabled/darkened.
+- Considered capping bookable dates to a 7-day window, paired with the calendar UI. Dropped as an arbitrary simplification with no real business justification. Final decision (at brief stage): calendar allows any future date; only past dates are disabled/darkened.
+- **Superseded during PRD (2026-07-21/22):** revisited after PRD review found that an unbounded forward window, combined with no shop-closed-day model, let customers book real slots on days the shop can't honor. The PRD now caps forward booking to 30 days (~1 month) — see `prds/prd-bmad-learning-project-2026-07-21/prd.md` FR7. Unlike the 7-day option rejected above, this cap is grounded in that concrete risk rather than being an arbitrary simplification. The PRD is the current source of truth on this point; this brief is left as-is for historical record.
 
 ### Options Considered — Date/Time Selection UI
 
