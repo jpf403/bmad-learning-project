@@ -1,0 +1,221 @@
+<!--
+Illustrates:
+  DESIGN.md: Colors, Typography, Shapes, Components (button-primary, nav-bar, Home hero)
+  EXPERIENCE.md: Information Architecture (Home row), Nav bar signed-out state,
+                 Component Patterns row "Home hero", Key Flow 1 step 1 (Jack signed-out, browsing Home)
+-->
+<style>
+  :root{
+    --primary:#0E7C9B;
+    --primary-fg:#FFFFFF;
+    --primary-hover:#0B5F79;
+    --destructive:#C93A3A;
+    --destructive-fg:#FFFFFF;
+    --destructive-hover:#A83030;
+    --background:#FFFFFF;
+    --neutral:#EFF6F8;
+    --border:#D3E4E9;
+    --text:#17242A;
+    --text-muted:#5B7480;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:'Manrope', sans-serif;
+    color:var(--text);
+    background:var(--background);
+    width:1280px;
+  }
+  .frame-label{
+    font-family:'Manrope', sans-serif;
+    font-size:12px;
+    font-weight:500;
+    color:#9AA7AC;
+    background:#F4F4F4;
+    padding:6px 32px;
+    border-bottom:1px solid #E2E2E2;
+  }
+
+  /* ---- Nav bar ({components.nav-bar}) ---- */
+  .nav-bar{
+    height:64px;
+    background:var(--background);
+    border-bottom:1px solid var(--border);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:0 32px;
+  }
+  .nav-left{display:flex;align-items:center;gap:40px;}
+  .logo{
+    font-size:20px;
+    font-weight:700;
+    color:var(--text);
+    letter-spacing:-0.01em;
+  }
+  .nav-links{display:flex;align-items:center;gap:32px;}
+  .nav-link{
+    font-size:14px;
+    font-weight:600;
+    line-height:1.4;
+    color:var(--text-muted);
+    text-decoration:none;
+    padding-bottom:4px;
+  }
+  .nav-link.active{
+    color:var(--primary);
+    border-bottom:2px solid var(--primary);
+  }
+  .nav-right{display:flex;align-items:center;gap:12px;}
+  .btn{
+    font-family:'Manrope', sans-serif;
+    font-size:14px;
+    font-weight:600;
+    line-height:1.4;
+    border-radius:0;
+    padding:12px 24px;
+    border:none;
+    cursor:pointer;
+  }
+  .btn-primary{
+    background:var(--primary);
+    color:var(--primary-fg);
+  }
+  .btn-secondary{
+    background:var(--background);
+    color:var(--primary);
+    border:1px solid var(--border);
+  }
+
+  /* ---- Home hero ---- */
+  .hero{
+    position:relative;
+    height:640px;
+    overflow:hidden;
+    background:var(--background);
+  }
+  .hero-blue{
+    position:absolute;
+    top:0;
+    right:0;
+    width:62%;
+    height:100%;
+    background:var(--primary);
+    clip-path:polygon(28% 0, 100% 0, 100% 100%, 4% 100%);
+  }
+  .hero-white-content{
+    position:relative;
+    z-index:2;
+    max-width:460px;
+    padding:120px 0 0 32px;
+  }
+  .hero-headline{
+    font-size:40px;
+    font-weight:700;
+    line-height:1.15;
+    letter-spacing:-0.01em;
+    margin:0 0 20px 0;
+    color:var(--text);
+  }
+  .hero-sub{
+    font-size:16px;
+    font-weight:400;
+    line-height:1.5;
+    color:var(--text-muted);
+    margin:0 0 32px 0;
+  }
+  .hero-graphic{
+    position:absolute;
+    right:170px;
+    top:50%;
+    transform:translateY(-50%);
+    z-index:2;
+  }
+
+  /* ---- Footer ({components.footer}) ---- */
+  .footer{
+    background:var(--neutral);
+    border-top:1px solid var(--border);
+    padding:24px 32px;
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    font-size:14px;
+    line-height:1.5;
+    color:var(--text-muted);
+  }
+  .footer-wordmark{
+    font-size:14px;
+    font-weight:700;
+    color:var(--text);
+    margin:0 0 4px 0;
+  }
+  .footer-copyright{
+    margin:0;
+  }
+</style>
+
+<div class="frame-label">key-home.html — Home page, signed-out state (desktop, 1280px reference viewport)</div>
+
+<!-- Nav bar: signed-out. Schedule Appointment link hidden signed-out (EXPERIENCE.md IA table);
+     My Schedule / Admin Panel hidden (role-gated, no role while signed out). -->
+<div class="nav-bar">
+  <div class="nav-left">
+    <span class="logo">Fake Barbershop</span>
+    <div class="nav-links">
+      <a href="#" class="nav-link active">Home</a>
+      <a href="#" class="nav-link">About</a>
+    </div>
+  </div>
+  <div class="nav-right">
+    <button class="btn btn-secondary">Sign In</button>
+    <button class="btn btn-primary">Register</button>
+  </div>
+</div>
+
+<!-- Hero: curved/angled diagonal split, white half left / {colors.primary} half right,
+     scissor+comb crossed like an X on the blue half (DESIGN.md "Home hero"). -->
+<div class="hero">
+  <div class="hero-blue"></div>
+  <div class="hero-white-content">
+    <h1 class="hero-headline">Book your cut.<br>Leave certain it's booked.</h1>
+    <p class="hero-sub">Pick a barber, a time, and go — a confirmed appointment in under a minute.</p>
+    <button class="btn btn-primary">Schedule Appointment</button>
+  </div>
+  <div class="hero-graphic">
+    <svg width="260" height="260" viewBox="0 0 260 260" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- Comb: straight bar with teeth, rotated to cross the scissors like an X -->
+      <g transform="rotate(45 130 130)">
+        <rect x="60" y="122" width="140" height="16" fill="#FFFFFF"/>
+        <rect x="66" y="138" width="6" height="26" fill="#FFFFFF"/>
+        <rect x="82" y="138" width="6" height="26" fill="#FFFFFF"/>
+        <rect x="98" y="138" width="6" height="26" fill="#FFFFFF"/>
+        <rect x="114" y="138" width="6" height="26" fill="#FFFFFF"/>
+        <rect x="130" y="138" width="6" height="26" fill="#FFFFFF"/>
+        <rect x="146" y="138" width="6" height="26" fill="#FFFFFF"/>
+        <rect x="162" y="138" width="6" height="26" fill="#FFFFFF"/>
+        <rect x="178" y="138" width="6" height="26" fill="#FFFFFF"/>
+      </g>
+      <!-- Scissors: two blade/handle assemblies crossed with the comb -->
+      <g transform="rotate(-45 130 130)">
+        <line x1="130" y1="130" x2="70" y2="40" stroke="#FFFFFF" stroke-width="8" stroke-linecap="square"/>
+        <line x1="130" y1="130" x2="190" y2="40" stroke="#FFFFFF" stroke-width="8" stroke-linecap="square"/>
+        <circle cx="70" cy="40" r="14" fill="none" stroke="#FFFFFF" stroke-width="8"/>
+        <circle cx="190" cy="40" r="14" fill="none" stroke="#FFFFFF" stroke-width="8"/>
+        <line x1="130" y1="130" x2="70" y2="220" stroke="#FFFFFF" stroke-width="8" stroke-linecap="square"/>
+        <line x1="130" y1="130" x2="190" y2="220" stroke="#FFFFFF" stroke-width="8" stroke-linecap="square"/>
+        <circle cx="130" cy="130" r="7" fill="#FFFFFF"/>
+      </g>
+    </svg>
+  </div>
+</div>
+
+<!-- Footer: present on every page, static regardless of role/auth state (EXPERIENCE.md IA note). -->
+<div class="footer">
+  <div>
+    <p class="footer-wordmark">Fake Barbershop</p>
+    <p>123 Maple Street, Springfield · (555) 019-2837</p>
+    <p>Mon–Fri, 9:00 AM – 4:30 PM</p>
+  </div>
+  <p class="footer-copyright">© 2026 Fake Barbershop</p>
+</div>

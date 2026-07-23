@@ -1,0 +1,181 @@
+<!--
+Illustrates:
+  DESIGN.md: Colors, Typography, Elevation & Depth (named exception: select-dropdown-admin-barber
+             carries floating shadow at rest), Components (nav-bar, date-nav-arrow,
+             select-dropdown-admin-barber, schedule-row-open, schedule-row-booked, button-destructive)
+  EXPERIENCE.md: Information Architecture (My Schedule row), Component Patterns rows
+                 "Date header + arrows", "Barber-select dropdown, admin variant",
+                 "Schedule row — open", "Schedule row — booked",
+                 Key Flow 3 steps 1-2 (Owner lands on My Schedule + Select Barber dropdown),
+                 Key Flow 2 steps 2-3 (defaults to today, 9:00 AM-4:30 PM slot list)
+-->
+<style>
+  :root{
+    --primary:#0E7C9B;
+    --primary-fg:#FFFFFF;
+    --primary-hover:#0B5F79;
+    --destructive:#C93A3A;
+    --destructive-fg:#FFFFFF;
+    --destructive-hover:#A83030;
+    --background:#FFFFFF;
+    --neutral:#EFF6F8;
+    --border:#D3E4E9;
+    --text:#17242A;
+    --text-muted:#5B7480;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:'Manrope', sans-serif;
+    color:var(--text);
+    background:var(--background);
+    width:1280px;
+  }
+  .frame-label{
+    font-size:12px;font-weight:500;color:#9AA7AC;
+    background:#F4F4F4;padding:6px 32px;border-bottom:1px solid #E2E2E2;
+  }
+
+  /* ---- Nav bar (admin: all links visible) ---- */
+  .nav-bar{
+    height:64px;background:var(--background);border-bottom:1px solid var(--border);
+    display:flex;align-items:center;justify-content:space-between;padding:0 32px;
+  }
+  .nav-left{display:flex;align-items:center;gap:40px;}
+  .logo{font-size:20px;font-weight:700;color:var(--text);letter-spacing:-0.01em;}
+  .nav-links{display:flex;align-items:center;gap:32px;}
+  .nav-link{font-size:14px;font-weight:600;line-height:1.4;color:var(--text-muted);text-decoration:none;padding-bottom:4px;}
+  .nav-link.active{color:var(--primary);border-bottom:2px solid var(--primary);}
+  .nav-right{display:flex;align-items:center;}
+  .profile-icon{
+    width:36px;height:36px;border-radius:50%;background:var(--neutral);
+    border:1px solid var(--border);display:flex;align-items:center;justify-content:center;
+    font-size:14px;font-weight:600;color:var(--primary);
+  }
+
+  .page{max-width:1120px;margin:0 auto;padding:40px 32px;}
+  h1.page-title{font-size:32px;font-weight:700;line-height:1.2;margin:0 0 24px 0;}
+
+  /* ---- Date header + arrows + admin barber-select ---- */
+  .date-header-row{
+    display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;
+  }
+  .date-nav{display:flex;align-items:center;gap:20px;}
+  .date-arrow{
+    font-size:20px;line-height:1;color:var(--text-muted);
+    width:20px;height:20px;display:flex;align-items:center;justify-content:center;
+    user-select:none;
+  }
+  h2.date-title{font-size:24px;font-weight:600;line-height:1.25;margin:0;min-width:220px;text-align:center;}
+
+  /* Admin-only barber-select: floating shadow AT REST (deliberate exception) */
+  .admin-barber-select{
+    background:var(--background);
+    border:1px solid var(--border);
+    border-radius:0;
+    box-shadow:0 2px 8px rgba(23,36,42,0.12);
+    padding:12px 16px;
+    font-size:16px;
+    color:var(--text);
+    display:flex;align-items:center;gap:12px;
+    min-width:200px;
+    justify-content:space-between;
+  }
+  .admin-barber-select .chevron{color:var(--text-muted);font-size:12px;}
+
+  /* ---- Schedule rows ---- */
+  .slot-list{display:flex;flex-direction:column;}
+  .slot-row{
+    display:flex;align-items:center;justify-content:space-between;
+    border:1px solid var(--border);
+    border-top:none;
+    background:var(--background);
+    padding:14px 20px;
+  }
+  .slot-list .slot-row:first-child{border-top:1px solid var(--border);}
+  .slot-time{font-size:14px;font-weight:400;line-height:1.5;width:100px;color:var(--text);}
+  .slot-open .slot-status{font-size:16px;font-weight:400;color:var(--text-muted);}
+  .slot-booked .slot-name{font-size:16px;font-weight:400;color:var(--text);flex:1;}
+  .btn{
+    font-family:'Manrope', sans-serif;font-size:14px;font-weight:600;line-height:1.4;
+    border-radius:0;padding:12px 24px;border:none;cursor:pointer;
+  }
+  .btn-destructive{background:var(--destructive);color:var(--destructive-fg);}
+
+  /* ---- Footer ({components.footer}) ---- */
+  .footer{
+    background:var(--neutral);
+    border-top:1px solid var(--border);
+    padding:24px 32px;
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    font-size:14px;
+    line-height:1.5;
+    color:var(--text-muted);
+  }
+  .footer-wordmark{font-size:14px;font-weight:700;color:var(--text);margin:0 0 4px 0;}
+  .footer-copyright{margin:0;}
+</style>
+
+<div class="frame-label">key-my-schedule.html — My Schedule, admin view (desktop, 1280px reference viewport)</div>
+
+<div class="nav-bar">
+  <div class="nav-left">
+    <span class="logo">Fake Barbershop</span>
+    <div class="nav-links">
+      <a href="#" class="nav-link">Home</a>
+      <a href="#" class="nav-link">Schedule Appointment</a>
+      <a href="#" class="nav-link">About</a>
+      <a href="#" class="nav-link active">My Schedule</a>
+      <a href="#" class="nav-link">Admin Panel</a>
+    </div>
+  </div>
+  <div class="nav-right">
+    <div class="profile-icon">O</div>
+  </div>
+</div>
+
+<div class="page">
+  <h1 class="page-title">My Schedule</h1>
+
+  <div class="date-header-row">
+    <div class="date-nav">
+      <span class="date-arrow">&#8249;</span>
+      <h2 class="date-title">Thursday, July 23</h2>
+      <span class="date-arrow">&#8250;</span>
+    </div>
+    <div class="admin-barber-select">
+      <span>Manny</span>
+      <span class="chevron">&#9662;</span>
+    </div>
+  </div>
+
+  <div class="slot-list">
+    <div class="slot-row slot-open"><span class="slot-time">9:00 AM</span><span class="slot-status">Available</span></div>
+    <div class="slot-row slot-open"><span class="slot-time">9:30 AM</span><span class="slot-status">Available</span></div>
+    <div class="slot-row slot-open"><span class="slot-time">10:00 AM</span><span class="slot-status">Available</span></div>
+    <div class="slot-row slot-open"><span class="slot-time">10:30 AM</span><span class="slot-status">Available</span></div>
+    <div class="slot-row slot-booked"><span class="slot-time">11:00 AM</span><span class="slot-name">Jack Anderson</span><button class="btn btn-destructive">Cancel</button></div>
+    <div class="slot-row slot-open"><span class="slot-time">11:30 AM</span><span class="slot-status">Available</span></div>
+    <div class="slot-row slot-open"><span class="slot-time">12:00 PM</span><span class="slot-status">Available</span></div>
+    <div class="slot-row slot-open"><span class="slot-time">12:30 PM</span><span class="slot-status">Available</span></div>
+    <div class="slot-row slot-open"><span class="slot-time">1:00 PM</span><span class="slot-status">Available</span></div>
+    <div class="slot-row slot-open"><span class="slot-time">1:30 PM</span><span class="slot-status">Available</span></div>
+    <div class="slot-row slot-open"><span class="slot-time">2:00 PM</span><span class="slot-status">Available</span></div>
+    <div class="slot-row slot-booked"><span class="slot-time">2:30 PM</span><span class="slot-name">Sarah Chen</span><button class="btn btn-destructive">Cancel</button></div>
+    <div class="slot-row slot-open"><span class="slot-time">3:00 PM</span><span class="slot-status">Available</span></div>
+    <div class="slot-row slot-open"><span class="slot-time">3:30 PM</span><span class="slot-status">Available</span></div>
+    <div class="slot-row slot-open"><span class="slot-time">4:00 PM</span><span class="slot-status">Available</span></div>
+    <div class="slot-row slot-open"><span class="slot-time">4:30 PM</span><span class="slot-status">Available</span></div>
+  </div>
+</div>
+
+<div class="footer">
+  <div>
+    <p class="footer-wordmark">Fake Barbershop</p>
+    <p>123 Maple Street, Springfield · (555) 019-2837</p>
+    <p>Mon–Fri, 9:00 AM – 4:30 PM</p>
+  </div>
+  <p class="footer-copyright">© 2026 Fake Barbershop</p>
+</div>

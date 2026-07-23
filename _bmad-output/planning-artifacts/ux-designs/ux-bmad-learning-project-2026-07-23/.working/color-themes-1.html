@@ -1,0 +1,490 @@
+<title>Fake Barbershop — Color Theme Directions</title>
+<meta charset="utf-8" />
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 0 0 80px 0;
+    background: #FAFAFA;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: #1A1A1A;
+  }
+  .page-header {
+    padding: 32px 40px 24px 40px;
+    background: #111318;
+    color: #fff;
+  }
+  .page-header h1 { margin: 0 0 6px 0; font-size: 1.6rem; }
+  .page-header p { margin: 0; color: #B7BCC7; font-size: 0.9rem; max-width: 760px; }
+
+  .variation {
+    margin: 32px 40px 0 40px;
+    background: #fff;
+    border: 1px solid #E2E2E2;
+    padding: 24px 28px 28px 28px;
+  }
+  .var-header { margin-bottom: 18px; border-bottom: 1px solid #EEE; padding-bottom: 12px; }
+  .var-header h2 { margin: 0 0 4px 0; font-size: 1.25rem; }
+  .var-header .register { margin: 0; font-style: italic; color: #666; font-size: 0.9rem; }
+  .var-header .font-note { margin: 4px 0 0 0; font-size: 0.78rem; color: #888; }
+
+  /* ---- Token chips ---- */
+  .tokens { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+  .chip {
+    display: flex; align-items: center; gap: 8px;
+    border: 1px solid var(--border);
+    background: #fff;
+    padding: 6px 10px 6px 6px;
+    font-size: 0.72rem;
+    min-width: 128px;
+  }
+  .swatch { width: 22px; height: 22px; border: 1px solid rgba(0,0,0,0.15); flex: 0 0 auto; }
+  .chip .label { font-weight: 600; display: block; color: #333; }
+  .chip .hex { display: block; color: #777; font-family: 'Courier New', monospace; }
+
+  /* ---- UI demo shell ---- */
+  .ui-demo { border: 1px solid var(--border); background: var(--bg); overflow: hidden; margin-bottom: 18px; }
+
+  .navbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 20px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    font-family: var(--font);
+  }
+  .nav-logo { font-weight: 700; font-size: 1rem; color: var(--primary); letter-spacing: 0.2px; }
+  .nav-links { display: flex; gap: 18px; font-size: 0.8rem; }
+  .nav-links a { color: #444; text-decoration: none; }
+  .nav-links a.active { color: var(--primary); font-weight: 600; border-bottom: 2px solid var(--primary); padding-bottom: 3px; }
+  .nav-actions { display: flex; gap: 8px; }
+  .nav-actions button { font-family: var(--font); font-size: 0.78rem; padding: 7px 14px; border: 1px solid var(--primary); cursor: default; }
+  .btn-signin { background: transparent; color: var(--primary); }
+  .btn-register { background: var(--primary); color: var(--primary-fg); border-color: var(--primary); }
+
+  /* ---- Hero split ---- */
+  .hero { position: relative; height: 200px; font-family: var(--font); }
+  .hero-white {
+    position: absolute; inset: 0;
+    background: var(--bg);
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 18px 22px; width: 62%;
+  }
+  .hero-white h3 { margin: 0 0 6px 0; font-size: 1.35rem; line-height: 1.15; color: #17181C; }
+  .hero-white p { margin: 0 0 14px 0; font-size: 0.78rem; color: #666; max-width: 260px; }
+  .hero-blue {
+    position: absolute; inset: 0;
+    background: var(--primary);
+    clip-path: polygon(45% 0%, 60% 15%, 66% 35%, 55% 50%, 45% 65%, 35% 80%, 25% 100%, 100% 100%, 100% 0%);
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+  }
+  .hero-blue .glyph { font-size: 2.1rem; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.25)); }
+  .cta {
+    display: inline-block;
+    font-family: var(--font);
+    background: var(--primary);
+    color: var(--primary-fg);
+    border: none;
+    padding: 10px 18px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: default;
+    align-self: flex-start;
+  }
+
+  /* ---- Button comparison row ---- */
+  .button-row { display: flex; gap: 14px; align-items: center; font-family: var(--font); }
+  .button-row .btn {
+    padding: 10px 18px; font-size: 0.82rem; font-weight: 600; border: none; color: #fff; cursor: default;
+  }
+  .btn-hover { background: var(--hover); }
+  .btn-destructive { background: var(--red); }
+  .button-row .btn-caption { font-size: 0.72rem; color: #888; margin-left: -4px; }
+
+  /* ---- Corner treatments ---- */
+  .corners-square .cta,
+  .corners-square .btn,
+  .corners-square .chip,
+  .corners-square .swatch,
+  .corners-square .nav-actions button { border-radius: 0; clip-path: none; }
+
+  .corners-clip-sm .cta,
+  .corners-clip-sm .btn,
+  .corners-clip-sm .nav-actions button {
+    border-radius: 0;
+    clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px);
+  }
+
+  .corners-clip-lg .cta,
+  .corners-clip-lg .btn,
+  .corners-clip-lg .nav-actions button {
+    border-radius: 0;
+    clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+  }
+
+  .hex-doc { margin-top: 16px; font-size: 0.7rem; color: #999; font-family: 'Courier New', monospace; white-space: pre-wrap; border-top: 1px dashed #E2E2E2; padding-top: 10px; }
+</style>
+
+<div class="page-header">
+  <h1>Fake Barbershop — Color Theme Directions (Round 1)</h1>
+  <p>6 directions, all on white base with sharp (or near-sharp) corners, blue as primary interactive color, red reserved for destructive actions only. Home concept shown: curved diagonal split hero (white left / blue right) with scissor + comb, nav bar in signed-out state, and hover vs. destructive button comparison.</p>
+</div>
+
+<!-- =========================================================
+     1. CORPORATE TRUST
+     ========================================================= -->
+<div class="variation corners-square"
+     style="--primary:#1B3A6B; --hover:#122A4E; --red:#DC2626; --bg:#FFFFFF; --neutral:#F1F3F6; --border:#D8DEE7; --primary-fg:#FFFFFF; --font:'Inter', sans-serif;">
+  <div class="var-header">
+    <h2>1. Corporate Trust</h2>
+    <p class="register">Steady, institutional confidence — a barbershop you'd trust with a board meeting haircut.</p>
+    <p class="font-note">Font: Inter (single family, headings + body) &middot; Corners: fully square</p>
+  </div>
+
+  <div class="tokens">
+    <div class="chip"><div class="swatch" style="background:#1B3A6B;"></div><span><span class="label">Primary blue</span><span class="hex">#1B3A6B</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#FFFFFF;"></div><span><span class="label">Primary-fg</span><span class="hex">#FFFFFF</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#122A4E;"></div><span><span class="label">Blue hover</span><span class="hex">#122A4E</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#DC2626;"></div><span><span class="label">Destructive red</span><span class="hex">#DC2626</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#FFFFFF;border:1px solid #ccc;"></div><span><span class="label">Background</span><span class="hex">#FFFFFF</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#F1F3F6;"></div><span><span class="label">Neutral/muted</span><span class="hex">#F1F3F6</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#D8DEE7;"></div><span><span class="label">Border</span><span class="hex">#D8DEE7</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#eee;display:flex;align-items:center;justify-content:center;font-size:10px;">Aa</div><span><span class="label">Font</span><span class="hex">Inter</span></span></div>
+  </div>
+
+  <div class="ui-demo">
+    <div class="navbar">
+      <div class="nav-logo">Fake Barbershop</div>
+      <div class="nav-links">
+        <a class="active">Home</a><a>Schedule Appointment</a><a>About</a><a>My Schedule</a><a>Admin Panel</a>
+      </div>
+      <div class="nav-actions">
+        <button class="btn-signin">Sign In</button>
+        <button class="btn-register">Register</button>
+      </div>
+    </div>
+    <div class="hero">
+      <div class="hero-blue"><span class="glyph">&#9986;&#65039;</span><span class="glyph">&#129838;</span></div>
+      <div class="hero-white">
+        <h3>Sharp cuts.<br/>Zero fuss.</h3>
+        <p>Book your next appointment in under a minute.</p>
+        <span class="cta">Schedule Appointment</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="button-row">
+    <button class="btn btn-hover">Schedule Appointment</button><span class="btn-caption">↑ hover state</span>
+    <button class="btn btn-destructive">Cancel Appointment</button><span class="btn-caption">↑ destructive only</span>
+  </div>
+
+  <div class="hex-doc">/* Corporate Trust
+   --primary:    #1B3A6B  (navy)
+   --primary-fg: #FFFFFF
+   --hover:      #122A4E
+   --red:        #DC2626  (destructive only)
+   --bg:         #FFFFFF
+   --neutral:    #F1F3F6
+   --border:     #D8DEE7
+   font: Inter
+   corners: fully square (border-radius:0, no clip-path) */</div>
+</div>
+
+<!-- =========================================================
+     2. STARTUP FRESH
+     ========================================================= -->
+<div class="variation corners-clip-sm"
+     style="--primary:#2E5AEB; --hover:#1E43C4; --red:#E11D2E; --bg:#FFFFFF; --neutral:#F2F4F8; --border:#DCE1EA; --primary-fg:#FFFFFF; --font:'Poppins', sans-serif;">
+  <div class="var-header">
+    <h2>2. Startup Fresh</h2>
+    <p class="register">Energetic, approachable momentum — booking a haircut should feel as easy as ordering coffee.</p>
+    <p class="font-note">Font: Poppins (headings) / Inter (body) &middot; Corners: sharp with a very slight 5px clip on interactive elements</p>
+  </div>
+
+  <div class="tokens">
+    <div class="chip"><div class="swatch" style="background:#2E5AEB;"></div><span><span class="label">Primary blue</span><span class="hex">#2E5AEB</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#FFFFFF;"></div><span><span class="label">Primary-fg</span><span class="hex">#FFFFFF</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#1E43C4;"></div><span><span class="label">Blue hover</span><span class="hex">#1E43C4</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#E11D2E;"></div><span><span class="label">Destructive red</span><span class="hex">#E11D2E</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#FFFFFF;border:1px solid #ccc;"></div><span><span class="label">Background</span><span class="hex">#FFFFFF</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#F2F4F8;"></div><span><span class="label">Neutral/muted</span><span class="hex">#F2F4F8</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#DCE1EA;"></div><span><span class="label">Border</span><span class="hex">#DCE1EA</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#eee;display:flex;align-items:center;justify-content:center;font-size:10px;font-family:'Poppins',sans-serif;">Aa</div><span><span class="label">Font</span><span class="hex">Poppins / Inter</span></span></div>
+  </div>
+
+  <div class="ui-demo">
+    <div class="navbar">
+      <div class="nav-logo">Fake Barbershop</div>
+      <div class="nav-links">
+        <a class="active">Home</a><a>Schedule Appointment</a><a>About</a><a>My Schedule</a><a>Admin Panel</a>
+      </div>
+      <div class="nav-actions">
+        <button class="btn-signin">Sign In</button>
+        <button class="btn-register">Register</button>
+      </div>
+    </div>
+    <div class="hero">
+      <div class="hero-blue"><span class="glyph">&#9986;&#65039;</span><span class="glyph">&#129838;</span></div>
+      <div class="hero-white">
+        <h3>Fresh look.<br/>Faster booking.</h3>
+        <p>Real-time slots, no phone tag, no waiting rooms.</p>
+        <span class="cta">Schedule Appointment</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="button-row">
+    <button class="btn btn-hover">Schedule Appointment</button><span class="btn-caption">↑ hover state</span>
+    <button class="btn btn-destructive">Cancel Appointment</button><span class="btn-caption">↑ destructive only</span>
+  </div>
+
+  <div class="hex-doc">/* Startup Fresh
+   --primary:    #2E5AEB  (royal / cobalt blue)
+   --primary-fg: #FFFFFF
+   --hover:      #1E43C4
+   --red:        #E11D2E  (destructive only)
+   --bg:         #FFFFFF
+   --neutral:    #F2F4F8
+   --border:     #DCE1EA
+   font: Poppins (headings) / Inter (body)
+   corners: sharp, 5px chamfer clip-path on buttons/nav actions */</div>
+</div>
+
+<!-- =========================================================
+     3. BARBERSHOP CLASSIC MEETS MODERN
+     ========================================================= -->
+<div class="variation corners-square"
+     style="--primary:#3E5C76; --hover:#2C4358; --red:#B3261E; --bg:#FFFFFF; --neutral:#F3F1EC; --border:#DAD5C9; --primary-fg:#FFFFFF; --font:'IBM Plex Sans', sans-serif;">
+  <div class="var-header">
+    <h2>3. Barbershop Classic Meets Modern</h2>
+    <p class="register">Timeless craft, contemporary polish — barber-pole heritage rendered in a modern grid.</p>
+    <p class="font-note">Font: IBM Plex Sans (headings + body) &middot; Corners: fully square</p>
+  </div>
+
+  <div class="tokens">
+    <div class="chip"><div class="swatch" style="background:#3E5C76;"></div><span><span class="label">Primary blue</span><span class="hex">#3E5C76</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#FFFFFF;"></div><span><span class="label">Primary-fg</span><span class="hex">#FFFFFF</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#2C4358;"></div><span><span class="label">Blue hover</span><span class="hex">#2C4358</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#B3261E;"></div><span><span class="label">Destructive red</span><span class="hex">#B3261E</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#FFFFFF;border:1px solid #ccc;"></div><span><span class="label">Background</span><span class="hex">#FFFFFF</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#F3F1EC;"></div><span><span class="label">Neutral/muted</span><span class="hex">#F3F1EC</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#DAD5C9;"></div><span><span class="label">Border</span><span class="hex">#DAD5C9</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#eee;display:flex;align-items:center;justify-content:center;font-size:10px;font-family:'IBM Plex Sans',sans-serif;">Aa</div><span><span class="label">Font</span><span class="hex">IBM Plex Sans</span></span></div>
+  </div>
+
+  <div class="ui-demo">
+    <div class="navbar">
+      <div class="nav-logo">Fake Barbershop</div>
+      <div class="nav-links">
+        <a class="active">Home</a><a>Schedule Appointment</a><a>About</a><a>My Schedule</a><a>Admin Panel</a>
+      </div>
+      <div class="nav-actions">
+        <button class="btn-signin">Sign In</button>
+        <button class="btn-register">Register</button>
+      </div>
+    </div>
+    <div class="hero">
+      <div class="hero-blue"><span class="glyph">&#9986;&#65039;</span><span class="glyph">&#129838;</span></div>
+      <div class="hero-white">
+        <h3>Old-school skill.<br/>New-school ease.</h3>
+        <p>The chair hasn't changed. The booking has.</p>
+        <span class="cta">Schedule Appointment</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="button-row">
+    <button class="btn btn-hover">Schedule Appointment</button><span class="btn-caption">↑ hover state</span>
+    <button class="btn btn-destructive">Cancel Appointment</button><span class="btn-caption">↑ destructive only</span>
+  </div>
+
+  <div class="hex-doc">/* Barbershop Classic Meets Modern
+   --primary:    #3E5C76  (steel / slate blue)
+   --primary-fg: #FFFFFF
+   --hover:      #2C4358
+   --red:        #B3261E  (destructive only, slightly muted/warm red)
+   --bg:         #FFFFFF
+   --neutral:    #F3F1EC  (warm-tinted neutral, nods to classic barbershop paper/leather)
+   --border:     #DAD5C9
+   font: IBM Plex Sans
+   corners: fully square */</div>
+</div>
+
+<!-- =========================================================
+     4. PRECISION TECH
+     ========================================================= -->
+<div class="variation corners-clip-sm"
+     style="--primary:#4A47C4; --hover:#37348F; --red:#D7263D; --bg:#FFFFFF; --neutral:#F3F2FA; --border:#DEDCF0; --primary-fg:#FFFFFF; --font:'Space Grotesk', sans-serif;">
+  <div class="var-header">
+    <h2>4. Precision Tech</h2>
+    <p class="register">Engineered, techy confidence — the scheduling system feels calibrated, not just styled.</p>
+    <p class="font-note">Font: Space Grotesk (headings) / IBM Plex Sans (body) &middot; Corners: sharp with a very slight 5px clip on interactive elements</p>
+  </div>
+
+  <div class="tokens">
+    <div class="chip"><div class="swatch" style="background:#4A47C4;"></div><span><span class="label">Primary blue</span><span class="hex">#4A47C4</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#FFFFFF;"></div><span><span class="label">Primary-fg</span><span class="hex">#FFFFFF</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#37348F;"></div><span><span class="label">Blue hover</span><span class="hex">#37348F</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#D7263D;"></div><span><span class="label">Destructive red</span><span class="hex">#D7263D</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#FFFFFF;border:1px solid #ccc;"></div><span><span class="label">Background</span><span class="hex">#FFFFFF</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#F3F2FA;"></div><span><span class="label">Neutral/muted</span><span class="hex">#F3F2FA</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#DEDCF0;"></div><span><span class="label">Border</span><span class="hex">#DEDCF0</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#eee;display:flex;align-items:center;justify-content:center;font-size:10px;font-family:'Space Grotesk',sans-serif;">Aa</div><span><span class="label">Font</span><span class="hex">Space Grotesk / IBM Plex Sans</span></span></div>
+  </div>
+
+  <div class="ui-demo">
+    <div class="navbar">
+      <div class="nav-logo">Fake Barbershop</div>
+      <div class="nav-links">
+        <a class="active">Home</a><a>Schedule Appointment</a><a>About</a><a>My Schedule</a><a>Admin Panel</a>
+      </div>
+      <div class="nav-actions">
+        <button class="btn-signin">Sign In</button>
+        <button class="btn-register">Register</button>
+      </div>
+    </div>
+    <div class="hero">
+      <div class="hero-blue"><span class="glyph">&#9986;&#65039;</span><span class="glyph">&#129838;</span></div>
+      <div class="hero-white">
+        <h3>Precision cuts.<br/>Precision scheduling.</h3>
+        <p>Every slot accounted for. Every line clean.</p>
+        <span class="cta">Schedule Appointment</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="button-row">
+    <button class="btn btn-hover">Schedule Appointment</button><span class="btn-caption">↑ hover state</span>
+    <button class="btn btn-destructive">Cancel Appointment</button><span class="btn-caption">↑ destructive only</span>
+  </div>
+
+  <div class="hex-doc">/* Precision Tech
+   --primary:    #4A47C4  (indigo)
+   --primary-fg: #FFFFFF
+   --hover:      #37348F
+   --red:        #D7263D  (destructive only)
+   --bg:         #FFFFFF
+   --neutral:    #F3F2FA
+   --border:     #DEDCF0
+   font: Space Grotesk (headings) / IBM Plex Sans (body)
+   corners: sharp, 5px chamfer clip-path on buttons/nav actions */</div>
+</div>
+
+<!-- =========================================================
+     5. MODERN WARMTH
+     ========================================================= -->
+<div class="variation corners-square"
+     style="--primary:#0E7C9B; --hover:#0B5F79; --red:#D64545; --bg:#FFFFFF; --neutral:#EFF6F8; --border:#D3E4E9; --primary-fg:#FFFFFF; --font:'Manrope', sans-serif;">
+  <div class="var-header">
+    <h2>5. Modern Warmth</h2>
+    <p class="register">Approachable, breathable calm — modern without feeling cold or corporate.</p>
+    <p class="font-note">Font: Manrope (headings + body) &middot; Corners: fully square</p>
+  </div>
+
+  <div class="tokens">
+    <div class="chip"><div class="swatch" style="background:#0E7C9B;"></div><span><span class="label">Primary blue</span><span class="hex">#0E7C9B</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#FFFFFF;"></div><span><span class="label">Primary-fg</span><span class="hex">#FFFFFF</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#0B5F79;"></div><span><span class="label">Blue hover</span><span class="hex">#0B5F79</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#D64545;"></div><span><span class="label">Destructive red</span><span class="hex">#D64545</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#FFFFFF;border:1px solid #ccc;"></div><span><span class="label">Background</span><span class="hex">#FFFFFF</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#EFF6F8;"></div><span><span class="label">Neutral/muted</span><span class="hex">#EFF6F8</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#D3E4E9;"></div><span><span class="label">Border</span><span class="hex">#D3E4E9</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#eee;display:flex;align-items:center;justify-content:center;font-size:10px;font-family:'Manrope',sans-serif;">Aa</div><span><span class="label">Font</span><span class="hex">Manrope</span></span></div>
+  </div>
+
+  <div class="ui-demo">
+    <div class="navbar">
+      <div class="nav-logo">Fake Barbershop</div>
+      <div class="nav-links">
+        <a class="active">Home</a><a>Schedule Appointment</a><a>About</a><a>My Schedule</a><a>Admin Panel</a>
+      </div>
+      <div class="nav-actions">
+        <button class="btn-signin">Sign In</button>
+        <button class="btn-register">Register</button>
+      </div>
+    </div>
+    <div class="hero">
+      <div class="hero-blue"><span class="glyph">&#9986;&#65039;</span><span class="glyph">&#129838;</span></div>
+      <div class="hero-white">
+        <h3>A cut above,<br/>without the wait.</h3>
+        <p>Friendly chairs. Effortless booking.</p>
+        <span class="cta">Schedule Appointment</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="button-row">
+    <button class="btn btn-hover">Schedule Appointment</button><span class="btn-caption">↑ hover state</span>
+    <button class="btn btn-destructive">Cancel Appointment</button><span class="btn-caption">↑ destructive only</span>
+  </div>
+
+  <div class="hex-doc">/* Modern Warmth
+   --primary:    #0E7C9B  (teal-leaning blue)
+   --primary-fg: #FFFFFF
+   --hover:      #0B5F79
+   --red:        #D64545  (destructive only)
+   --bg:         #FFFFFF
+   --neutral:    #EFF6F8
+   --border:     #D3E4E9
+   font: Manrope
+   corners: fully square */</div>
+</div>
+
+<!-- =========================================================
+     6. BOLD EDITORIAL
+     ========================================================= -->
+<div class="variation corners-clip-lg"
+     style="--primary:#1447E6; --hover:#0F35B0; --red:#E4232F; --bg:#FFFFFF; --neutral:#F4F5F7; --border:#DADFE6; --primary-fg:#FFFFFF; --font:'Sora', sans-serif;">
+  <div class="var-header">
+    <h2>6. Bold Editorial</h2>
+    <p class="register">Confident, magazine-poster energy — big type, saturated blue, no apologies.</p>
+    <p class="font-note">Font: Sora (headings) / Work Sans (body) &middot; Corners: sharp with a bolder 12px clip on interactive elements</p>
+  </div>
+
+  <div class="tokens">
+    <div class="chip"><div class="swatch" style="background:#1447E6;"></div><span><span class="label">Primary blue</span><span class="hex">#1447E6</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#FFFFFF;"></div><span><span class="label">Primary-fg</span><span class="hex">#FFFFFF</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#0F35B0;"></div><span><span class="label">Blue hover</span><span class="hex">#0F35B0</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#E4232F;"></div><span><span class="label">Destructive red</span><span class="hex">#E4232F</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#FFFFFF;border:1px solid #ccc;"></div><span><span class="label">Background</span><span class="hex">#FFFFFF</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#F4F5F7;"></div><span><span class="label">Neutral/muted</span><span class="hex">#F4F5F7</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#DADFE6;"></div><span><span class="label">Border</span><span class="hex">#DADFE6</span></span></div>
+    <div class="chip"><div class="swatch" style="background:#eee;display:flex;align-items:center;justify-content:center;font-size:10px;font-family:'Sora',sans-serif;">Aa</div><span><span class="label">Font</span><span class="hex">Sora / Work Sans</span></span></div>
+  </div>
+
+  <div class="ui-demo">
+    <div class="navbar">
+      <div class="nav-logo">Fake Barbershop</div>
+      <div class="nav-links">
+        <a class="active">Home</a><a>Schedule Appointment</a><a>About</a><a>My Schedule</a><a>Admin Panel</a>
+      </div>
+      <div class="nav-actions">
+        <button class="btn-signin">Sign In</button>
+        <button class="btn-register">Register</button>
+      </div>
+    </div>
+    <div class="hero">
+      <div class="hero-blue"><span class="glyph">&#9986;&#65039;</span><span class="glyph">&#129838;</span></div>
+      <div class="hero-white">
+        <h3>Own the chair.<br/>Own the schedule.</h3>
+        <p>Bold looks deserve a bolder booking flow.</p>
+        <span class="cta">Schedule Appointment</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="button-row">
+    <button class="btn btn-hover">Schedule Appointment</button><span class="btn-caption">↑ hover state</span>
+    <button class="btn btn-destructive">Cancel Appointment</button><span class="btn-caption">↑ destructive only</span>
+  </div>
+
+  <div class="hex-doc">/* Bold Editorial
+   --primary:    #1447E6  (deep, vivid electric cobalt)
+   --primary-fg: #FFFFFF
+   --hover:      #0F35B0
+   --red:        #E4232F  (destructive only)
+   --bg:         #FFFFFF
+   --neutral:    #F4F5F7
+   --border:     #DADFE6
+   font: Sora (headings) / Work Sans (body)
+   corners: sharp, bolder 12px chamfer clip-path on buttons/nav actions */</div>
+</div>

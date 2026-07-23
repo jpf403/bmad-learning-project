@@ -1,0 +1,256 @@
+<!--
+Illustrates:
+  DESIGN.md: Colors, Typography, Elevation & Depth (border-only in-flow triggers/rows),
+             Components (nav-bar signed-in, input, select-dropdown, schedule-row-booked,
+             button-primary/destructive, confirmation-screen)
+  EXPERIENCE.md: Information Architecture (Schedule Appointment row), Component Patterns rows
+                 "Booking form", "Confirmation screen", "My Appointments list",
+                 State Patterns row "Finished appointments",
+                 Key Flow 1 steps 3-8 (Jack signs in -> lands on Schedule Appointment ->
+                 selects Manny/July 24/11:00 AM -> Submit -> confirmation screen climax)
+-->
+<style>
+  :root{
+    --primary:#0E7C9B;
+    --primary-fg:#FFFFFF;
+    --primary-hover:#0B5F79;
+    --destructive:#C93A3A;
+    --destructive-fg:#FFFFFF;
+    --destructive-hover:#A83030;
+    --background:#FFFFFF;
+    --neutral:#EFF6F8;
+    --border:#D3E4E9;
+    --text:#17242A;
+    --text-muted:#5B7480;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:'Manrope', sans-serif;
+    color:var(--text);
+    background:var(--background);
+    width:1280px;
+  }
+  .frame-label{
+    font-size:12px;
+    font-weight:500;
+    color:#9AA7AC;
+    background:#F4F4F4;
+    padding:6px 32px;
+    border-bottom:1px solid #E2E2E2;
+  }
+  .divider-band{
+    background:#F4F4F4;
+    border-top:4px solid #E2E2E2;
+    border-bottom:1px solid #E2E2E2;
+    padding:10px 32px;
+    font-size:12px;
+    font-weight:500;
+    color:#9AA7AC;
+  }
+
+  /* ---- Nav bar ---- */
+  .nav-bar{
+    height:64px;
+    background:var(--background);
+    border-bottom:1px solid var(--border);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:0 32px;
+  }
+  .nav-left{display:flex;align-items:center;gap:40px;}
+  .logo{font-size:20px;font-weight:700;color:var(--text);letter-spacing:-0.01em;}
+  .nav-links{display:flex;align-items:center;gap:32px;}
+  .nav-link{
+    font-size:14px;font-weight:600;line-height:1.4;
+    color:var(--text-muted);text-decoration:none;padding-bottom:4px;
+  }
+  .nav-link.active{color:var(--primary);border-bottom:2px solid var(--primary);}
+  .nav-right{display:flex;align-items:center;}
+  .profile-icon{
+    width:36px;height:36px;border-radius:50%;
+    background:var(--neutral);border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:center;
+    font-size:14px;font-weight:600;color:var(--primary);
+  }
+
+  .page{max-width:1120px;margin:0 auto;padding:40px 32px;}
+  h1.page-title{font-size:32px;font-weight:700;line-height:1.2;margin:0 0 24px 0;}
+  h2.section-title{font-size:24px;font-weight:600;line-height:1.25;margin:0 0 16px 0;}
+
+  /* ---- Booking form ---- */
+  .form-section{border:1px solid var(--border);padding:24px;margin-bottom:48px;}
+  .form-row{display:flex;gap:16px;margin-bottom:16px;}
+  .field{flex:1;display:flex;flex-direction:column;gap:8px;}
+  .field label{font-size:14px;font-weight:600;line-height:1.4;color:var(--text);}
+  .field-control{
+    background:var(--background);
+    border:1px solid var(--border);
+    border-radius:0;
+    padding:12px 16px;
+    font-size:16px;
+    color:var(--text);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+  }
+  .chevron{color:var(--text-muted);font-size:12px;}
+  .btn{
+    font-family:'Manrope', sans-serif;
+    font-size:14px;font-weight:600;line-height:1.4;
+    border-radius:0;padding:12px 24px;border:none;cursor:pointer;
+  }
+  .btn-primary{background:var(--primary);color:var(--primary-fg);}
+  .btn-destructive{background:var(--destructive);color:var(--destructive-fg);}
+  .submit-row{margin-top:8px;}
+
+  /* ---- My Appointments (reuses schedule-row-booked) ---- */
+  .appt-row{
+    display:flex;align-items:center;justify-content:space-between;
+    border:1px solid var(--border);
+    background:var(--background);
+    padding:16px 20px;
+    margin-bottom:12px;
+  }
+  .appt-info{display:flex;flex-direction:column;gap:4px;}
+  .appt-primary{font-size:16px;font-weight:400;color:var(--text);}
+  .appt-meta{font-size:14px;font-weight:400;color:var(--text-muted);}
+  .tag-finished{
+    font-size:12px;font-weight:500;letter-spacing:0.01em;
+    color:var(--text-muted);
+    border:1px solid var(--border);
+    padding:4px 8px;
+  }
+
+  /* ---- Confirmation screen ---- */
+  .confirmation{
+    max-width:1120px;margin:0 auto;padding:100px 32px;
+    display:flex;flex-direction:column;align-items:flex-start;
+  }
+  .confirmation h2{
+    font-size:24px;font-weight:600;line-height:1.25;
+    color:var(--primary);
+    margin:0 0 12px 0;
+  }
+  .confirmation p{
+    font-size:16px;font-weight:400;line-height:1.5;
+    color:var(--text);
+    margin:0;
+  }
+
+  /* ---- Footer ({components.footer}) ---- */
+  .footer{
+    background:var(--neutral);
+    border-top:1px solid var(--border);
+    padding:24px 32px;
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    font-size:14px;
+    line-height:1.5;
+    color:var(--text-muted);
+  }
+  .footer-wordmark{font-size:14px;font-weight:700;color:var(--text);margin:0 0 4px 0;}
+  .footer-copyright{margin:0;}
+</style>
+
+<div class="frame-label">key-schedule-appointment.html — Schedule Appointment, signed-in customer view (desktop, 1280px reference viewport)</div>
+
+<!-- ============ STATE 1: canonical — booking form + My Appointments ============ -->
+<div class="nav-bar">
+  <div class="nav-left">
+    <span class="logo">Fake Barbershop</span>
+    <div class="nav-links">
+      <a href="#" class="nav-link">Home</a>
+      <a href="#" class="nav-link active">Schedule Appointment</a>
+      <a href="#" class="nav-link">About</a>
+    </div>
+  </div>
+  <div class="nav-right">
+    <div class="profile-icon">JA</div>
+  </div>
+</div>
+
+<div class="page">
+  <h1 class="page-title">Schedule Appointment</h1>
+
+  <!-- Booking form: barber / date / time / Submit -->
+  <div class="form-section">
+    <div class="form-row">
+      <div class="field">
+        <label>Barber</label>
+        <div class="field-control"><span>Manny</span><span class="chevron">&#9662;</span></div>
+      </div>
+      <div class="field">
+        <label>Date</label>
+        <div class="field-control"><span>July 24, 2026</span><span class="chevron">&#9662;</span></div>
+      </div>
+      <div class="field">
+        <label>Time</label>
+        <div class="field-control"><span>11:00 AM</span><span class="chevron">&#9662;</span></div>
+      </div>
+    </div>
+    <div class="submit-row">
+      <button class="btn btn-primary">Submit</button>
+    </div>
+  </div>
+
+  <!-- My Appointments -->
+  <h2 class="section-title">My Appointments</h2>
+
+  <div class="appt-row">
+    <div class="appt-info">
+      <span class="appt-primary">Manny</span>
+      <span class="appt-meta">11:00 AM, July 24</span>
+    </div>
+    <button class="btn btn-destructive">Cancel</button>
+  </div>
+
+  <div class="appt-row">
+    <div class="appt-info">
+      <span class="appt-primary">Manny</span>
+      <span class="appt-meta">2:00 PM, July 10</span>
+    </div>
+    <span class="tag-finished">Finished</span>
+  </div>
+</div>
+
+<div class="footer">
+  <div>
+    <p class="footer-wordmark">Fake Barbershop</p>
+    <p>123 Maple Street, Springfield · (555) 019-2837</p>
+    <p>Mon–Fri, 9:00 AM – 4:30 PM</p>
+  </div>
+  <p class="footer-copyright">© 2026 Fake Barbershop</p>
+</div>
+
+<!-- ============ STATE 2: post-submit — confirmation screen (full-page replacement) ============ -->
+<div class="divider-band">Second state shown below — Confirmation screen, full-page replacement of the form above (not a popup), reached after clicking Submit in state 1</div>
+
+<div class="nav-bar">
+  <div class="nav-left">
+    <span class="logo">Fake Barbershop</span>
+    <div class="nav-links">
+      <a href="#" class="nav-link">Home</a>
+      <a href="#" class="nav-link active">Schedule Appointment</a>
+      <a href="#" class="nav-link">About</a>
+    </div>
+  </div>
+  <div class="nav-right">
+    <div class="profile-icon">JA</div>
+  </div>
+</div>
+
+<div class="confirmation">
+  <h2>Appointment booked with Manny at 11:00 AM on July 24.</h2>
+</div>
+
+<div class="footer">
+  <div>
+    <p class="footer-wordmark">Fake Barbershop</p>
+    <p>123 Maple Street, Springfield · (555) 019-2837</p>
+    <p>Mon–Fri, 9:00 AM – 4:30 PM</p>
+  </div>
+  <p class="footer-copyright">© 2026 Fake Barbershop</p>
+</div>
