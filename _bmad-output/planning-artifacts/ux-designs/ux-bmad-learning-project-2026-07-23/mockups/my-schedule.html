@@ -1,8 +1,10 @@
 <!--
-Illustrates:
-  DESIGN.md: Colors, Typography, Elevation & Depth (named exception: select-dropdown-admin-barber
-             carries floating shadow at rest), Components (nav-bar, date-nav-arrow,
-             select-dropdown-admin-barber, schedule-row-open, schedule-row-booked, button-destructive)
+Illustrates (revised 2026-07-24 for client feedback: tinted sections + subtle rounding):
+  DESIGN.md: Colors (Neutral as primary tint fill), Typography, Elevation & Depth
+             (tinted rows vs. named exception: select-dropdown-admin-barber still carries
+             floating shadow at rest, now with rounded.DEFAULT corners), Components
+             (nav-bar, date-nav-arrow, select-dropdown-admin-barber, schedule-row-open,
+             schedule-row-booked, button-destructive)
   EXPERIENCE.md: Information Architecture (My Schedule row), Component Patterns rows
                  "Date header + arrows", "Barber-select dropdown, admin variant",
                  "Schedule row — open", "Schedule row — booked",
@@ -72,7 +74,7 @@ Illustrates:
   .admin-barber-select{
     background:var(--background);
     border:1px solid var(--border);
-    border-radius:0;
+    border-radius:6px;
     box-shadow:0 2px 8px rgba(23,36,42,0.12);
     padding:12px 16px;
     font-size:16px;
@@ -83,22 +85,21 @@ Illustrates:
   }
   .admin-barber-select .chevron{color:var(--text-muted);font-size:12px;}
 
-  /* ---- Schedule rows ---- */
-  .slot-list{display:flex;flex-direction:column;}
+  /* ---- Schedule rows ({components.schedule-row-open}/{components.schedule-row-booked}:
+       tinted, no border, distinguished by content not color) ---- */
+  .slot-list{display:flex;flex-direction:column;gap:6px;}
   .slot-row{
     display:flex;align-items:center;justify-content:space-between;
-    border:1px solid var(--border);
-    border-top:none;
-    background:var(--background);
+    background:var(--neutral);
+    border-radius:6px;
     padding:14px 20px;
   }
-  .slot-list .slot-row:first-child{border-top:1px solid var(--border);}
   .slot-time{font-size:14px;font-weight:400;line-height:1.5;width:100px;color:var(--text);}
   .slot-open .slot-status{font-size:16px;font-weight:400;color:var(--text-muted);}
   .slot-booked .slot-name{font-size:16px;font-weight:400;color:var(--text);flex:1;}
   .btn{
     font-family:'Manrope', sans-serif;font-size:14px;font-weight:600;line-height:1.4;
-    border-radius:0;padding:12px 24px;border:none;cursor:pointer;
+    border-radius:6px;padding:12px 24px;border:none;cursor:pointer;
   }
   .btn-destructive{background:var(--destructive);color:var(--destructive-fg);}
 

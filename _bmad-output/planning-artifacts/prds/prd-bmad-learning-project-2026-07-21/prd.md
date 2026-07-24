@@ -2,7 +2,7 @@
 title: Barbershop Appointment Scheduler — PRD
 status: final
 created: 2026-07-21
-updated: 2026-07-22
+updated: 2026-07-24
 ---
 
 # Barbershop Appointment Scheduler — PRD
@@ -60,7 +60,7 @@ Any signed-in user — customer, barber, or admin — can sign out, ending their
 - FR8: Time dropdown shows only open slots for the chosen barber/date, drawn from fixed 9:00 AM–4:30 PM, 30-minute increments. When the selected date is today, any slot within 30 minutes of the current time is excluded (e.g., at 8:59 AM, the 9:00 AM slot is no longer offered).
 - FR9: Submitting creates the appointment under the signed-in user's account and transitions to a confirmation screen (e.g., "Appointment booked with [Barber] at [Time]") — this also naturally prevents an accidental duplicate submission of the same booking, since the bookable form is no longer on screen once a booking succeeds. A signed-in user cannot hold two appointments at the same date/time across different barbers — the same customer double-booking themselves is blocked the same way a slot conflict between two different customers is.
 - FR10: A submission for a slot taken between load and submit is rejected: an error message is shown on the user's screen, and the backend does not create a second appointment for that slot and does not error out or crash (double-booking guard).
-- FR24: The Schedule Appointment page lists the signed-in user's own upcoming (not-yet-occurred) booked appointments at the bottom of the page. Past appointments are retained, not deleted, and tagged Finished rather than mixed into the same unbounded list.
+- FR24: The Schedule Appointment page lists the signed-in user's own upcoming (not-yet-occurred) booked appointments at the bottom of the page. Past appointments are retained in the database, not deleted, but are not displayed in this list at all — the visible list is upcoming-only.
 - FR25: From that list, a user can cancel one of their own appointments, freeing the slot back to availability.
 
 ### Barber Dashboard

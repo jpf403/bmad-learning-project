@@ -1,0 +1,496 @@
+<!--
+Color Usage Directions — Schedule Appointment page
+Purpose: client feedback said non-Home pages "lacked color" (mostly white, thin
+border-only rows/cards) and asked for "Figma-based style, like rounded buttons"
+(client-confirmed: subtle 6-8px rounding on buttons/inputs/cards, applied
+identically in all four variations below — NOT what's being tested here).
+This file tests ONLY where/how much of the EXISTING token palette (primary
+teal #0E7C9B, destructive red #C93A3A, neutral wash #EFF6F8, border #D3E4E9,
+text #17242A, text-muted #5B7480, white) should be added to an otherwise
+all-white page. No new hues are introduced anywhere in this file.
+Base content/copy/layout reused as-is from key-schedule-appointment.html
+(canonical state only: booking form + My Appointments; confirmation-screen
+state intentionally omitted per instructions).
+Chosen radius for this exercise: 8px, applied consistently everywhere below.
+-->
+<style>
+  :root{
+    --primary:#0E7C9B;
+    --primary-fg:#FFFFFF;
+    --primary-hover:#0B5F79;
+    --destructive:#C93A3A;
+    --destructive-fg:#FFFFFF;
+    --destructive-hover:#A83030;
+    --background:#FFFFFF;
+    --neutral:#EFF6F8;
+    --border:#D3E4E9;
+    --text:#17242A;
+    --text-muted:#5B7480;
+    --radius:8px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:'Manrope', sans-serif;
+    color:var(--text);
+    background:#F4F4F4;
+  }
+
+  /* ---- Meta / comparison-doc chrome (deliberately grayscale — not part of
+         the palette under test, so it never gets confused with the design) ---- */
+  .intro{
+    max-width:1120px;margin:0 auto;padding:32px 32px 24px 32px;
+  }
+  .intro h1{font-size:22px;font-weight:700;margin:0 0 8px 0;color:var(--text);}
+  .intro p{font-size:14px;line-height:1.6;color:var(--text-muted);margin:0 0 4px 0;max-width:820px;}
+  .jumpnav{
+    position:sticky;top:0;z-index:10;
+    background:#FFFFFF;border-bottom:1px solid #E2E2E2;
+    padding:12px 32px;display:flex;gap:8px;flex-wrap:wrap;
+  }
+  .jumpnav a{
+    font-size:13px;font-weight:600;color:var(--text-muted);
+    text-decoration:none;padding:6px 12px;border:1px solid #E2E2E2;border-radius:6px;
+  }
+  .jumpnav a:hover{color:var(--primary);border-color:var(--primary);}
+
+  .frame-label{
+    font-size:12px;font-weight:500;color:#9AA7AC;background:#F4F4F4;
+    padding:14px 32px 6px 32px;
+  }
+  .variation-desc{
+    font-size:14px;line-height:1.5;color:var(--text-muted);
+    padding:0 32px 16px 32px;max-width:900px;
+  }
+  .variation-desc b{color:var(--text);}
+  section.variation{padding-bottom:8px;margin-bottom:8px;}
+  section.variation + section.variation{border-top:8px solid #E2E2E2;}
+
+  .mock-wrap{overflow-x:auto;background:var(--background);}
+  .mock{width:1280px;background:var(--background);}
+
+  /* ---- Shared mock components (defaults = current all-white/square design,
+         minus the corner-squaring, since 8px radius applies everywhere now) ---- */
+  .nav-bar{
+    height:64px;background:var(--background);border-bottom:1px solid var(--border);
+    display:flex;align-items:center;justify-content:space-between;padding:0 32px;
+  }
+  .nav-left{display:flex;align-items:center;gap:40px;}
+  .logo{font-size:20px;font-weight:700;color:var(--text);letter-spacing:-0.01em;}
+  .nav-links{display:flex;align-items:center;gap:32px;}
+  .nav-link{font-size:14px;font-weight:600;line-height:1.4;color:var(--text-muted);text-decoration:none;padding-bottom:4px;}
+  .nav-link.active{color:var(--primary);border-bottom:2px solid var(--primary);}
+  .profile-icon{
+    width:36px;height:36px;border-radius:50%;background:var(--neutral);border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:var(--primary);
+  }
+
+  .page{max-width:1120px;margin:0 auto;padding:40px 32px;}
+  h1.page-title{font-size:32px;font-weight:700;line-height:1.2;margin:0 0 24px 0;}
+  h2.section-title{font-size:24px;font-weight:600;line-height:1.25;margin:0 0 16px 0;display:flex;align-items:center;gap:10px;}
+
+  .form-section{border:1px solid var(--border);background:var(--background);padding:24px;margin-bottom:48px;border-radius:var(--radius);}
+  .form-row{display:flex;gap:16px;margin-bottom:16px;}
+  .field{flex:1;display:flex;flex-direction:column;gap:8px;}
+  .field label{font-size:14px;font-weight:600;line-height:1.4;color:var(--text);display:flex;align-items:center;gap:6px;}
+  .field-control{
+    background:var(--background);border:1px solid var(--border);border-radius:var(--radius);
+    padding:12px 16px;font-size:16px;color:var(--text);display:flex;align-items:center;justify-content:space-between;
+  }
+  .chevron{color:var(--text-muted);font-size:12px;}
+  .btn{
+    font-family:'Manrope', sans-serif;font-size:14px;font-weight:600;line-height:1.4;
+    border-radius:var(--radius);padding:12px 24px;border:none;cursor:pointer;
+  }
+  .btn-primary{background:var(--primary);color:var(--primary-fg);}
+  .btn-primary:hover{background:var(--primary-hover);}
+  .btn-destructive{background:var(--destructive);color:var(--destructive-fg);}
+  .btn-destructive:hover{background:var(--destructive-hover);}
+  .submit-row{margin-top:8px;}
+
+  .appt-row{
+    display:flex;align-items:center;justify-content:space-between;
+    border:1px solid var(--border);background:var(--background);
+    padding:16px 20px;margin-bottom:12px;border-radius:var(--radius);
+  }
+  .appt-info{display:flex;flex-direction:column;gap:4px;}
+  .appt-primary{font-size:16px;font-weight:400;color:var(--text);}
+  .appt-meta{font-size:14px;font-weight:400;color:var(--text-muted);}
+  .tag-finished{
+    font-size:12px;font-weight:500;letter-spacing:0.01em;color:var(--text-muted);
+    border:1px solid var(--border);padding:4px 8px;border-radius:var(--radius);
+  }
+
+  .footer{
+    background:var(--neutral);border-top:1px solid var(--border);padding:24px 32px;
+    display:flex;justify-content:space-between;align-items:flex-start;
+    font-size:14px;line-height:1.5;color:var(--text-muted);
+  }
+  .footer-wordmark{font-size:14px;font-weight:700;color:var(--text);margin:0 0 4px 0;}
+  .footer-copyright{margin:0;}
+
+  .icon-chip{
+    display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;
+    background:var(--primary);color:var(--primary-fg);border-radius:6px;
+    font-size:12px;line-height:1;
+  }
+
+  /* =========================================================
+     VARIATION 1 — Tinted sections
+     ========================================================= */
+  .v1 .form-section{background:var(--neutral);border:none;}
+  .v1 .field-control{background:var(--background);border:1px solid var(--border);}
+  .v1 .appt-row{background:var(--neutral);border:none;}
+
+  /* =========================================================
+     VARIATION 2 — Colored accents
+     ========================================================= */
+  .v2 .field label{color:var(--primary);}
+  .v2 .icon-chip{width:20px;height:20px;}
+  .v2 h2.section-title .icon-chip{width:26px;height:26px;font-size:14px;}
+  .v2 .appt-row{border-left:4px solid var(--primary);padding-left:16px;}
+  .v2 .tag-finished{background:var(--neutral);color:var(--primary);border:1px solid var(--primary);}
+  .v2 .field-control.demo-focus{
+    border-color:var(--primary);
+    box-shadow:0 0 0 3px rgba(14,124,155,0.25);
+  }
+  .v2 .focus-caption{font-size:12px;color:var(--primary);font-weight:600;margin-top:6px;}
+
+  /* =========================================================
+     VARIATION 3 — Bolder header band
+     ========================================================= */
+  .v3 .header-band{
+    background:var(--primary);border-radius:var(--radius);
+    padding:32px;margin-bottom:32px;
+  }
+  .v3 .header-band h1.page-title{color:var(--primary-fg);margin:0;}
+
+  /* =========================================================
+     VARIATION 4 — Combined
+     ========================================================= */
+  .v4 .header-band{
+    background:var(--primary);border-radius:var(--radius);
+    padding:32px;margin-bottom:32px;
+  }
+  .v4 .header-band h1.page-title{color:var(--primary-fg);margin:0;}
+  .v4 .form-section{background:var(--neutral);border:none;}
+  .v4 .field-control{background:var(--background);border:1px solid var(--border);}
+  .v4 .field label{color:var(--primary);}
+  .v4 .icon-chip{width:20px;height:20px;}
+  .v4 h2.section-title .icon-chip{width:26px;height:26px;font-size:14px;}
+  .v4 .appt-row{background:var(--neutral);border:none;border-left:4px solid var(--primary);padding-left:16px;}
+  .v4 .tag-finished{background:var(--background);color:var(--primary);border:1px solid var(--primary);}
+</style>
+
+<div class="intro">
+  <h1>Color Usage Directions — Schedule Appointment</h1>
+  <p>Four treatments of the same page, differing only in where/how much of the existing "Modern Warmth" palette (primary teal, destructive red, neutral wash, border, white) is applied. No new colors are introduced in any version. All four use the client-confirmed 8px corner rounding on buttons, inputs, and cards — that part is settled and identical across the board. Copy and layout are reused as-is from the current Schedule Appointment mock.</p>
+</div>
+
+<div class="jumpnav">
+  <a href="#v1">1. Tinted sections</a>
+  <a href="#v2">2. Colored accents</a>
+  <a href="#v3">3. Bolder header band</a>
+  <a href="#v4">4. Combined</a>
+</div>
+
+<!-- =========================================================
+     VARIATION 1
+     ========================================================= -->
+<section class="variation v1" id="v1">
+  <div class="frame-label">Variation 1 of 4</div>
+  <div class="variation-desc"><b>Tinted sections.</b> The booking-form card and each My Appointments row swap their white-fill + thin-border treatment for a light neutral-wash (#EFF6F8) background with no border, so the page reads in distinct zones at a glance instead of thin outlines on white.</div>
+  <div class="mock-wrap">
+    <div class="mock">
+      <div class="nav-bar">
+        <div class="nav-left">
+          <span class="logo">Fake Barbershop</span>
+          <div class="nav-links">
+            <a href="#" class="nav-link">Home</a>
+            <a href="#" class="nav-link active">Schedule Appointment</a>
+            <a href="#" class="nav-link">About</a>
+          </div>
+        </div>
+        <div class="profile-icon">JA</div>
+      </div>
+
+      <div class="page">
+        <h1 class="page-title">Schedule Appointment</h1>
+
+        <div class="form-section">
+          <div class="form-row">
+            <div class="field">
+              <label>Barber</label>
+              <div class="field-control"><span>Manny</span><span class="chevron">&#9662;</span></div>
+            </div>
+            <div class="field">
+              <label>Date</label>
+              <div class="field-control"><span>July 24, 2026</span><span class="chevron">&#9662;</span></div>
+            </div>
+            <div class="field">
+              <label>Time</label>
+              <div class="field-control"><span>11:00 AM</span><span class="chevron">&#9662;</span></div>
+            </div>
+          </div>
+          <div class="submit-row">
+            <button class="btn btn-primary">Submit</button>
+          </div>
+        </div>
+
+        <h2 class="section-title">My Appointments</h2>
+
+        <div class="appt-row">
+          <div class="appt-info">
+            <span class="appt-primary">Manny</span>
+            <span class="appt-meta">11:00 AM, July 24</span>
+          </div>
+          <button class="btn btn-destructive">Cancel</button>
+        </div>
+
+        <div class="appt-row">
+          <div class="appt-info">
+            <span class="appt-primary">Manny</span>
+            <span class="appt-meta">2:00 PM, July 10</span>
+          </div>
+          <span class="tag-finished">Finished</span>
+        </div>
+      </div>
+
+      <div class="footer">
+        <div>
+          <p class="footer-wordmark">Fake Barbershop</p>
+          <p>123 Maple Street, Springfield &middot; (555) 019-2837</p>
+          <p>Mon&ndash;Fri, 9:00 AM &ndash; 4:30 PM</p>
+        </div>
+        <p class="footer-copyright">&copy; 2026 Fake Barbershop</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =========================================================
+     VARIATION 2
+     ========================================================= -->
+<section class="variation v2" id="v2">
+  <div class="frame-label">Variation 2 of 4</div>
+  <div class="variation-desc"><b>Colored accents.</b> Page stays mostly white (cards and rows keep their white fill + border), but small elements pick up primary teal: an icon chip next to "My Appointments" and each field label, teal-tinted field labels, a teal left-border accent stripe on each appointment row, the "Finished" tag re-colored teal instead of neutral gray, and a more visible focus ring (shown here as a static demo on the Date field).</div>
+  <div class="mock-wrap">
+    <div class="mock">
+      <div class="nav-bar">
+        <div class="nav-left">
+          <span class="logo">Fake Barbershop</span>
+          <div class="nav-links">
+            <a href="#" class="nav-link">Home</a>
+            <a href="#" class="nav-link active">Schedule Appointment</a>
+            <a href="#" class="nav-link">About</a>
+          </div>
+        </div>
+        <div class="profile-icon">JA</div>
+      </div>
+
+      <div class="page">
+        <h1 class="page-title">Schedule Appointment</h1>
+
+        <div class="form-section">
+          <div class="form-row">
+            <div class="field">
+              <label><span class="icon-chip">&#9679;</span>Barber</label>
+              <div class="field-control"><span>Manny</span><span class="chevron">&#9662;</span></div>
+            </div>
+            <div class="field">
+              <label><span class="icon-chip">&#9679;</span>Date</label>
+              <div class="field-control demo-focus"><span>July 24, 2026</span><span class="chevron">&#9662;</span></div>
+              <span class="focus-caption">&uarr; focus/hover ring shown enlarged for review</span>
+            </div>
+            <div class="field">
+              <label><span class="icon-chip">&#9679;</span>Time</label>
+              <div class="field-control"><span>11:00 AM</span><span class="chevron">&#9662;</span></div>
+            </div>
+          </div>
+          <div class="submit-row">
+            <button class="btn btn-primary">Submit</button>
+          </div>
+        </div>
+
+        <h2 class="section-title"><span class="icon-chip">&#9776;</span>My Appointments</h2>
+
+        <div class="appt-row">
+          <div class="appt-info">
+            <span class="appt-primary">Manny</span>
+            <span class="appt-meta">11:00 AM, July 24</span>
+          </div>
+          <button class="btn btn-destructive">Cancel</button>
+        </div>
+
+        <div class="appt-row">
+          <div class="appt-info">
+            <span class="appt-primary">Manny</span>
+            <span class="appt-meta">2:00 PM, July 10</span>
+          </div>
+          <span class="tag-finished">Finished</span>
+        </div>
+      </div>
+
+      <div class="footer">
+        <div>
+          <p class="footer-wordmark">Fake Barbershop</p>
+          <p>123 Maple Street, Springfield &middot; (555) 019-2837</p>
+          <p>Mon&ndash;Fri, 9:00 AM &ndash; 4:30 PM</p>
+        </div>
+        <p class="footer-copyright">&copy; 2026 Fake Barbershop</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =========================================================
+     VARIATION 3
+     ========================================================= -->
+<section class="variation v3" id="v3">
+  <div class="frame-label">Variation 3 of 4</div>
+  <div class="variation-desc"><b>Bolder header band.</b> A solid primary-teal band now sits behind the page title, contained to the page width (not full-bleed like Home's diagonal split) &mdash; the same color confidence Home already has, echoed here on a smaller scale. Everything below the band (form card, appointment rows) stays in the current all-white + border treatment.</div>
+  <div class="mock-wrap">
+    <div class="mock">
+      <div class="nav-bar">
+        <div class="nav-left">
+          <span class="logo">Fake Barbershop</span>
+          <div class="nav-links">
+            <a href="#" class="nav-link">Home</a>
+            <a href="#" class="nav-link active">Schedule Appointment</a>
+            <a href="#" class="nav-link">About</a>
+          </div>
+        </div>
+        <div class="profile-icon">JA</div>
+      </div>
+
+      <div class="page">
+        <div class="header-band">
+          <h1 class="page-title">Schedule Appointment</h1>
+        </div>
+
+        <div class="form-section">
+          <div class="form-row">
+            <div class="field">
+              <label>Barber</label>
+              <div class="field-control"><span>Manny</span><span class="chevron">&#9662;</span></div>
+            </div>
+            <div class="field">
+              <label>Date</label>
+              <div class="field-control"><span>July 24, 2026</span><span class="chevron">&#9662;</span></div>
+            </div>
+            <div class="field">
+              <label>Time</label>
+              <div class="field-control"><span>11:00 AM</span><span class="chevron">&#9662;</span></div>
+            </div>
+          </div>
+          <div class="submit-row">
+            <button class="btn btn-primary">Submit</button>
+          </div>
+        </div>
+
+        <h2 class="section-title">My Appointments</h2>
+
+        <div class="appt-row">
+          <div class="appt-info">
+            <span class="appt-primary">Manny</span>
+            <span class="appt-meta">11:00 AM, July 24</span>
+          </div>
+          <button class="btn btn-destructive">Cancel</button>
+        </div>
+
+        <div class="appt-row">
+          <div class="appt-info">
+            <span class="appt-primary">Manny</span>
+            <span class="appt-meta">2:00 PM, July 10</span>
+          </div>
+          <span class="tag-finished">Finished</span>
+        </div>
+      </div>
+
+      <div class="footer">
+        <div>
+          <p class="footer-wordmark">Fake Barbershop</p>
+          <p>123 Maple Street, Springfield &middot; (555) 019-2837</p>
+          <p>Mon&ndash;Fri, 9:00 AM &ndash; 4:30 PM</p>
+        </div>
+        <p class="footer-copyright">&copy; 2026 Fake Barbershop</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =========================================================
+     VARIATION 4
+     ========================================================= -->
+<section class="variation v4" id="v4">
+  <div class="frame-label">Variation 4 of 4</div>
+  <div class="variation-desc"><b>Combined.</b> The teal header band (Variation 3) plus neutral-tinted card/row backgrounds (Variation 1) plus the accent details (Variation 2: icon chips, teal labels, left-border stripe on rows, teal "Finished" tag) &mdash; the most color-forward of the four, still built entirely from existing tokens.</div>
+  <div class="mock-wrap">
+    <div class="mock">
+      <div class="nav-bar">
+        <div class="nav-left">
+          <span class="logo">Fake Barbershop</span>
+          <div class="nav-links">
+            <a href="#" class="nav-link">Home</a>
+            <a href="#" class="nav-link active">Schedule Appointment</a>
+            <a href="#" class="nav-link">About</a>
+          </div>
+        </div>
+        <div class="profile-icon">JA</div>
+      </div>
+
+      <div class="page">
+        <div class="header-band">
+          <h1 class="page-title">Schedule Appointment</h1>
+        </div>
+
+        <div class="form-section">
+          <div class="form-row">
+            <div class="field">
+              <label><span class="icon-chip">&#9679;</span>Barber</label>
+              <div class="field-control"><span>Manny</span><span class="chevron">&#9662;</span></div>
+            </div>
+            <div class="field">
+              <label><span class="icon-chip">&#9679;</span>Date</label>
+              <div class="field-control"><span>July 24, 2026</span><span class="chevron">&#9662;</span></div>
+            </div>
+            <div class="field">
+              <label><span class="icon-chip">&#9679;</span>Time</label>
+              <div class="field-control"><span>11:00 AM</span><span class="chevron">&#9662;</span></div>
+            </div>
+          </div>
+          <div class="submit-row">
+            <button class="btn btn-primary">Submit</button>
+          </div>
+        </div>
+
+        <h2 class="section-title"><span class="icon-chip">&#9776;</span>My Appointments</h2>
+
+        <div class="appt-row">
+          <div class="appt-info">
+            <span class="appt-primary">Manny</span>
+            <span class="appt-meta">11:00 AM, July 24</span>
+          </div>
+          <button class="btn btn-destructive">Cancel</button>
+        </div>
+
+        <div class="appt-row">
+          <div class="appt-info">
+            <span class="appt-primary">Manny</span>
+            <span class="appt-meta">2:00 PM, July 10</span>
+          </div>
+          <span class="tag-finished">Finished</span>
+        </div>
+      </div>
+
+      <div class="footer">
+        <div>
+          <p class="footer-wordmark">Fake Barbershop</p>
+          <p>123 Maple Street, Springfield &middot; (555) 019-2837</p>
+          <p>Mon&ndash;Fri, 9:00 AM &ndash; 4:30 PM</p>
+        </div>
+        <p class="footer-copyright">&copy; 2026 Fake Barbershop</p>
+      </div>
+    </div>
+  </div>
+</section>

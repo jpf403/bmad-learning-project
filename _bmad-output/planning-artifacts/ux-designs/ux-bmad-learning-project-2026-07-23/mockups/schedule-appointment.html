@@ -1,11 +1,13 @@
 <!--
-Illustrates:
-  DESIGN.md: Colors, Typography, Elevation & Depth (border-only in-flow triggers/rows),
-             Components (nav-bar signed-in, input, select-dropdown, schedule-row-booked,
-             button-primary/destructive, confirmation-screen)
+Illustrates (revised 2026-07-24 for client feedback: tinted sections + subtle rounding):
+  DESIGN.md: Colors (Neutral as primary tint fill), Typography, Elevation & Depth
+             (tinted in-flow containers vs. bordered individual controls), Shapes
+             (rounded.DEFAULT/lg scale), Components (nav-bar signed-in, input,
+             select-dropdown, form-section, schedule-row-booked, button-primary/
+             destructive, confirmation-screen)
   EXPERIENCE.md: Information Architecture (Schedule Appointment row), Component Patterns rows
-                 "Booking form", "Confirmation screen", "My Appointments list",
-                 State Patterns row "Finished appointments",
+                 "Booking form", "Confirmation screen", "My Appointments list" (upcoming-only,
+                 no Finished tag per amended FR24),
                  Key Flow 1 steps 3-8 (Jack signs in -> lands on Schedule Appointment ->
                  selects Manny/July 24/11:00 AM -> Submit -> confirmation screen climax)
 -->
@@ -79,15 +81,15 @@ Illustrates:
   h1.page-title{font-size:32px;font-weight:700;line-height:1.2;margin:0 0 24px 0;}
   h2.section-title{font-size:24px;font-weight:600;line-height:1.25;margin:0 0 16px 0;}
 
-  /* ---- Booking form ---- */
-  .form-section{border:1px solid var(--border);padding:24px;margin-bottom:48px;}
+  /* ---- Booking form ({components.form-section}: tinted card, no border) ---- */
+  .form-section{background:var(--neutral);border-radius:8px;padding:24px;margin-bottom:48px;}
   .form-row{display:flex;gap:16px;margin-bottom:16px;}
   .field{flex:1;display:flex;flex-direction:column;gap:8px;}
   .field label{font-size:14px;font-weight:600;line-height:1.4;color:var(--text);}
   .field-control{
     background:var(--background);
     border:1px solid var(--border);
-    border-radius:0;
+    border-radius:6px;
     padding:12px 16px;
     font-size:16px;
     color:var(--text);
@@ -99,29 +101,23 @@ Illustrates:
   .btn{
     font-family:'Manrope', sans-serif;
     font-size:14px;font-weight:600;line-height:1.4;
-    border-radius:0;padding:12px 24px;border:none;cursor:pointer;
+    border-radius:6px;padding:12px 24px;border:none;cursor:pointer;
   }
   .btn-primary{background:var(--primary);color:var(--primary-fg);}
   .btn-destructive{background:var(--destructive);color:var(--destructive-fg);}
   .submit-row{margin-top:8px;}
 
-  /* ---- My Appointments (reuses schedule-row-booked) ---- */
+  /* ---- My Appointments ({components.schedule-row-booked}: tinted, no border, upcoming-only) ---- */
   .appt-row{
     display:flex;align-items:center;justify-content:space-between;
-    border:1px solid var(--border);
-    background:var(--background);
+    background:var(--neutral);
+    border-radius:6px;
     padding:16px 20px;
     margin-bottom:12px;
   }
   .appt-info{display:flex;flex-direction:column;gap:4px;}
   .appt-primary{font-size:16px;font-weight:400;color:var(--text);}
   .appt-meta{font-size:14px;font-weight:400;color:var(--text-muted);}
-  .tag-finished{
-    font-size:12px;font-weight:500;letter-spacing:0.01em;
-    color:var(--text-muted);
-    border:1px solid var(--border);
-    padding:4px 8px;
-  }
 
   /* ---- Confirmation screen ---- */
   .confirmation{
@@ -205,14 +201,6 @@ Illustrates:
       <span class="appt-meta">11:00 AM, July 24</span>
     </div>
     <button class="btn btn-destructive">Cancel</button>
-  </div>
-
-  <div class="appt-row">
-    <div class="appt-info">
-      <span class="appt-primary">Manny</span>
-      <span class="appt-meta">2:00 PM, July 10</span>
-    </div>
-    <span class="tag-finished">Finished</span>
   </div>
 </div>
 

@@ -1,11 +1,11 @@
 ---
 name: Fake Barbershop
-description: Barbershop appointment scheduler (portfolio/learning project). React frontend, fully custom CSS/components except Radix UI primitives for calendar, dropdown/select, and modal — "Modern Warmth" palette, Manrope, fully square corners, light-only.
+description: Barbershop appointment scheduler (portfolio/learning project). React frontend, fully custom CSS/components except Radix UI primitives for calendar, dropdown/select, and modal — "Modern Warmth" palette, Manrope, subtly rounded corners, light-only.
 status: final
 sources:
   - "{planning_artifacts}/prds/prd-bmad-learning-project-2026-07-21/prd.md"
   - "{planning_artifacts}/prds/prd-bmad-learning-project-2026-07-21/addendum.md"
-updated: 2026-07-23
+updated: 2026-07-24
 colors:
   # "Modern Warmth" — picked direction, variation 5 of 6 explored in
   # .working/color-themes-1.html. Hex values are locked client decisions.
@@ -76,19 +76,22 @@ typography:
     lineHeight: '1.4'
     letterSpacing: 0.01em
 rounded:
-  # Fully square corners is an explicit, locked decision (not an oversight) —
-  # the client wants to try it for character. The scale intentionally
-  # collapses to zero at every step, including `full`, rather than being
-  # omitted: an omitted scale invites a framework default (e.g. a UI kit's
-  # rounded-full utility) to leak back in on a badge or avatar. Setting
-  # every step to 0px — and stating there are no pill/capsule shapes in
-  # this product — closes that gap explicitly.
-  DEFAULT: 0px
-  sm: 0px
-  md: 0px
-  lg: 0px
-  xl: 0px
-  full: 0px
+  # Revised, subtly-rounded scale — previously this was all-0px/square (see
+  # git history / Shapes below for that earlier direction). That square,
+  # hairline-bordered language was flagged at the time as exploratory and
+  # revisitable, and direct client feedback after seeing the finished
+  # product asked for something closer to "Figma-based style, like rounded
+  # buttons." The client explicitly wants subtle rounding, not pill-shaped
+  # controls, so the scale below stays in the 4–8px range at every step.
+  # `full` remains a standard available step (e.g. the circular profile-icon
+  # avatar) — it is not a signal that buttons or other rectangular surfaces
+  # should go pill-shaped anywhere in this product.
+  sm: 4px
+  DEFAULT: 6px
+  md: 6px
+  lg: 8px
+  xl: 8px
+  full: 9999px
 spacing:
   # No spacing scale was discussed with the client. This is a standard
   # 4px-base scale, proposed as a sensible default — not a bespoke decision.
@@ -199,19 +202,32 @@ components:
     radius: '{rounded.DEFAULT}'
     overlay-scrim: 'rgba(23, 36, 42, 0.4)'
   schedule-row-open:
-    background: '{colors.background}'
-    border: '1px solid {colors.border}'
+    # Tinted-section treatment (client feedback: non-Home pages "lacked
+    # color"). Neutral fill, no border; hover deepens to the border tint.
+    background: '{colors.neutral}'
+    hover-background: '{colors.border}'
     foreground: '{colors.text-muted}'
   schedule-row-booked:
-    background: '{colors.background}'
-    border: '1px solid {colors.border}'
+    # Same tinted-section treatment as schedule-row-open.
+    background: '{colors.neutral}'
+    hover-background: '{colors.border}'
     foreground: '{colors.text}'
     cancel-button: '{components.button-destructive}'
   admin-account-row:
-    background: '{colors.background}'
-    border: '1px solid {colors.border}'
-    hover-background: '{colors.neutral}'
+    # Same tinted-section treatment; hover-background is now a distinct,
+    # visibly darker tint since the resting state is already neutral-filled.
+    background: '{colors.neutral}'
+    hover-background: '{colors.border}'
     foreground: '{colors.text}'
+  form-section:
+    # New tinted-card treatment for the booking-form container (and other
+    # single-form pages: Account, Login, Register). Part of the "Tinted
+    # sections" fix for client feedback that non-Home pages "lacked color."
+    # Previously this container had no dedicated token — it relied on a
+    # border via generic "form sections" prose in Colors, not a real entry.
+    background: '{colors.neutral}'
+    radius: '{rounded.lg}'
+    padding: '{spacing.6}'
   date-nav-arrow:
     # My Schedule's day-step controls, either side of the date header.
     foreground: '{colors.text-muted}'
@@ -245,7 +261,7 @@ components:
 
 Fake Barbershop is a portfolio/learning project built as a real, working appointment scheduler — not a mockup. The brand posture follows the product's actual claim: booking a haircut should feel as fast and unfussy as the cut itself. Nothing about the visual language should slow a customer down or make an admin second-guess a click.
 
-The identity has two ingredients doing all the work: a warm-but-professional teal-blue that means "this is the thing you can act on," and a fully square, hairline-bordered surface language that reads as precise and tool-like rather than soft and consumer-app-like. There's no logo mark — just a wordmark, "Fake Barbershop," set in Manrope. The square corners are the one deliberately exploratory choice in this system (full rule in Shapes, below). Every other decision here is in service of making that sharp-edged surface feel calm and trustworthy rather than harsh — which is why the palette leans warm and the shadow language is disciplined rather than decorative.
+The identity has two ingredients doing all the work: a warm-but-professional teal-blue that means "this is the thing you can act on," and a subtly-rounded surface language, built from tinted-section fills on grouped content, that reads as approachable and considered rather than sterile. There's no logo mark — just a wordmark, "Fake Barbershop," set in Manrope. This revises the original all-square, border-only direction (full rule in Shapes, below) after direct client feedback that it read as too monochrome and not "Figma-style" enough — that square language had been explicitly flagged at the time as the one exploratory, revisitable choice in the system, and this is that revision. Every other decision here is in service of making the surface feel calm and trustworthy — which is why the palette leans warm and the shadow language is disciplined rather than decorative.
 
 The frontend is fully custom CSS and components, with one exception: Radix UI's unstyled, accessible primitives power the calendar/date-picker, the dropdown/select menus, and the modal/dialog. Those three surfaces are the highest-risk spots for accessibility bugs (focus trapping, keyboard navigation, ARIA semantics) if hand-rolled — Radix supplies the behavior, this document supplies 100% of the visual skin on top of it. Buttons, nav, forms, schedule rows, and layout are fully custom, no library involved.
 
@@ -258,8 +274,8 @@ The frontend is fully custom CSS and components, with one exception: Radix UI's 
   - *Contrast:* `{colors.destructive}` against white computes to **≈5.06:1**, clearing the 4.5:1 AA threshold for normal-size text with a bit of margin. This is a deliberately darkened shade — the original candidate (`#D64545`) sat at ≈4.38:1, just under AA for the 14px/600 button labels this color is used on; client decision was to darken the fill rather than accept the shortfall or carve out a smaller-text exception, so `#C93A3A` is the single destructive value everywhere, no size-dependent variants.
 - **Destructive Hover (`{colors.destructive-hover}`, `#A83030`)** extends the same darker-on-hover pattern already locked for primary — not an explicit client decision on the exact hex, but inferred from that rule and re-tuned to match the darkened destructive base. Computes to ≈6.71:1 against white, consistent with hover states being a genuine contrast improvement over resting state, not just cosmetic.
 - **Background (`{colors.background}`, `#FFFFFF`)** is the page canvas everywhere. No off-white, no tinted surface — pure white, consistent with "slick modern" and the light-only mandate.
-- **Neutral/Muted (`{colors.neutral}`, `#EFF6F8`)** is a barely-there wash used for hover states on rows/bars (admin account rows, dropdown option hover) and for subtle section separation. It is never a primary surface color.
-- **Border (`{colors.border}`, `#D3E4E9`)** is the workhorse of the elevation model (see below) — the hairline that defines every in-flow element: schedule rows, admin account bars, form sections, input fields.
+- **Neutral/Muted (`{colors.neutral}`, `#EFF6F8`)** is now a primary fill color, not just a wash — it's the "Tinted sections" fix for client feedback that non-Home pages read as too monochrome/white. It's the resting-state background for every grouped, in-flow container: schedule rows (open and booked), admin account rows/bars, and the booking-form card (`{components.form-section}`, also reused by other single-form pages). It's still never used for a full-page background — that stays `{colors.background}` white — and it's still not part of Home's hero, which stays the untouched primary-teal/white split.
+- **Border (`{colors.border}`, `#D3E4E9`)** now covers a narrower, more specific set of jobs than before, following the tinted-sections change: the nav-bar bottom rule, the footer top rule, individual input-field outlines, and dropdown/calendar trigger outlines in their resting customer-facing state. Schedule rows, admin account bars, and form sections no longer use it as a resting-state outline (they're neutral-tinted with no border — see above); instead, `{colors.border}` is repurposed as the *hover-state fill* for those tinted rows/cards, a darker tint layered on top of `{colors.neutral}` rather than a hairline around it.
 - **Text (`{colors.text}`, `#17242A`) and Text-Muted (`{colors.text-muted}`, `#5B7480`)** are proposed defaults, not explicit client decisions — the memlog locked interactive-element and surface colors but never a body-text color. `{colors.text}` is a dark, cool-leaning near-black (not pure `#000`) chosen to sit comfortably next to the teal palette; `{colors.text-muted}` is used for secondary copy, placeholder text, and open (unbooked) schedule-slot labels.
   - *Contrast:* `{colors.text-muted}` against white computes to **≈4.93:1** — clears the 4.5:1 AA threshold for normal-size text, but by a narrower margin than the primary/destructive pairings above. Worth stating explicitly for the same reason those two are: this is the color used for open-slot labels and placeholder text, and it doesn't have much room to get lighter or shift hue before it drops below AA.
 - **Open gap:** no error/warning color exists in this palette for form validation (e.g., a password-confirmation mismatch on Register/Account/Admin-edit). Using `{colors.destructive}` for that would conflict with the "destructive red only for destructive *actions*" rule above — a validation message isn't a destructive action. This document does not invent one; it's flagged as an item for a follow-up pass.
@@ -287,35 +303,39 @@ The product is responsive across mobile and desktop viewports (no native app), w
 
 ## Elevation & Depth
 
-Exactly two depth states exist in this system, and the rule is deliberately binary: **border means "in the page," shadow means "floating above the page."** Shadow is never decorative — if something casts one, it's because it's an overlay sitting on top of the flow, not because it looked nice.
+Three depth states exist in this system now (previously two, before the tinted-sections change split "in-flow" into two distinct treatments). Shadow is still never decorative — if something casts one, it's because it's an overlay sitting on top of the flow, not because it looked nice.
 
-- **In-flow (border only, no shadow):** schedule rows (both open and booked), admin account rows/bars, form sections, input fields, closed dropdown triggers in their default/customer-facing context, and the site footer. All use `{colors.border}` as a 1px hairline.
-- **Floating (shadow, subtle):** confirm-action popups, the admin account-edit popup, and any open dropdown/select menu (calendar panel, barber-select menu, time-slot menu) while expanded. The shadow should read as a soft, close lift — not a dramatic drop shadow; it exists to signal "this will go away if you click outside," not to add visual weight.
+- **Individual controls (white + border, no shadow, no tint):** input fields, dropdown/calendar triggers in their resting customer-facing state, the nav bar, and the footer. All use `{colors.border}` as a 1px hairline against `{colors.background}` white — these are single controls or unrelated page-level separators, not grouped containers, so they keep the original outline treatment.
+- **Grouped in-flow containers (neutral tint, no border):** schedule rows (both open and booked), admin account rows/bars, and the booking-form card (`{components.form-section}`). These sit in the page flow like the controls above, but as row/card-level containers for grouped content they now use a `{colors.neutral}` fill with no border — the "Tinted sections" fix for feedback that non-Home pages lacked color. Hover swaps the fill to `{colors.border}` as a slightly darker tint, reusing the existing border color rather than introducing a new hex.
+- **Floating (shadow, subtle):** confirm-action popups, the admin account-edit popup, and any open dropdown/select menu (calendar panel, barber-select menu, time-slot menu) while expanded. Unchanged by the tinted-sections update. The shadow should read as a soft, close lift — not a dramatic drop shadow; it exists to signal "this will go away if you click outside," not to add visual weight.
 - **Named exception:** the admin-only barber-select control on My Schedule (`{components.select-dropdown-admin-barber}`) carries the floating shadow *at rest*, closed, not just when its menu is open. This is intentional, not an inconsistency: in the admin view it functions as a page-level filter sitting above the schedule list it governs, and the shadow signals that relationship even before it's interacted with. The equivalent barber-select on the customer-facing Schedule Appointment page lives inside the booking form and stays border-only at rest, consistent with the general rule — only the admin variant gets the exception. → `mockups/my-schedule.html`.
 
 Motion is minimal and tied to the same floating/overlay set: a fast, subtle fade-and-slide (roughly 120–160ms, ease-out) on popups and dropdown menus opening/closing. Nothing else in the product animates — no hover transitions beyond the instant color swap, no page-transition choreography, no decorative motion. Exact easing/duration values above are a proposed default, not yet reviewed with the client.
 
 ## Shapes
 
-Every corner in this product is square — `border-radius: 0` on buttons, inputs, cards, rows, popups, and the modal/dialog surfaces, with no `clip-path` chamfering anywhere. This is explicit and intentional: the client wants to try a fully sharp-edged surface language for character, not an oversight or a placeholder. There are no pill/capsule shapes anywhere in the product (no rounded status badges, no circular chips) — the one possible exception, a circular profile-icon avatar in the signed-in nav, is a shape decision for that specific icon glyph, not a `border-radius` override, and doesn't reintroduce roundedness to any rectangular surface.
+Corners are now subtly rounded, in the 4–8px range depending on the element — `{rounded.DEFAULT}`/6px for most buttons, inputs, and rows, `{rounded.lg}`/8px for larger card-level containers like `{components.form-section}` and popups. This reverses the earlier all-square decision (`border-radius: 0` everywhere) after direct client feedback asking for something closer to a familiar, "Figma-style" softness — "like rounded buttons" — rather than the sharper, tool-like edge the square language was going for. That original decision was flagged at the time as the one exploratory, revisitable choice in the system, and this is that revision.
+
+There are still no pill/capsule shapes anywhere in the product (no fully-rounded status badges, no circular chips) — this stays a deliberate choice, not an oversight: when offered the option, the client specifically asked for "subtle" rounding, not pill-shaped buttons. The one circular element remains the profile-icon avatar in the signed-in nav, now consistently expressible via the standard `{rounded.full}` scale step rather than a one-off exception outside the scale.
 
 ## Components
 
-- **Button — Primary (`{components.button-primary}`).** `{colors.primary}` fill, `{colors.primary-foreground}` label, no border, square corners, `{typography.label}` sizing. Used for "Schedule Appointment" (nav CTA and Home hero CTA), form "Submit" actions, and non-destructive "Confirm" inside popups. Hover/active swaps fill to `{colors.primary-hover}` on pointer devices only.
+- **Button — Primary (`{components.button-primary}`).** `{colors.primary}` fill, `{colors.primary-foreground}` label, no border, `{rounded.DEFAULT}` corners, `{typography.label}` sizing. Used for "Schedule Appointment" (nav CTA and Home hero CTA), form "Submit" actions, and non-destructive "Confirm" inside popups. Hover/active swaps fill to `{colors.primary-hover}` on pointer devices only.
 - **Button — Destructive (`{components.button-destructive}`).** `{colors.destructive}` fill, `{colors.destructive-foreground}` label, otherwise identical shape/sizing to primary. Used *only* for "Cancel" on a booked schedule row, "Delete" in the admin account-edit popup, and destructive "Confirm" inside a confirm-popup. Passes AA contrast at ≈5.06:1 — see the Colors section above.
 - **Button — Secondary/neutral (`{components.button-secondary}`).** White fill, `{colors.primary}` label, `{colors.border}` outline. Used for "Go Back" in every confirm-popup (always white/neutral, regardless of what it's cancelling out of) and, as a proposed default not explicitly locked, for "Sign In" in the nav — a lower-emphasis companion to a more prominent "Register."
 - **Footer (`{components.footer}`).** Present on every page, below all content. `{colors.neutral}` fill with a `{colors.border}` top border — the same "subtle section separation" use of neutral defined in Colors above, not a new pattern. Carries, in `{colors.text-muted}` at `{typography.body-sm}`: the "Fake Barbershop" wordmark (in `{colors.text}`, smaller and quieter than the nav logo — it's a footer credit, not a second brand moment), address and phone (same fake contact info as the About page), hours ("Mon–Fri, 9:00 AM – 4:30 PM," matching the shop's actual booking window and the weekends-closed rule), and a copyright line ("© 2026 Fake Barbershop"). No links, no social icons — kept as simple as every other surface in this product.
 - **Nav bar (`{components.nav-bar}`).** Present on every page. Left: wordmark logo (`{colors.text}`, no graphic mark). Center/left-of-center: Home, Schedule Appointment, About, My Schedule, Admin Panel — My Schedule hidden unless the signed-in user is a barber or admin, Admin Panel hidden unless admin, matching the product's role-based visibility rule. The active link is `{colors.primary}` with a `{colors.primary}` underline; inactive links are `{colors.text-muted}`. Right side: signed-out shows Sign In (secondary/neutral button) + Register (primary button); signed-in replaces both with a profile icon that opens a dropdown (Radix) listing account actions and sign-out — the icon's own visual treatment (avatar vs. generic glyph) is a default left open for implementation, not specified here.
-- **Form inputs (`{components.input}`), including double-entry password fields.** Single-line text style: white fill, `{colors.border}` outline, square corners, `{colors.text}` value color, `{colors.text-muted}` placeholder. Focus state swaps the border to `{colors.primary}`. Register, Account, and Admin account-edit all use the identical double-entry pattern for passwords: two stacked `{components.input}` fields ("Password," "Confirm Password") with no visual distinction between them beyond the label — there is currently no defined error/warning color for a mismatch state (see the open gap noted in Colors); until one exists, a mismatch should surface as a plain-text message in `{typography.caption}` using `{colors.text}`, not a color-coded alert.
+- **Form inputs (`{components.input}`), including double-entry password fields.** Single-line text style: white fill, `{colors.border}` outline, `{rounded.DEFAULT}` corners, `{colors.text}` value color, `{colors.text-muted}` placeholder. Focus state swaps the border to `{colors.primary}`. Register, Account, and Admin account-edit all use the identical double-entry pattern for passwords: two stacked `{components.input}` fields ("Password," "Confirm Password") with no visual distinction between them beyond the label — there is currently no defined error/warning color for a mismatch state (see the open gap noted in Colors); until one exists, a mismatch should surface as a plain-text message in `{typography.caption}` using `{colors.text}`, not a color-coded alert.
+- **Form-section card (`{components.form-section}`).** The tinted container wrapping the booking form on Schedule Appointment, and reused by other single-form pages (Account, Login, Register) that were previously bare white pages relying only on their individual bordered inputs for definition. `{colors.neutral}` fill, no border, `{rounded.lg}` corners, `{spacing.6}` padding — part of the same "Tinted sections" fix as the schedule and admin rows above.
 - **Calendar / date-picker (`{components.calendar}`).** Radix Popover-driven date picker, fully restyled: closed trigger is border-only in the booking form; the open panel is a floating surface with `{colors.background}` fill and the standard floating shadow. Selected day is a solid `{colors.primary}` fill with `{colors.primary-foreground}` text; today is indicated by `{colors.primary}` text only (no fill) so it doesn't compete visually with the actual selection.
 - **Barber-select dropdown (`{components.select-dropdown}` / `{components.select-dropdown-admin-barber}`).** Customer-facing (Schedule Appointment form): standard border-only trigger, floating-shadow menu when open. Admin-facing (My Schedule, next to the date header): the trigger itself carries the floating shadow at rest — the one deliberate exception in the elevation model, explained in Elevation & Depth above.
 - **Time-slot dropdown (`{components.select-dropdown}`).** Same visual family as the barber-select: border-only trigger inside the booking form, floating-shadow menu when expanded, `{colors.neutral}` hover wash on individual options.
-- **Schedule row — open slot (`{components.schedule-row-open}`).** In-flow, border-only. Time label in `{colors.text-muted}` (nothing to act on yet).
-- **Schedule row — booked slot (`{components.schedule-row-booked}`).** Same border-only surface, but shows the customer's name in `{colors.text}` plus a `{components.button-destructive}` "Cancel" button, right-aligned.
-- **Admin account row/bar (`{components.admin-account-row}`).** In-flow, border-only, clickable — `{colors.neutral}` hover wash signals interactivity. Clicking opens the account-edit modal.
+- **Schedule row — open slot (`{components.schedule-row-open}`).** Tinted in-flow container: `{colors.neutral}` fill, no border. Hover deepens the fill to `{colors.border}`. Time label in `{colors.text-muted}` (nothing to act on yet).
+- **Schedule row — booked slot (`{components.schedule-row-booked}`).** Same tinted surface as schedule-row-open (`{colors.neutral}` fill, no border, `{colors.border}` on hover), but shows the customer's name in `{colors.text}` plus a `{components.button-destructive}` "Cancel" button, right-aligned. My Appointments rows reuse this same treatment.
+- **Admin account row/bar (`{components.admin-account-row}`).** Tinted in-flow container, clickable — `{colors.neutral}` resting fill, no border, with `{colors.border}` as a distinct hover state signaling interactivity. Clicking opens the account-edit modal.
 - **Date-nav arrows (`{components.date-nav-arrow}`).** The two day-step controls flanking My Schedule's date header. Resting state uses `{colors.text-muted}`; hover (pointer devices only) swaps to `{colors.primary}`; a disabled edge case (should one ever exist) would use `{colors.border}`. No background, no border — icon-only, sized at 20px.
 - **Admin account-edit / account-create popup (`{components.admin-account-popup}`).** The field layout inside `{components.modal}` for both variants: stacked `{components.input}` fields (and `{components.select-dropdown}` for the permission-level field, edit-only) separated by `{spacing.4}`, grouped into logical sections (identity fields, then password fields) separated by `{spacing.6}`, with `{spacing.3}` above the footer row of Cancel/Save or Cancel/Delete buttons. Same shell for edit and create — create simply omits the permission-select field per its behavioral spec in EXPERIENCE.md.
-- **Confirm-action popup (`{components.confirm-popup}`).** Radix Dialog, floating surface, square corners. Always exactly two buttons: **"Go Back"** in `{components.button-secondary}` (white/neutral) on every instance, and **"Confirm"** whose color is context-dependent — this is a real, non-obvious rule, not a stylistic flourish: `{components.button-primary}` (blue) when confirming a non-destructive action like saving an account edit, `{components.button-destructive}` (red) when confirming a destructive action like cancelling an appointment or deleting an account. The same popup shell is reused for both the account-edit and delete flows in the Admin Panel — only the Confirm button's color and destination action differ. → `mockups/confirm-popup.html` (destructive and non-destructive variants side by side).
+- **Confirm-action popup (`{components.confirm-popup}`).** Radix Dialog, floating surface, `{rounded.DEFAULT}` corners. Always exactly two buttons: **"Go Back"** in `{components.button-secondary}` (white/neutral) on every instance, and **"Confirm"** whose color is context-dependent — this is a real, non-obvious rule, not a stylistic flourish: `{components.button-primary}` (blue) when confirming a non-destructive action like saving an account edit, `{components.button-destructive}` (red) when confirming a destructive action like cancelling an appointment or deleting an account. The same popup shell is reused for both the account-edit and delete flows in the Admin Panel — only the Confirm button's color and destination action differ. → `mockups/confirm-popup.html` (destructive and non-destructive variants side by side).
 - **Confirmation screen (`{components.confirmation-screen}`).** Post-booking, full page (not a popup) — plain `{colors.background}`, a `{colors.primary}`-accented confirmation line in `{typography.h2}` or similar weight, and the booking detail in `{typography.body}`/`{colors.text}`. Copy in this register: plain and specific, e.g. "Appointment booked with Manny at 11:00 AM on July 24." No celebratory iconography or color beyond the single primary accent. → `mockups/schedule-appointment.html` (second state in that file).
 - **Home hero.** A curved/angled diagonal splits the page into a white half (left) and a `{colors.primary}`-filled half (right). The white half carries a short headline plus the `{components.button-primary}` "Schedule Appointment" CTA — exact headline copy is a content-pass decision owned by EXPERIENCE.md/copywriting, not fixed here. The blue half carries a scissor-and-comb graphic, the two crossed like an X; this is the only illustrative graphic element in the entire product. → `mockups/home.html`.
 
@@ -324,7 +344,7 @@ Every corner in this product is square — `border-radius: 0` on buttons, inputs
 | Do | Don't |
 |---|---|
 | Use `{colors.destructive}` only for Cancel/Delete actions and their destructive-context Confirm button | Use red for warnings, emphasis, validation, or any non-destructive state |
-| Keep every corner at `{rounded.DEFAULT}` (0px) — buttons, inputs, rows, popups, modal | Round any corner "just this once," or reach for `clip-path` chamfering |
+| Keep every corner at its assigned `{rounded.*}` step — don't introduce one-off radius values outside the defined scale | Reintroduce sharp 0px corners without a documented decision, or go pill-shaped when the client asked for subtle rounding |
 | Use a shadow only on floating/overlay surfaces (popups, open dropdown/select menus, modal) | Add shadow to anything sitting in normal page flow (rows, bars, form sections, in-flow input) |
 | Trigger hover/active color states only on pointer/desktop input | Fire hover states from touch input, or make an action only discoverable via hover |
 | Keep the confirm-popup's "Go Back" button white/neutral in every instance | Recolor "Go Back" to match the action being confirmed |

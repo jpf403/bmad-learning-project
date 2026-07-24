@@ -1,8 +1,10 @@
 <!--
-Illustrates:
-  DESIGN.md: Colors, Typography, Elevation & Depth (floating = shadow, modal overlay-scrim),
-             Shapes (square corners on popup), Components (confirm-popup, modal,
-             button-secondary, button-destructive, button-primary), Do's and Don'ts
+Illustrates (revised 2026-07-24 for client feedback: subtle rounding; popup itself stays
+white/untinted since it's a floating overlay, not one of the "page lacked color" surfaces):
+  DESIGN.md: Colors, Typography, Elevation & Depth (floating = shadow, modal overlay-scrim,
+             unaffected by the tinted-sections change), Shapes (rounded.lg corners on popup,
+             was square), Components (confirm-popup, modal, button-secondary,
+             button-destructive, button-primary), Do's and Don'ts
              ("Go Back" always neutral; Confirm colored by consequence)
   EXPERIENCE.md: Component Patterns row "Confirm-action popup", Information Architecture
                  (Confirm-action popup row), Key Flow 2 (Cancel an appointment — destructive),
@@ -57,7 +59,7 @@ Illustrates:
   }
   .popup{
     background:var(--background);
-    border-radius:0;
+    border-radius:8px;
     box-shadow:0 8px 24px rgba(23,36,42,0.28);
     width:400px;
     padding:24px;
@@ -75,7 +77,7 @@ Illustrates:
   .popup-footer{display:flex;justify-content:flex-end;gap:12px;}
   .btn{
     font-family:'Manrope', sans-serif;font-size:14px;font-weight:600;line-height:1.4;
-    border-radius:0;padding:12px 24px;border:none;cursor:pointer;
+    border-radius:6px;padding:12px 24px;border:none;cursor:pointer;
   }
   .btn-secondary{background:var(--background);color:var(--primary);border:1px solid var(--border);}
   .btn-destructive{background:var(--destructive);color:var(--destructive-fg);}
