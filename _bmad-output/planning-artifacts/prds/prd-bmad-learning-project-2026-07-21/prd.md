@@ -29,7 +29,7 @@ The goal is straightforward: give customers a way to book a time slot in advance
 ## User Journeys
 
 **UJ-1: Customer registers and books an appointment (signed-in).**
-A new customer lands on the home page and selects Create Account, entering email, password, first name, and last name to register. On a return visit, the customer signs in with email/password. Once signed in, they navigate to the Schedule Appointment page, select their barber, open the calendar widget to pick a date (past dates disabled, no forward limit), open the time dropdown to select an available slot, and submit — the appointment is booked under their account.
+A new customer lands on the home page and selects Create Account, entering email, password, first name, and last name to register. On a return visit, the customer signs in with email/password. Once signed in, they navigate to the Schedule Appointment page, select their barber, open the calendar widget to pick a date (past dates disabled, future dates capped at 30 days out), open the time dropdown to select an available slot, and submit — the appointment is booked under their account.
 
 **UJ-2: Barber views their schedule.**
 A barber signs in and is routed directly to their own schedule (not the home page). The view defaults to today and lists every fixed time slot from 9:00 AM to 4:30 PM in 30-minute increments; booked slots show the customer's name, open slots show as available. Back/forward arrows navigate to other days. The barber can also book an appointment via the Schedule Appointment page, and sees only their own appointments, never another barber's.

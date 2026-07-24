@@ -111,7 +111,7 @@ graph LR
 
 - **Binds:** FR7, FR8
 - **Prevents:** trusting the calendar/time-dropdown widget's client-side disabling as the actual guard (same failure mode AD-2/FR3 closes for role checks)
-- **Rule:** on every booking submission, the server independently re-checks: date is not in the past, date is a weekday (weekends closed), date is within the 30-day forward cap (FR7), and — for a same-day booking — the slot isn't within 30 minutes of current EST time (FR8/AD-12). A disabled calendar cell or filtered dropdown option is a UX convenience, never the enforcement point. *Note: FR7 states a 30-day forward cap while UJ-1's narrative says "no forward limit" — this spine follows the explicit numbered FR as authoritative; the PRD's wording should be reconciled to remove the contradiction.*
+- **Rule:** on every booking submission, the server independently re-checks: date is not in the past, date is a weekday (weekends closed), date is within the 30-day forward cap (FR7), and — for a same-day booking — the slot isn't within 30 minutes of current EST time (FR8/AD-12). A disabled calendar cell or filtered dropdown option is a UX convenience, never the enforcement point.
 
 ### AD-15 — Account soft-delete with relaxed email uniqueness
 
@@ -232,4 +232,3 @@ erDiagram
 - **Guest (unauthenticated) booking** — PRD non-goal, called out as a possible same-day addition that never landed; revisit architecture if it's added later.
 - **Dev database seeding with sample data** — explicitly declined; dev DB starts empty via `Database.Migrate()` (AD-10).
 - **UX open items touching implementation** — DESIGN.md flags no error/warning color exists yet for form-validation states (e.g., password-mismatch messages), and the exact tablet breakpoint pixel value is undefined (only named, not sized); both need a decision before the components that depend on them are built, but neither is an architecture-level call. Owner: UX (Sally) — revisit before the ScheduleAppointment/Register/Account components are built.
-- **PRD self-contradiction on booking forward limit** — UJ-1's narrative says "no forward limit" while FR7 states a 30-day cap; AD-14 follows FR7, but the PRD text itself should be reconciled by the user so the two don't keep disagreeing on paper.
