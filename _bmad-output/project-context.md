@@ -70,6 +70,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - Frontend tests: Vitest + jsdom + React Testing Library + user-event; stub API calls directly via `vi.fn()`/`vi.spyOn(fetch)` — no MSW, don't introduce a request-mocking framework for this small a fetch surface (AD-4).
 - Playwright e2e is optional, and when used, mocks nothing (AD-4).
 - CI: one GitHub Actions workflow, parallel jobs for the .NET suite and frontend suite — a red pipeline is not mergeable; this is the project's DORA signal since there's no real deploy target (AD-11).
+- Frontend CI job runs `eslint .` (code quality) **and** a separate `prettier --check .` step (formatting) — both must pass; ESLint alone does not catch unformatted code since `eslint-config-prettier` disables its stylistic rules.
 
 ### Code Quality & Style Rules
 
@@ -95,7 +96,9 @@ frontend/src/
 - camelCase for JSON payloads and JS/React code.
 - File naming: PascalCase across the board — C# files (`BookingService.cs`), React components (`ScheduleAppointment.jsx`), and their test files (`ScheduleAppointment.test.jsx`). Non-component JS (utilities, API wrapper modules) also PascalCase.
 
-**Open — not yet decided:** no ESLint/Prettier config chosen yet for the frontend.
+**Linting/formatting:**
+- ESLint (Vite's default React config) + Prettier; `eslint-config-prettier` disables ESLint's stylistic rules so Prettier is the single source of truth for formatting — don't let both tools fight over the same rule.
+- `eslint-config-prettier` only turns off conflicting ESLint rules — it does not run Prettier itself. `eslint .` passing does not mean the code is formatted correctly; formatting is enforced separately in CI (see Testing Rules — CI).
 
 ### Development Workflow Rules
 
