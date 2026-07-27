@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Fake Barbershop — Validation-Error Color Options</title>
+<style>
+  body { font-family: Manrope, -apple-system, sans-serif; background: #FFFFFF; color: #17242A; margin: 0; padding: 32px; }
+  h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  p.sub { color: #5B7480; font-size: 14px; margin-top: 0; margin-bottom: 32px; max-width: 640px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; max-width: 1100px; }
+  .card { border: 1px solid #D3E4E9; border-radius: 8px; overflow: hidden; }
+  .swatch { height: 64px; }
+  .body { padding: 16px; }
+  .name { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+  .hex { font-size: 12px; color: #5B7480; font-family: monospace; margin-bottom: 12px; }
+  .contrast { font-size: 12px; color: #5B7480; margin-bottom: 16px; }
+  .contrast b { color: #17242A; }
+  .field { background: #FFFFFF; border: 1px solid #D3E4E9; border-radius: 6px; padding: 10px 12px; font-size: 14px; margin-bottom: 6px; }
+  .caption { font-size: 12px; font-weight: 500; }
+  .demo-label { font-size: 12px; color: #5B7480; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+  <h1>Validation-error color — 4 options against the locked "Modern Warmth" palette</h1>
+  <p class="sub">Primary teal #0E7C9B, destructive red #C93A3A, background white, neutral #EFF6F8, border #D3E4E9. Each option shown as a swatch, its contrast ratio against white (needs 4.5:1 to clear WCAG AA at the 12px caption size these messages render at), and both real usage moments: a duplicate-email message and a password-mismatch caption under a form field.</p>
+
+  <div class="grid">
+
+    <div class="card">
+      <div class="swatch" style="background:#B45309;"></div>
+      <div class="body">
+        <div class="name">Amber</div>
+        <div class="hex">#B45309</div>
+        <div class="contrast">Contrast on white: <b>≈5.02:1</b> — passes AA, comfortable margin. Warm, sits near the teal/red family without being confused with either.</div>
+        <div class="demo-label">Duplicate-email message:</div>
+        <div class="caption" style="color:#B45309;">That email is already in use.</div>
+        <br>
+        <div class="demo-label">Password field:</div>
+        <div class="field">••••••••</div>
+        <div class="caption" style="color:#B45309;">Passwords do not match.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="swatch" style="background:#92400E;"></div>
+      <div class="body">
+        <div class="name">Deep Amber (Brown-leaning)</div>
+        <div class="hex">#92400E</div>
+        <div class="contrast">Contrast on white: <b>≈7.09:1</b> — passes AA with the widest margin of the four. Reads more muted/serious, less "bright warning."</div>
+        <div class="demo-label">Duplicate-email message:</div>
+        <div class="caption" style="color:#92400E;">That email is already in use.</div>
+        <br>
+        <div class="demo-label">Password field:</div>
+        <div class="field">••••••••</div>
+        <div class="caption" style="color:#92400E;">Passwords do not match.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="swatch" style="background:#C2410C;"></div>
+      <div class="body">
+        <div class="name">Orange</div>
+        <div class="hex">#C2410C</div>
+        <div class="contrast">Contrast on white: <b>≈5.18:1</b> — passes AA. Most clearly "orange," furthest visually from the destructive red — easiest to tell apart at a glance.</div>
+        <div class="demo-label">Duplicate-email message:</div>
+        <div class="caption" style="color:#C2410C;">That email is already in use.</div>
+        <br>
+        <div class="demo-label">Password field:</div>
+        <div class="field">••••••••</div>
+        <div class="caption" style="color:#C2410C;">Passwords do not match.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="swatch" style="background:#A16207;"></div>
+      <div class="body">
+        <div class="name">Gold</div>
+        <div class="hex">#A16207</div>
+        <div class="contrast">Contrast on white: <b>≈4.93:1</b> — passes AA but the narrowest margin of the four (same ballpark as text-muted's existing 4.93:1). Warmest/most "yellow" option.</div>
+        <div class="demo-label">Duplicate-email message:</div>
+        <div class="caption" style="color:#A16207;">That email is already in use.</div>
+        <br>
+        <div class="demo-label">Password field:</div>
+        <div class="field">••••••••</div>
+        <div class="caption" style="color:#A16207;">Passwords do not match.</div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

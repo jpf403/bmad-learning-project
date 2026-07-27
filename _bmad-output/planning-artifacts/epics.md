@@ -333,7 +333,7 @@ So that I can securely access my account; and as the shop owner, I want an admin
 
 **Given** valid credentials
 **When** submitted on Login
-**Then** the user is authenticated (access token in memory, refresh token in an HttpOnly+Secure+SameSite=Strict cookie) and routed per FR4 (customer → Schedule Appointment route, barber/admin → My Schedule route)
+**Then** the user is authenticated (access token in memory, refresh token in an HttpOnly+Secure+SameSite=Strict cookie) and routed per FR4 (customer → Schedule Appointment route, barber/admin → My Schedule route) — the destination pages themselves are built in Epic 2 (Stories 2.2 and 2.5); this story only wires the routing decision
 
 **Given** invalid credentials (unregistered email or wrong password)
 **When** submitted
