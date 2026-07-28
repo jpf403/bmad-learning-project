@@ -1,0 +1,76 @@
+# generated: 2026-07-27
+# last_updated: 2026-07-27
+# project: bmad-learning-project
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# Action Item Status:
+#   - open: Committed during a retrospective, not yet addressed
+#   - in-progress: Actively being worked on
+#   - done: Completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+# - Retrospective appends its action items to action_items; sprint-status surfaces open ones
+
+generated: 2026-07-27
+last_updated: 2026-07-27
+project: bmad-learning-project
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+
+development_status:
+  epic-1: backlog
+  1-1-project-scaffold-ci-pipeline-and-design-system-foundation: backlog
+  1-2-account-entity-and-repository: backlog
+  1-3-home-and-about-pages: backlog
+  1-4-customer-self-registration: backlog
+  1-5-sign-in-sign-out-and-first-admin-bootstrap: backlog
+  1-6-server-side-role-gating-and-protected-routing: backlog
+  1-7-self-service-account-management: backlog
+  epic-1-retrospective: optional
+
+  epic-2: backlog
+  2-1-appointment-entity-and-repository: backlog
+  2-2-customer-books-an-appointment: backlog
+  2-3-double-booking-and-self-conflict-guards: backlog
+  2-4-my-appointments-view-cancel-and-race-safety: backlog
+  2-5-barbers-own-schedule-view: backlog
+  2-6-admin-schedule-oversight: backlog
+  epic-2-retrospective: optional
+
+  epic-3: backlog
+  3-1-account-repository-admin-operations: backlog
+  3-2-admin-account-search: backlog
+  3-3-admin-edits-an-account: backlog
+  3-4-admin-creates-a-barber-account: backlog
+  3-5-admin-deletes-an-account: backlog
+  epic-3-retrospective: optional
