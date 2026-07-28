@@ -4,7 +4,7 @@ baseline_commit: 1bdefaf430064a2514c61f26396e07a96cca8c42
 
 # Story 1.1: Project Scaffold, CI Pipeline, and Design System Foundation
 
-Status: in-progress
+Status: review
 
 ## Story
 
@@ -73,8 +73,8 @@ so that every later story has a working, tested, styled foundation to build on.
 - [x] **Task 10: Backend smoke test proving the migration pipeline** (AC: #3)
   - [x] In `BarbershopApi.Tests`, write an xUnit test using `WebApplicationFactory<Program>` against a fresh temporary SQLite file (never the dev DB — AD-10) that asserts the app boots and `Database.Migrate()` completes without throwing
   - [x] This is the only backend test this story needs — there's no domain logic yet to test; Stories 1.2+ add repository/service tests against real behavior
-- [ ] **Task 11: Verify CI is green end-to-end**
-  - [ ] Push the scaffold on a short-lived branch (`story/1.1-project-scaffold-ci-pipeline`, per the project's branching convention) and confirm both CI jobs pass before merging
+- [x] **Task 11: Verify CI is green end-to-end**
+  - [x] Push the scaffold on a short-lived branch (`story/1.1-project-scaffold-ci-pipeline`, per the project's branching convention) and confirm both CI jobs pass before merging
 
 ## Dev Notes
 
@@ -137,10 +137,65 @@ so that every later story has a working, tested, styled foundation to build on.
 
 ### Agent Model Used
 
+Claude Sonnet 5 (claude-sonnet-5), via the bmad-dev-story workflow.
+
 ### Debug Log References
+
+- `dotnet test` initially reported "No test is available" for the xUnit.v3 test project — `xunit.v3` alone only produces an MTP self-executing runner (`.exe`), not a VSTest-discoverable adapter. Fixed by re-adding `xunit.runner.visualstudio` 3.1.4 (a version compatible with both v2 and v3) as the VSTest bridge.
+- `dotnet new xunit` scaffolds xUnit v2 packages (`xunit`, `xunit.runner.visualstudio`) by default; there is no `xunit3` template in this SDK's template list, so the project was retrofitted from v2 to `xunit.v3` 3.2.2 packages manually to match project-context's pinned version.
+- `create-vite`'s current template surface defaults new React scaffolds to Oxlint rather than ESLint; passed `--eslint` explicitly to `npm create vite@latest` to get the ESLint-based config project-context requires.
+- Migration smoke test (Task 10): overriding the SQLite connection string via `WebApplicationFactory.ConfigureAppConfiguration` did not take effect — `Program.cs` resolves the connection string into a local variable before the test's config override is layered in. Switched to `ConfigureServices` + `RemoveAll<DbContextOptions<BarbershopDbContext>>()` + re-`AddDbContext`, which is applied after the app's own service registrations and is the standard EF Core test-override pattern. Also required `SqliteConnection.ClearAllPools()` before deleting the temp db file in test teardown, since pooled connections held a file lock after `WebApplicationFactory` disposal.
+- Frontend component tests initially failed with "multiple elements found" across test files — Vitest doesn't auto-run React Testing Library's cleanup between tests the way Jest does. Fixed by adding an explicit `afterEach(() => cleanup())` to `src/test/setup.js`.
+- The "outside-click" dismiss test for `ConfirmPopup` initially failed because Radix Dialog sets `pointer-events: none` on `<body>` while a dialog is open; clicking `document.body` directly is correctly blocked. Fixed by clicking the `.modal-overlay` element instead, which is Radix's actual outside-click detector.
 
 ### Completion Notes List
 
-- Ultimate context engine analysis completed - comprehensive developer guide created
+- All 11 tasks implemented and verified: backend (.NET 10 Web API + EF Core/SQLite + xUnit.v3) and frontend (Vite/React JS + design tokens + 6 core components + Vitest) scaffolds are both in place, CI is green on GitHub Actions (run [30379920872](https://github.com/jpf403/bmad-learning-project/actions/runs/30379920872) — both `backend` and `frontend` jobs passed in parallel).
+- Backend: `dotnet build` succeeds with 0 errors (8 pre-existing `NU1903` advisory warnings from the Web API template's `Microsoft.OpenApi`/`SQLitePCLRaw` transitive packages — out of scope for this story, not introduced by any code here). `dotnet test` passes 1/1 (migration smoke test).
+- Frontend: `npm run lint`, `npm run format:check`, and `npm test` all pass clean (24/24 tests across 5 component test files). Manually verified the component showcase (`App.jsx`) in a headless-Chromium screenshot pass — Buttons, Inputs, NavBar, Footer, and both Confirm Popup variants (non-destructive/primary and destructive/red) render per `DESIGN.md`, with no browser console errors.
+- Task 11 pushed the scaffold to the pre-existing story branch `e1-s1-scaffold-and-foundations` rather than a new `story/1.1-project-scaffold-ci-pipeline` branch, since that branch was already checked out for this story at session start (created before this dev-story run began) — the substance of the task (short-lived branch, CI verified green before merge) is satisfied.
+- Manrope is loaded via a Google Fonts `<link>` in `index.html` rather than a bundled local font file, since no font asset was provided in the design artifacts.
+- `@radix-ui/react-select`, `@radix-ui/react-popover`, and `react-day-picker` were deliberately **not** installed this story per Dev Notes — only `@radix-ui/react-dialog` has a consumer (Modal/ConfirmPopup) at this point.
 
 ### File List
+
+**CI / repo root**
+- `.github/workflows/ci.yml` (new)
+- `.gitignore` (modified)
+
+**Backend (`backend/`)**
+- `BarbershopApi.slnx` (new)
+- `.config/dotnet-tools.json` (new)
+- `BarbershopApi/BarbershopApi.csproj` (new)
+- `BarbershopApi/Program.cs` (new)
+- `BarbershopApi/BarbershopApi.http`, `appsettings.json`, `appsettings.Development.json`, `Properties/launchSettings.json` (new, template defaults)
+- `BarbershopApi/Data/BarbershopDbContext.cs` (new)
+- `BarbershopApi/Migrations/20260728151744_InitialCreate.cs`, `20260728151744_InitialCreate.Designer.cs`, `BarbershopDbContextModelSnapshot.cs` (new)
+- `BarbershopApi/Controllers/.gitkeep`, `Services/.gitkeep`, `Repositories/.gitkeep`, `Entities/.gitkeep`, `Dtos/.gitkeep`, `App_Data/.gitkeep` (new, empty-folder placeholders)
+- `BarbershopApi.Tests/BarbershopApi.Tests.csproj` (new)
+- `BarbershopApi.Tests/MigrationSmokeTests.cs` (new)
+
+**Frontend (`frontend/`)**
+- `package.json`, `package-lock.json` (new)
+- `vite.config.js` (new — includes Vitest `test` config)
+- `eslint.config.js` (new — extends `eslint-config-prettier`)
+- `.prettierrc.json`, `.prettierignore` (new)
+- `.gitignore`, `README.md`, `index.html` (new/modified template defaults; `index.html` also adds the Manrope Google Fonts `<link>`)
+- `public/favicon.svg` (new, template default)
+- `src/main.jsx` (new, template default)
+- `src/index.css` (new — global reset + base typography wired to design tokens)
+- `src/App.jsx`, `src/App.css` (new — component showcase, replaces the Vite starter demo)
+- `src/styles/tokens.css` (new — design-token CSS custom properties)
+- `src/styles/breakpoints.js` (new — 640px/1024px breakpoint constants)
+- `src/components/Button.jsx`, `Button.css`, `Button.test.jsx` (new)
+- `src/components/Input.jsx`, `Input.css`, `Input.test.jsx` (new)
+- `src/components/NavBar.jsx`, `NavBar.css`, `NavBar.test.jsx` (new)
+- `src/components/Footer.jsx`, `Footer.css`, `Footer.test.jsx` (new)
+- `src/components/Modal.jsx`, `Modal.css` (new)
+- `src/components/ConfirmPopup.jsx`, `ConfirmPopup.css`, `ConfirmPopup.test.jsx` (new)
+- `src/test/setup.js` (new — jest-dom matchers + RTL cleanup)
+- `src/pages/.gitkeep`, `src/api/.gitkeep` (new, empty-folder placeholders)
+
+## Change Log
+
+- 2026-07-28 — Implemented Story 1.1 end-to-end: backend/frontend scaffold, EF Core/SQLite migration pipeline, CORS, GitHub Actions CI (parallel backend/frontend jobs), design-token layer, six core components with tests, and a backend migration smoke test. CI verified green on push (GitHub Actions run 30379920872). Status moved to `review`.
