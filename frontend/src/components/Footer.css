@@ -1,0 +1,18 @@
+.footer {
+  background: var(--color-neutral);
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  padding: var(--spacing-6) var(--spacing-4);
+  font-family: var(--font-family-base);
+  font-size: var(--typography-body-sm-size);
+  line-height: var(--typography-body-sm-line-height);
+}
+
+.footer p {
+  margin: 0 0 var(--spacing-1);
+}
+
+.footer__wordmark {
+  color: var(--color-text);
+  font-weight: var(--typography-label-weight);
+}

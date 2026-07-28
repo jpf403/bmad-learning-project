@@ -1,0 +1,91 @@
+/*
+ * Design tokens — single source of truth for every value in DESIGN.md's
+ * frontmatter (colors, typography, rounded, spacing). Components must
+ * reference these custom properties rather than hardcoding values.
+ *
+ * Breakpoints (640px / 1024px, locked 2026-07-27) can't be expressed as CSS
+ * custom properties inside @media conditions — native CSS doesn't support
+ * that. They're duplicated as JS constants in breakpoints.js so there's one
+ * documented pair of numbers, even though two files must be kept in sync.
+ *
+ * Manrope itself is loaded via the Google Fonts <link> in index.html, not
+ * a local @font-face — no font files are bundled with this project.
+ */
+
+:root {
+  /* Colors */
+  --color-primary: #0e7c9b;
+  --color-primary-foreground: #ffffff;
+  --color-primary-hover: #0b5f79;
+  --color-destructive: #c93a3a;
+  --color-destructive-foreground: #ffffff;
+  --color-destructive-hover: #a83030;
+  /* Distinct token from --color-destructive despite the identical hex --
+     validation-message text only, never a button/fill (DESIGN.md §Colors). */
+  --color-error: #c93a3a;
+  --color-background: #ffffff;
+  --color-neutral: #eff6f8;
+  --color-border: #d3e4e9;
+  --color-text: #17242a;
+  --color-text-muted: #5b7480;
+
+  /* Typography */
+  --font-family-base: 'Manrope', sans-serif;
+
+  --typography-display-size: 40px;
+  --typography-display-weight: 700;
+  --typography-display-line-height: 1.15;
+  --typography-display-letter-spacing: -0.01em;
+
+  --typography-h1-size: 32px;
+  --typography-h1-weight: 700;
+  --typography-h1-line-height: 1.2;
+
+  --typography-h2-size: 24px;
+  --typography-h2-weight: 600;
+  --typography-h2-line-height: 1.25;
+
+  --typography-h3-size: 20px;
+  --typography-h3-weight: 600;
+  --typography-h3-line-height: 1.3;
+
+  --typography-body-size: 16px;
+  --typography-body-weight: 400;
+  --typography-body-line-height: 1.5;
+
+  --typography-body-sm-size: 14px;
+  --typography-body-sm-weight: 400;
+  --typography-body-sm-line-height: 1.5;
+
+  --typography-label-size: 14px;
+  --typography-label-weight: 600;
+  --typography-label-line-height: 1.4;
+
+  --typography-caption-size: 12px;
+  --typography-caption-weight: 500;
+  --typography-caption-line-height: 1.4;
+  --typography-caption-letter-spacing: 0.01em;
+
+  /* Rounded */
+  --rounded-sm: 4px;
+  --rounded-default: 6px;
+  --rounded-md: 6px;
+  --rounded-lg: 8px;
+  --rounded-xl: 8px;
+  --rounded-full: 9999px;
+
+  /* Spacing (4px-base scale) */
+  --spacing-1: 4px;
+  --spacing-2: 8px;
+  --spacing-3: 12px;
+  --spacing-4: 16px;
+  --spacing-5: 20px;
+  --spacing-6: 24px;
+  --spacing-8: 32px;
+  --spacing-10: 40px;
+  --spacing-12: 48px;
+  --spacing-16: 64px;
+  --spacing-gutter-mobile: 16px;
+  --spacing-gutter-desktop: 32px;
+  --spacing-content-max-width: 1120px;
+}
