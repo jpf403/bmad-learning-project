@@ -33,14 +33,14 @@ using (var scope = app.Services.CreateScope())
 }
 
 // Configure the HTTP request pipeline.
+app.UseHttpsRedirection();
+
+app.UseCors(VitePolicy);
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
-
-app.UseHttpsRedirection();
-
-app.UseCors(VitePolicy);
 
 app.UseAuthorization();
 

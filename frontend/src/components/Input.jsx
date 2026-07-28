@@ -12,6 +12,7 @@ export default function Input({
   const generatedId = useId()
   const inputId = id ?? generatedId
   const captionText = error ?? caption
+  const captionId = captionText ? `${inputId}-caption` : undefined
 
   const classes = className ? `input ${className}` : 'input'
 
@@ -22,9 +23,16 @@ export default function Input({
           {label}
         </label>
       )}
-      <input id={inputId} className={classes} {...rest} />
+      <input
+        id={inputId}
+        className={classes}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={captionId}
+        {...rest}
+      />
       {captionText && (
         <span
+          id={captionId}
           className={
             error
               ? 'input-field__caption input-field__caption--error'

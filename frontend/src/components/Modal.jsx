@@ -14,12 +14,10 @@ export default function Modal({
         <Dialog.Overlay className="modal-overlay" />
         <Dialog.Content className="modal">
           <Dialog.Title className="modal__title">{title}</Dialog.Title>
-          {description ? (
+          {description && (
             <Dialog.Description className="modal__description">
               {description}
             </Dialog.Description>
-          ) : (
-            <Dialog.Description className="sr-only">{title}</Dialog.Description>
           )}
           {children}
         </Dialog.Content>

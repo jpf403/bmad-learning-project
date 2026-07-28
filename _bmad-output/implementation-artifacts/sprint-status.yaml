@@ -49,7 +49,7 @@ story_location: _bmad-output/implementation-artifacts
 
 development_status:
   epic-1: in-progress
-  1-1-project-scaffold-ci-pipeline-and-design-system-foundation: review
+  1-1-project-scaffold-ci-pipeline-and-design-system-foundation: done
   1-2-account-entity-and-repository: backlog
   1-3-home-and-about-pages: backlog
   1-4-customer-self-registration: backlog

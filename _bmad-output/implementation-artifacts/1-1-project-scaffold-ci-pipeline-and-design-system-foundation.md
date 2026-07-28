@@ -4,7 +4,7 @@ baseline_commit: 1bdefaf430064a2514c61f26396e07a96cca8c42
 
 # Story 1.1: Project Scaffold, CI Pipeline, and Design System Foundation
 
-Status: review
+Status: done
 
 ## Story
 
@@ -75,6 +75,14 @@ so that every later story has a working, tested, styled foundation to build on.
   - [x] This is the only backend test this story needs — there's no domain logic yet to test; Stories 1.2+ add repository/service tests against real behavior
 - [x] **Task 11: Verify CI is green end-to-end**
   - [x] Push the scaffold on a short-lived branch (`story/1.1-project-scaffold-ci-pipeline`, per the project's branching convention) and confirm both CI jobs pass before merging
+
+### Review Findings
+
+- [x] [Review][Patch] CORS applied after `MapOpenApi()`'s endpoint mapping, violating Task 5's explicit "before any endpoint mapping" ordering — the dev-only OpenAPI JSON endpoint bypasses CORS/HTTPS-redirect entirely [backend/BarbershopApi/Program.cs:36-43]
+- [x] [Review][Patch] `.http` scaffold file still references `/weatherforecast/`, the endpoint from the controller this same story deleted [backend/BarbershopApi/BarbershopApi.http:3]
+- [x] [Review][Patch] `Input` component has no `aria-invalid`/`aria-describedby` wiring for its error-caption state — screen-reader users aren't told a field has an error [frontend/src/components/Input.jsx:25-35]
+- [x] [Review][Patch] `vite` pinned with a caret range (`^8.1.1`) while every other dependency is exact-pinned to match project-context.md's Technology Stack table value (`8.1.5`) [frontend/package.json:36]
+- [x] [Review][Patch] `Modal` faked a `Dialog.Description` by duplicating the title text when no real description was given, causing screen readers to announce the title twice [frontend/src/components/Modal.jsx:15-22]
 
 ## Dev Notes
 
