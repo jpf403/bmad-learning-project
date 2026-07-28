@@ -207,3 +207,4 @@ Claude Sonnet 5 (claude-sonnet-5), via the bmad-dev-story workflow.
 ## Change Log
 
 - 2026-07-28 — Implemented Story 1.1 end-to-end: backend/frontend scaffold, EF Core/SQLite migration pipeline, CORS, GitHub Actions CI (parallel backend/frontend jobs), design-token layer, six core components with tests, and a backend migration smoke test. CI verified green on push (GitHub Actions run 30379920872). Status moved to `review`.
+- 2026-07-28 — Code review (two passes) found 5 patchable defects: CORS/MapOpenApi ordering, a stale `.http` file referencing a deleted controller, missing ARIA wiring on `Input`'s error state, a caret-ranged `vite` pin, and `Modal` double-announcing its title via a fake screen-reader-only description. All 5 fixed, committed, and pushed (commit `fe33441`); CI verified green against the patched code (GitHub Actions run 30386948916). Status moved to `done`.
