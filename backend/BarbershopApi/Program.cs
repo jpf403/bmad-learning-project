@@ -1,4 +1,5 @@
 using BarbershopApi.Data;
+using BarbershopApi.Repositories;
 using Microsoft.EntityFrameworkCore;
 
 const string VitePolicy = "VitePolicy";
@@ -24,6 +25,7 @@ var connectionString = builder.Configuration.GetConnectionString("BarbershopDb")
     ?? $"Data Source={Path.Combine(builder.Environment.ContentRootPath, "App_Data", "barbershop.db")}";
 
 builder.Services.AddDbContext<BarbershopDbContext>(options => options.UseSqlite(connectionString));
+builder.Services.AddScoped<IAccountRepository, AccountRepository>();
 
 var app = builder.Build();
 
