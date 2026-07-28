@@ -1,0 +1,45 @@
+.input-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+}
+
+.input-field__label {
+  font-family: var(--font-family-base);
+  font-size: var(--typography-label-size);
+  font-weight: var(--typography-label-weight);
+  line-height: var(--typography-label-line-height);
+  color: var(--color-text);
+}
+
+.input {
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--rounded-default);
+  color: var(--color-text);
+  padding: var(--spacing-3) var(--spacing-4);
+  font-family: var(--font-family-base);
+  font-size: var(--typography-body-size);
+}
+
+.input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.input-field__caption {
+  font-family: var(--font-family-base);
+  font-size: var(--typography-caption-size);
+  font-weight: var(--typography-caption-weight);
+  line-height: var(--typography-caption-line-height);
+  letter-spacing: var(--typography-caption-letter-spacing);
+  color: var(--color-text-muted);
+}
+
+.input-field__caption--error {
+  color: var(--color-error);
+}

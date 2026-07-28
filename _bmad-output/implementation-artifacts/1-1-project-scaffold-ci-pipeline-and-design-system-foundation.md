@@ -1,6 +1,10 @@
+---
+baseline_commit: 1bdefaf430064a2514c61f26396e07a96cca8c42
+---
+
 # Story 1.1: Project Scaffold, CI Pipeline, and Design System Foundation
 
-Status: ready-for-dev
+Status: in-progress
 
 ## Story
 
@@ -21,54 +25,54 @@ so that every later story has a working, tested, styled foundation to build on.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Scaffold backend project structure** (AC: #1)
-  - [ ] Run `dotnet new webapi --use-controllers` inside `backend/BarbershopApi/` (.NET 10 SDK; verified current — see Latest Tech Info)
-  - [ ] Delete the template's sample `WeatherForecastController.cs` and `WeatherForecast.cs` — they belong to no domain concept and would violate AD-1/NFR6 (no catch-all/orphan classes) if left in
-  - [ ] Create empty `Controllers/`, `Services/`, `Repositories/`, `Entities/`, `Dtos/` folders under `backend/BarbershopApi/` with `.gitkeep` placeholders (git doesn't track empty dirs; these stay empty until Story 1.2+ adds Auth/Booking/Account domain code)
-  - [ ] Create `backend/BarbershopApi.Tests/` as an xUnit.v3 project (`dotnet new xunit`); add `Microsoft.AspNetCore.Mvc.Testing` (for `WebApplicationFactory`) package reference
-  - [ ] Create a solution file at `backend/` wiring both projects (`dotnet new sln` + `dotnet sln add`)
-- [ ] **Task 2: Scaffold frontend project structure** (AC: #1)
-  - [ ] Scaffold via `npm create vite@latest frontend -- --template react` (the `react` template is the plain-JS variant; do **not** pick `react-compiler`, which is a distinct template Vite now also offers and is out of scope) — re-verify the exact flag against `npm create vite@latest -- --help` if this errors, since `create-vite`'s flag surface has changed across majors
-  - [ ] Create `frontend/src/{pages,components,api,styles}` folders (styles/ will hold the design-token CSS from Task 4)
-  - [ ] Verify `package.json` pins React to `19.2.8` / ReactDOM to match (per Architecture Stack table) — Vite's template may pull a different patch; adjust if so
-- [ ] **Task 3: Wire up SQLite + EF Core with an empty migration** (AC: #3)
-  - [ ] Add `Microsoft.EntityFrameworkCore.Sqlite` 10.0.10 and `Microsoft.EntityFrameworkCore.Design` (matching version) to `BarbershopApi`
-  - [ ] Create `Data/BarbershopDbContext.cs` — an EF Core `DbContext` with **no entities yet** (Account/Appointment arrive in Stories 1.2/2.1); this story only proves the migration pipeline works end-to-end
-  - [ ] Configure the connection string to `backend/BarbershopApi/App_Data/barbershop.db` (create `App_Data/` if `dotnet new` doesn't)
-  - [ ] Generate an initial (empty) migration via `dotnet ef migrations add InitialCreate`; commit the generated `Migrations/` folder
-  - [ ] Call `Database.Migrate()` in `Program.cs` on startup, after the DbContext is registered in DI
-  - [ ] Verify on a fresh clone: `dotnet run` creates `App_Data/barbershop.db` with no errors and no manual DB setup step
-- [ ] **Task 4: Update `.gitignore` for both stacks** (AC: #3)
-  - [ ] Add `.NET`: `backend/**/bin/`, `backend/**/obj/`, `backend/BarbershopApi/App_Data/*.db`, `backend/BarbershopApi/App_Data/*.db-*` (WAL/SHM files)
-  - [ ] Add Node: `frontend/node_modules/`, `frontend/dist/`
-  - [ ] Confirm `Migrations/` is **not** excluded by any of the above (it must be committed — AD-10)
-- [ ] **Task 5: Configure CORS for the Vite dev origin** (AC: #4)
-  - [ ] In `Program.cs`, add a CORS policy naming the Vite dev-server origin explicitly (default Vite dev port; confirm actual port from the scaffolded `vite.config.js`/console output rather than assuming `5173`) with `.AllowCredentials()`
-  - [ ] Apply the policy via `app.UseCors(...)` before any endpoint mapping
-  - [ ] Note for future stories: every frontend fetch touching auth will need `credentials: 'include'` (AD-13) — not this story's concern (no auth exists yet), but don't configure CORS in a way that would block it later (i.e., don't use a wildcard origin, which is incompatible with `AllowCredentials()`)
-- [ ] **Task 6: GitHub Actions CI pipeline** (AC: #2)
-  - [ ] Create `.github/workflows/ci.yml` triggered on every push
-  - [ ] Job 1 (`backend`): setup .NET 10 SDK, `dotnet restore`, `dotnet build`, `dotnet test` against `backend/BarbershopApi.Tests`
-  - [ ] Job 2 (`frontend`): setup **Node ≥22** (required by `@testing-library/jest-dom` 7.0.0 — see Latest Tech Info), `npm ci`, then run lint, format-check, and test as separate steps: `eslint .`, `prettier --check .`, and the Vitest run — all three must pass (per project-context testing rules; `eslint-config-prettier` disables ESLint's stylistic rules but doesn't run Prettier itself, so both checks are required independently)
-  - [ ] Confirm the two jobs run in parallel (no `needs:` dependency between them) — this is the project's DORA "deployment frequency" signal (NFR5, AD-11); a red pipeline must not be mergeable
-- [ ] **Task 7: Implement design tokens** (AC: #5, #6)
-  - [ ] Create `frontend/src/styles/tokens.css` (or equivalent) defining CSS custom properties for every value in `DESIGN.md`'s frontmatter: colors (including `{colors.error}` = `#C93A3A`, distinct from `{colors.destructive}`), typography scale (Manrope; display/h1/h2/h3/body/body-sm/label/caption), rounded scale (`sm` 4px / `DEFAULT`+`md` 6px / `lg`+`xl` 8px / `full`), spacing scale (4px-base 1–16, plus `gutter-mobile`/`gutter-desktop`/`content-max-width`)
-  - [ ] Load the Manrope font (single family for the whole app — no second family, no TypeScript-style "display font moment")
-  - [ ] Bake the two breakpoints (640px / 1024px) into the token layer (e.g., CSS custom media or documented constants) so every later component references the same values rather than hardcoding pixel numbers per-component
-- [ ] **Task 8: Build core components in isolation** (AC: #5)
-  - [ ] `Button` — primary/secondary/destructive variants per `{components.button-primary/-secondary/-destructive}`; hover/active color swap via CSS `:hover`/`:active` (naturally pointer-only in browsers — do not add JS touch-detection logic on top); every variant activates on a single, complete tap (no press-and-hold, no double-tap-to-arm)
-  - [ ] `Input` — `{components.input}` tokens; focus-state border swap to `{colors.primary}`; support the double-entry password pattern's rendering (two stacked inputs, no visual distinction beyond label) — the mismatch-message *behavior* belongs to Register/Account (Stories 1.4/1.7), this story only needs the Input component and the `{colors.error}`-styled caption-text treatment to exist and be stylable
-  - [ ] Nav bar shell (`{components.nav-bar}`) — static for this story: render all five links (Home, Schedule Appointment, About, My Schedule, Admin Panel) unconditionally and a static "Sign In / Register" right-side area. **Do not wire real routing, auth-state swapping, or role-based hiding yet** — those depend on pages/auth that don't exist until Stories 1.3–1.6; wiring them now would be premature and untestable
-  - [ ] Footer (`{components.footer}`) — fully static: wordmark, address, phone, hours, copyright line, no links/social icons
-  - [ ] Modal wrapper via `@radix-ui/react-dialog` (`{components.modal}`) — install **only** this one Radix package now; `@radix-ui/react-select` and `@radix-ui/react-popover`+`react-day-picker` are pinned in Architecture but have no consumer until Epic 2/3 components are built — installing them now is premature
-  - [ ] Confirm-action popup (`{components.confirm-popup}`) built on the Modal wrapper — exactly two buttons every time: "Go Back" (always `{components.button-secondary}`, regardless of context) and "Confirm" (color is a prop — `{components.button-primary}` for non-destructive, `{components.button-destructive}` for destructive); `Esc`/outside-click/"Go Back" all dismiss with zero effect — this is Radix Dialog default behavior, verify rather than assume
-- [ ] **Task 9: Component-level tests (frontend)** (AC: #5)
-  - [ ] Vitest + jsdom + React Testing Library + user-event for each component above: variant rendering (correct label/role/class per variant), focus-state behavior on `Input`, Confirm-popup's two-button contract and dismiss behavior (`Esc`, outside-click, "Go Back")
-  - [ ] Note: RTL/jsdom cannot meaningfully simulate real mouse-hover-only-on-pointer-devices behavior — don't write a test asserting "hover doesn't fire on touch"; that's inherent to CSS `:hover` and not something app code could get wrong. Focus tests on what the component actually controls: variant styling, ARIA roles, keyboard activation (`Enter`/`Space`), and the confirm-popup's button contract
-  - [ ] Configure Vitest with `environment: 'jsdom'` and a setup file importing `@testing-library/jest-dom`'s matchers
-- [ ] **Task 10: Backend smoke test proving the migration pipeline** (AC: #3)
-  - [ ] In `BarbershopApi.Tests`, write an xUnit test using `WebApplicationFactory<Program>` against a fresh temporary SQLite file (never the dev DB — AD-10) that asserts the app boots and `Database.Migrate()` completes without throwing
-  - [ ] This is the only backend test this story needs — there's no domain logic yet to test; Stories 1.2+ add repository/service tests against real behavior
+- [x] **Task 1: Scaffold backend project structure** (AC: #1)
+  - [x] Run `dotnet new webapi --use-controllers` inside `backend/BarbershopApi/` (.NET 10 SDK; verified current — see Latest Tech Info)
+  - [x] Delete the template's sample `WeatherForecastController.cs` and `WeatherForecast.cs` — they belong to no domain concept and would violate AD-1/NFR6 (no catch-all/orphan classes) if left in
+  - [x] Create empty `Controllers/`, `Services/`, `Repositories/`, `Entities/`, `Dtos/` folders under `backend/BarbershopApi/` with `.gitkeep` placeholders (git doesn't track empty dirs; these stay empty until Story 1.2+ adds Auth/Booking/Account domain code)
+  - [x] Create `backend/BarbershopApi.Tests/` as an xUnit.v3 project (`dotnet new xunit`); add `Microsoft.AspNetCore.Mvc.Testing` (for `WebApplicationFactory`) package reference
+  - [x] Create a solution file at `backend/` wiring both projects (`dotnet new sln` + `dotnet sln add`)
+- [x] **Task 2: Scaffold frontend project structure** (AC: #1)
+  - [x] Scaffold via `npm create vite@latest frontend -- --template react` (the `react` template is the plain-JS variant; do **not** pick `react-compiler`, which is a distinct template Vite now also offers and is out of scope) — re-verify the exact flag against `npm create vite@latest -- --help` if this errors, since `create-vite`'s flag surface has changed across majors
+  - [x] Create `frontend/src/{pages,components,api,styles}` folders (styles/ will hold the design-token CSS from Task 4)
+  - [x] Verify `package.json` pins React to `19.2.8` / ReactDOM to match (per Architecture Stack table) — Vite's template may pull a different patch; adjust if so
+- [x] **Task 3: Wire up SQLite + EF Core with an empty migration** (AC: #3)
+  - [x] Add `Microsoft.EntityFrameworkCore.Sqlite` 10.0.10 and `Microsoft.EntityFrameworkCore.Design` (matching version) to `BarbershopApi`
+  - [x] Create `Data/BarbershopDbContext.cs` — an EF Core `DbContext` with **no entities yet** (Account/Appointment arrive in Stories 1.2/2.1); this story only proves the migration pipeline works end-to-end
+  - [x] Configure the connection string to `backend/BarbershopApi/App_Data/barbershop.db` (create `App_Data/` if `dotnet new` doesn't)
+  - [x] Generate an initial (empty) migration via `dotnet ef migrations add InitialCreate`; commit the generated `Migrations/` folder
+  - [x] Call `Database.Migrate()` in `Program.cs` on startup, after the DbContext is registered in DI
+  - [x] Verify on a fresh clone: `dotnet run` creates `App_Data/barbershop.db` with no errors and no manual DB setup step
+- [x] **Task 4: Update `.gitignore` for both stacks** (AC: #3)
+  - [x] Add `.NET`: `backend/**/bin/`, `backend/**/obj/`, `backend/BarbershopApi/App_Data/*.db`, `backend/BarbershopApi/App_Data/*.db-*` (WAL/SHM files)
+  - [x] Add Node: `frontend/node_modules/`, `frontend/dist/`
+  - [x] Confirm `Migrations/` is **not** excluded by any of the above (it must be committed — AD-10)
+- [x] **Task 5: Configure CORS for the Vite dev origin** (AC: #4)
+  - [x] In `Program.cs`, add a CORS policy naming the Vite dev-server origin explicitly (default Vite dev port; confirm actual port from the scaffolded `vite.config.js`/console output rather than assuming `5173`) with `.AllowCredentials()`
+  - [x] Apply the policy via `app.UseCors(...)` before any endpoint mapping
+  - [x] Note for future stories: every frontend fetch touching auth will need `credentials: 'include'` (AD-13) — not this story's concern (no auth exists yet), but don't configure CORS in a way that would block it later (i.e., don't use a wildcard origin, which is incompatible with `AllowCredentials()`)
+- [x] **Task 6: GitHub Actions CI pipeline** (AC: #2)
+  - [x] Create `.github/workflows/ci.yml` triggered on every push
+  - [x] Job 1 (`backend`): setup .NET 10 SDK, `dotnet restore`, `dotnet build`, `dotnet test` against `backend/BarbershopApi.Tests`
+  - [x] Job 2 (`frontend`): setup **Node ≥22** (required by `@testing-library/jest-dom` 7.0.0 — see Latest Tech Info), `npm ci`, then run lint, format-check, and test as separate steps: `eslint .`, `prettier --check .`, and the Vitest run — all three must pass (per project-context testing rules; `eslint-config-prettier` disables ESLint's stylistic rules but doesn't run Prettier itself, so both checks are required independently)
+  - [x] Confirm the two jobs run in parallel (no `needs:` dependency between them) — this is the project's DORA "deployment frequency" signal (NFR5, AD-11); a red pipeline must not be mergeable
+- [x] **Task 7: Implement design tokens** (AC: #5, #6)
+  - [x] Create `frontend/src/styles/tokens.css` (or equivalent) defining CSS custom properties for every value in `DESIGN.md`'s frontmatter: colors (including `{colors.error}` = `#C93A3A`, distinct from `{colors.destructive}`), typography scale (Manrope; display/h1/h2/h3/body/body-sm/label/caption), rounded scale (`sm` 4px / `DEFAULT`+`md` 6px / `lg`+`xl` 8px / `full`), spacing scale (4px-base 1–16, plus `gutter-mobile`/`gutter-desktop`/`content-max-width`)
+  - [x] Load the Manrope font (single family for the whole app — no second family, no TypeScript-style "display font moment")
+  - [x] Bake the two breakpoints (640px / 1024px) into the token layer (e.g., CSS custom media or documented constants) so every later component references the same values rather than hardcoding pixel numbers per-component
+- [x] **Task 8: Build core components in isolation** (AC: #5)
+  - [x] `Button` — primary/secondary/destructive variants per `{components.button-primary/-secondary/-destructive}`; hover/active color swap via CSS `:hover`/`:active` (naturally pointer-only in browsers — do not add JS touch-detection logic on top); every variant activates on a single, complete tap (no press-and-hold, no double-tap-to-arm)
+  - [x] `Input` — `{components.input}` tokens; focus-state border swap to `{colors.primary}`; support the double-entry password pattern's rendering (two stacked inputs, no visual distinction beyond label) — the mismatch-message *behavior* belongs to Register/Account (Stories 1.4/1.7), this story only needs the Input component and the `{colors.error}`-styled caption-text treatment to exist and be stylable
+  - [x] Nav bar shell (`{components.nav-bar}`) — static for this story: render all five links (Home, Schedule Appointment, About, My Schedule, Admin Panel) unconditionally and a static "Sign In / Register" right-side area. **Do not wire real routing, auth-state swapping, or role-based hiding yet** — those depend on pages/auth that don't exist until Stories 1.3–1.6; wiring them now would be premature and untestable
+  - [x] Footer (`{components.footer}`) — fully static: wordmark, address, phone, hours, copyright line, no links/social icons
+  - [x] Modal wrapper via `@radix-ui/react-dialog` (`{components.modal}`) — install **only** this one Radix package now; `@radix-ui/react-select` and `@radix-ui/react-popover`+`react-day-picker` are pinned in Architecture but have no consumer until Epic 2/3 components are built — installing them now is premature
+  - [x] Confirm-action popup (`{components.confirm-popup}`) built on the Modal wrapper — exactly two buttons every time: "Go Back" (always `{components.button-secondary}`, regardless of context) and "Confirm" (color is a prop — `{components.button-primary}` for non-destructive, `{components.button-destructive}` for destructive); `Esc`/outside-click/"Go Back" all dismiss with zero effect — this is Radix Dialog default behavior, verify rather than assume
+- [x] **Task 9: Component-level tests (frontend)** (AC: #5)
+  - [x] Vitest + jsdom + React Testing Library + user-event for each component above: variant rendering (correct label/role/class per variant), focus-state behavior on `Input`, Confirm-popup's two-button contract and dismiss behavior (`Esc`, outside-click, "Go Back")
+  - [x] Note: RTL/jsdom cannot meaningfully simulate real mouse-hover-only-on-pointer-devices behavior — don't write a test asserting "hover doesn't fire on touch"; that's inherent to CSS `:hover` and not something app code could get wrong. Focus tests on what the component actually controls: variant styling, ARIA roles, keyboard activation (`Enter`/`Space`), and the confirm-popup's button contract
+  - [x] Configure Vitest with `environment: 'jsdom'` and a setup file importing `@testing-library/jest-dom`'s matchers
+- [x] **Task 10: Backend smoke test proving the migration pipeline** (AC: #3)
+  - [x] In `BarbershopApi.Tests`, write an xUnit test using `WebApplicationFactory<Program>` against a fresh temporary SQLite file (never the dev DB — AD-10) that asserts the app boots and `Database.Migrate()` completes without throwing
+  - [x] This is the only backend test this story needs — there's no domain logic yet to test; Stories 1.2+ add repository/service tests against real behavior
 - [ ] **Task 11: Verify CI is green end-to-end**
   - [ ] Push the scaffold on a short-lived branch (`story/1.1-project-scaffold-ci-pipeline`, per the project's branching convention) and confirm both CI jobs pass before merging
 
