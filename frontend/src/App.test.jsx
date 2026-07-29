@@ -16,6 +16,7 @@ describe('App', () => {
     ).toBeInTheDocument()
     expect(screen.getAllByText('Fake Barbershop').length).toBeGreaterThan(0)
     expect(screen.getByText('123 Main Street, Springfield')).toBeInTheDocument()
+    expect(screen.getByRole('main')).toBeInTheDocument()
   })
 
   it('renders About content at /about', () => {

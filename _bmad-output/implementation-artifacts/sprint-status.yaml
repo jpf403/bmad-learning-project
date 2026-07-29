@@ -51,7 +51,7 @@ development_status:
   epic-1: in-progress
   1-1-project-scaffold-ci-pipeline-and-design-system-foundation: done
   1-2-account-entity-and-repository: done
-  1-3-home-and-about-pages: review
+  1-3-home-and-about-pages: done
   1-4-customer-self-registration: backlog
   1-5-sign-in-sign-out-and-first-admin-bootstrap: backlog
   1-6-server-side-role-gating-and-protected-routing: backlog

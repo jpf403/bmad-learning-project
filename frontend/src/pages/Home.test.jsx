@@ -21,7 +21,7 @@ function renderHome({ isSignedIn } = {}) {
 
 describe('Home', () => {
   it('renders the hero headline, tagline, and CTA', () => {
-    renderHome()
+    const { container } = renderHome()
 
     expect(
       screen.getByText('Your next haircut, booked in under a minute.'),
@@ -32,6 +32,10 @@ describe('Home', () => {
     expect(
       screen.getByRole('button', { name: 'Schedule Appointment' }),
     ).toBeInTheDocument()
+    expect(container.querySelector('.home__hero-teal svg')).toHaveAttribute(
+      'aria-hidden',
+      'true',
+    )
   })
 
   it('navigates to /login when signed out and the CTA is clicked', async () => {

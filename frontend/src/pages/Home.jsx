@@ -25,18 +25,80 @@ export default function Home({ isSignedIn = false }) {
         </div>
         <div className="home__hero-teal">
           <svg
-            className="home__hero-icon"
             aria-hidden="true"
-            viewBox="0 0 100 100"
-            width="96"
-            height="96"
+            viewBox="0 0 260 260"
+            width="140"
+            height="140"
             fill="none"
-            stroke="currentColor"
-            strokeWidth="6"
-            strokeLinecap="round"
           >
-            <line x1="15" y1="15" x2="85" y2="85" />
-            <line x1="15" y1="85" x2="85" y2="15" />
+            {/* Comb: straight bar with teeth, rotated to cross the scissors like an X */}
+            <g transform="rotate(45 130 130)">
+              <rect x="60" y="122" width="140" height="16" fill="currentColor" />
+              <rect x="66" y="138" width="6" height="26" fill="currentColor" />
+              <rect x="82" y="138" width="6" height="26" fill="currentColor" />
+              <rect x="98" y="138" width="6" height="26" fill="currentColor" />
+              <rect x="114" y="138" width="6" height="26" fill="currentColor" />
+              <rect x="130" y="138" width="6" height="26" fill="currentColor" />
+              <rect x="146" y="138" width="6" height="26" fill="currentColor" />
+              <rect x="162" y="138" width="6" height="26" fill="currentColor" />
+              <rect x="178" y="138" width="6" height="26" fill="currentColor" />
+            </g>
+            {/* Scissors: two blade/handle assemblies crossed with the comb */}
+            <g transform="rotate(-45 130 130)">
+              <line
+                x1="130"
+                y1="130"
+                x2="70"
+                y2="40"
+                stroke="currentColor"
+                strokeWidth="8"
+                strokeLinecap="square"
+              />
+              <line
+                x1="130"
+                y1="130"
+                x2="190"
+                y2="40"
+                stroke="currentColor"
+                strokeWidth="8"
+                strokeLinecap="square"
+              />
+              <circle
+                cx="70"
+                cy="40"
+                r="14"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="8"
+              />
+              <circle
+                cx="190"
+                cy="40"
+                r="14"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="8"
+              />
+              <line
+                x1="130"
+                y1="130"
+                x2="70"
+                y2="220"
+                stroke="currentColor"
+                strokeWidth="8"
+                strokeLinecap="square"
+              />
+              <line
+                x1="130"
+                y1="130"
+                x2="190"
+                y2="220"
+                stroke="currentColor"
+                strokeWidth="8"
+                strokeLinecap="square"
+              />
+              <circle cx="130" cy="130" r="7" fill="currentColor" />
+            </g>
           </svg>
         </div>
       </section>

@@ -9,8 +9,13 @@ const ROUTED_LINKS = [
 
 const INERT_LINKS = ['Schedule Appointment', 'My Schedule', 'Admin Panel']
 
+function normalizePath(path) {
+  return path.toLowerCase().replace(/\/$/, '') || '/'
+}
+
 export default function NavBar() {
   const location = useLocation()
+  const currentPath = normalizePath(location.pathname)
 
   return (
     <nav className="nav-bar">
@@ -20,7 +25,7 @@ export default function NavBar() {
           <li key={label}>
             <Link
               className={
-                location.pathname === to
+                currentPath === normalizePath(to)
                   ? 'nav-bar__link nav-bar__link--active'
                   : 'nav-bar__link'
               }

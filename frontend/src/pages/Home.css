@@ -61,7 +61,10 @@
     flex: 1 1 45%;
     min-height: unset;
     margin-left: calc(-1 * var(--spacing-16));
-    clip-path: polygon(15% 0, 100% 0, 100% 100%, 0% 100%);
+    /* Both x-offsets must exceed --spacing-16 (64px) -- the negative margin
+       above hides anything closer to the left edge than that, which would
+       otherwise flatten the diagonal into a straight seam. */
+    clip-path: polygon(140px 0, 100% 0, 100% 100%, 80px 100%);
   }
 }
 

@@ -4,7 +4,7 @@ baseline_commit: 35ed372cb7f0b041e9928565b431b627a30d1f42
 
 # Story 1.3: Home and About Pages
 
-Status: review
+Status: done
 
 ## Story
 
@@ -60,6 +60,28 @@ so that I can learn about the shop before signing up.
 - [x] **Task 7: Verify CI green**
   - [x] Branch as `story/1.3-home-and-about-pages` from `main` (continuing the convention resumed in Story 1.2).
   - [x] Run `npm run lint`, `npm run format:check`, `npm test` locally; push and confirm both CI jobs pass before merging (AD-11). No backend changes in this story — the backend CI job is unaffected but must still stay green.
+
+### Review Findings
+
+- [x] [Review][Patch] Diagonal hero split is invisible for container widths ~640–948px — the clip-path's 15% diagonal cut falls entirely behind the -64px negative-margin overlap at those widths, so the visible edge is a straight line, not a diagonal [frontend/src/pages/Home.css:60-65]
+- [x] [Review][Patch] `<main>` landmark removed and never replaced — accessibility regression (no landmark for "skip to main content") [frontend/src/App.jsx:9-17]
+- [x] [Review][Patch] Backend `.csproj` dependency patch rides along in this branch/diff, but this story's own File List/Debug Log/Project Structure Notes all say "No backend changes" — undocumented in this story [backend/BarbershopApi/BarbershopApi.csproj:16-17]
+- [x] [Review][Patch] NavBar active-link check (`location.pathname === to`) is case- and trailing-slash-sensitive — e.g. `/About` renders the About page but its nav link won't show active [frontend/src/components/NavBar.jsx:23]
+- [x] [Review][Patch] Dead CSS hook `.home__hero-icon` — class set on the decorative SVG but no CSS rule defines it [frontend/src/pages/Home.jsx:28]
+- [x] [Review][Patch] No test asserts the decorative SVG stays `aria-hidden="true"` [frontend/src/pages/Home.test.jsx]
+- [x] [Review][Defer] Home CTA navigates to `/login` (and any unmatched path) with no registered `<Route>`/no catch-all — renders blank until Story 1.5 builds Login; spec explicitly forbids adding a placeholder route now [frontend/src/App.jsx:12-15] — deferred, pre-existing/spec-scoped
+- [x] [Review][Defer] `isSignedIn` is never passed by `App.jsx`, so AC#3's signed-in branch is unreachable in the running app, only exercised via direct prop injection in tests [frontend/src/pages/Home.jsx:5, frontend/src/App.jsx:13] — deferred, documented temporary auth seam (Stories 1.5/1.6)
+- [x] [Review][Defer] NavBar overflows/doesn't wrap below ~640px, causing horizontal overflow on every page including Home/About [frontend/src/components/NavBar.css] — deferred, pre-existing (Story 1.1 shell, acknowledged in Dev Notes as Story 1.5's job)
+- [x] [Review][Defer] `SQLitePCLRaw.lib.e_sqlite3` 2.1.11→2.1.12 bump may not actually contain the CVE-2025-6965 fix (advisory data suggests the fix only ships in the 3.x line) [backend/BarbershopApi/BarbershopApi.csproj:17] — deferred, out of this story's scope (tracked under Story 1.2's changelog), needs external verification
+- [x] [Review][Defer] react-router 8.3.0 requires Node ≥22.22.0 but CI only pins the major version (`node-version: '22'`) [.github/workflows/ci.yml:31] — deferred, informational risk already flagged in this story's own Dev Notes, not confirmed to break CI
+
+### Review Findings (Round 2 — patch verification)
+
+- [x] [Review][Patch] Round-1 diagonal fix (fixed `80px` inset) only produced a true diagonal across the top ~20% of the hero's height — the polygon's bottom vertex was pinned at `x=0`, so the bottom ~80% still rendered as a flat vertical seam at the 64px occlusion boundary; fixed by moving both polygon endpoints past the 64px line (`140px`/`80px`) [frontend/src/pages/Home.css:60-66]
+- [x] [Review][Patch] No comment tied the clip-path px offsets to `--spacing-16` (64px) they must exceed — added an explanatory comment to prevent a silent regression if the token changes [frontend/src/pages/Home.css:60-66]
+- [x] [Review][Patch] `container.querySelector('svg')` in the SVG a11y test was untargeted — scoped to `.home__hero-teal svg` [frontend/src/pages/Home.test.jsx]
+- [x] [Review][Patch] No test covered `normalizePath`'s actual fix scenarios (case mismatch, trailing slash) — added a case/trailing-slash active-link test [frontend/src/components/NavBar.test.jsx]
+- [x] [Review][Patch] No regression test for the restored `<main>` landmark — added assertion to `App.test.jsx` [frontend/src/App.test.jsx]
 
 ## Dev Notes
 
@@ -157,7 +179,7 @@ Claude Sonnet 5 (Amelia persona, bmad-dev-story workflow)
 - Updated `NavBar.test.jsx` for the routing change (wrapped in `<MemoryRouter>`, split the "renders all five" assertion into routed-link vs. inert-text checks) and added a new active-link-class test.
 - Added `Home.test.jsx`, `About.test.jsx`, and `App.test.jsx` per Task 6 — Home's navigation tests use real `<MemoryRouter>` + `<Routes>` with stub destination routes, no mocked `useNavigate`.
 - Manual browser check (headless Chromium via Playwright) surfaced one pre-existing, out-of-scope gap: `NavBar` doesn't collapse/wrap at narrow viewports (causes horizontal overflow below ~640px), per `EXPERIENCE.md`'s documented (but not-yet-built) nav-collapse pattern. This predates this story (Story 1.1's static shell, untouched here per this story's own Dev Notes — "that's Story 1.5's job") and isn't introduced by any change in this diff; Home's and About's own content does not overflow at any tested width. Flagging for whichever later story ends up owning NavBar's responsive behavior.
-- No backend changes; backend CI job unaffected.
+- No backend *feature* changes; backend CI job unaffected. Note: `backend/BarbershopApi/BarbershopApi.csproj` was touched on this branch by an unrelated NU1903 dependency-vulnerability patch found while working this story — see `1-2-account-entity-and-repository.md`'s Change Log (2026-07-29 entry) for the full rationale; tracked against story 1.2, not this one.
 
 ### File List
 
@@ -180,3 +202,6 @@ Claude Sonnet 5 (Amelia persona, bmad-dev-story workflow)
 ## Change Log
 
 - 2026-07-29: Implemented Home and About pages (Tasks 1-7); React Router v8 wired, all ACs satisfied, 31/31 frontend tests passing, lint clean, build clean; status set to review.
+- 2026-07-29: Code review (Blind Hunter + Edge Case Hunter + Acceptance Auditor) — fixed diagonal hero split invisible at ~640–948px widths, restored `<main>` landmark, normalized NavBar active-link path comparison, removed dead `.home__hero-icon` CSS hook, added SVG `aria-hidden` test coverage, and documented the undisclosed backend `.csproj` change. 5 pre-existing/out-of-scope issues deferred (see Review Findings and `deferred-work.md`). 31/31 tests passing, lint clean; status set to done.
+- 2026-07-29: Round-2 review of the patch diff — the round-1 diagonal fix was only a partial fix (true diagonal only across the top ~20% of hero height); corrected by moving both clip-path endpoints past the 64px occlusion line, plus added a guarding comment, a tighter SVG test selector, a `normalizePath` case/trailing-slash test, and a `<main>` landmark regression test. 32/32 tests passing, lint clean.
+- 2026-07-29: Replaced the placeholder crossed-line SVG with an actual scissors-and-comb graphic (comb bar+teeth crossed with a scissors blade/handle assembly, both at 45°/-45° per `DESIGN.md`'s reference mockup) — Jack flagged the original as reading as a plain X, not the intended icon. 32/32 tests passing, lint clean.

@@ -55,4 +55,16 @@ describe('NavBar', () => {
       'nav-bar__link--active',
     )
   })
+
+  it('normalizes case and a trailing slash when matching the active link', () => {
+    render(
+      <MemoryRouter initialEntries={['/About/']}>
+        <NavBar />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByRole('link', { name: 'About' })).toHaveClass(
+      'nav-bar__link--active',
+    )
+  })
 })
