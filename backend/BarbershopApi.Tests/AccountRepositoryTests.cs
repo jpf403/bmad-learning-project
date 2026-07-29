@@ -45,6 +45,22 @@ public class AccountRepositoryTests : IDisposable
     }
 
     [Fact]
+    public async Task Create_trims_whitespace_before_persisting()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+
+        var created = await repository.Create(NewAccount(email: "  jack@example.com  "));
+
+        await using var verifyContext = _factory.CreateDbContext();
+        var verifyRepository = new AccountRepository(verifyContext);
+        var reloaded = await verifyRepository.FindById(created.Id);
+
+        Assert.NotNull(reloaded);
+        Assert.Equal("jack@example.com", reloaded.Email);
+    }
+
+    [Fact]
     public async Task Create_with_duplicate_active_email_throws()
     {
         await using var context = _factory.CreateDbContext();
@@ -94,6 +110,19 @@ public class AccountRepositoryTests : IDisposable
     }
 
     [Fact]
+    public async Task FindByEmail_matches_despite_surrounding_whitespace()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        var created = await repository.Create(NewAccount(email: "jack@example.com"));
+
+        var found = await repository.FindByEmail("  jack@example.com  ");
+
+        Assert.NotNull(found);
+        Assert.Equal(created.Id, found.Id);
+    }
+
+    [Fact]
     public async Task FindByEmail_returns_null_for_soft_deleted_account()
     {
         await using var context = _factory.CreateDbContext();
@@ -130,6 +159,65 @@ public class AccountRepositoryTests : IDisposable
         var found = await repository.FindById(created.Id);
 
         Assert.Null(found);
+    }
+
+    [Fact]
+    public async Task FindById_returns_null_when_no_match()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+
+        var found = await repository.FindById(999);
+
+        Assert.Null(found);
+    }
+
+    [Fact]
+    public async Task Update_normalizes_email_before_persisting()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        var created = await repository.Create(NewAccount(email: "jack@example.com"));
+
+        created.Email = " Jack@Example.com ";
+        await repository.Update(created);
+
+        Assert.Equal("jack@example.com", created.Email);
+    }
+
+    [Fact]
+    public async Task Update_with_duplicate_active_email_throws()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        await repository.Create(NewAccount(email: "jack@example.com"));
+        var second = await repository.Create(NewAccount(email: "someone-else@example.com"));
+
+        second.Email = "Jack@Example.com";
+
+        await Assert.ThrowsAsync<DbUpdateException>(() => repository.Update(second));
+    }
+
+    [Fact]
+    public async Task Update_twice_on_same_instance_does_not_throw_spurious_concurrency_exception()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        var created = await repository.Create(NewAccount());
+
+        created.FirstName = "First update";
+        await repository.Update(created);
+
+        created.FirstName = "Second update";
+        await repository.Update(created);
+
+        await using var verifyContext = _factory.CreateDbContext();
+        var verifyRepository = new AccountRepository(verifyContext);
+        var reloaded = await verifyRepository.FindById(created.Id);
+
+        Assert.NotNull(reloaded);
+        Assert.Equal("Second update", reloaded.FirstName);
+        Assert.Equal(created.RowVersion, reloaded.RowVersion);
     }
 
     [Fact]

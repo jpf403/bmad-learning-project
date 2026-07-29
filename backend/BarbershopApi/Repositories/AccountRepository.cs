@@ -8,7 +8,7 @@ public class AccountRepository(BarbershopDbContext context) : IAccountRepository
 {
     public async Task<Account> Create(Account account)
     {
-        account.Email = account.Email.ToLowerInvariant();
+        account.Email = account.Email.Trim().ToLowerInvariant();
         context.Accounts.Add(account);
         await context.SaveChangesAsync();
         return account;
@@ -16,7 +16,7 @@ public class AccountRepository(BarbershopDbContext context) : IAccountRepository
 
     public async Task<Account?> FindByEmail(string email)
     {
-        var normalizedEmail = email.ToLowerInvariant();
+        var normalizedEmail = email.Trim().ToLowerInvariant();
         return await context.Accounts
             .FirstOrDefaultAsync(a => a.Email == normalizedEmail && a.DeletedAt == null);
     }
@@ -29,7 +29,9 @@ public class AccountRepository(BarbershopDbContext context) : IAccountRepository
 
     public async Task Update(Account account)
     {
+        account.Email = account.Email.Trim().ToLowerInvariant();
         context.Update(account);
         await context.SaveChangesAsync();
+        await context.Entry(account).ReloadAsync();
     }
 }

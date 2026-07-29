@@ -35,18 +35,23 @@ public class SqliteApiFactory : WebApplicationFactory<Program>
 
         SqliteConnection.ClearAllPools();
 
-        if (File.Exists(_dbPath))
+        TryDelete(_dbPath);
+        foreach (var suffix in new[] { "-wal", "-shm", "-journal" })
         {
-            File.Delete(_dbPath);
+            TryDelete(_dbPath + suffix);
         }
+    }
 
-        foreach (var suffix in new[] { "-wal", "-shm" })
+    private static void TryDelete(string path)
+    {
+        try
         {
-            var sidecar = _dbPath + suffix;
-            if (File.Exists(sidecar))
-            {
-                File.Delete(sidecar);
-            }
+            File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // best-effort cleanup of the temp DB file; a lingering handle on Windows
+            // shouldn't fail the test itself (ClearAllPools already ran above).
         }
     }
 }
