@@ -33,7 +33,13 @@ export default function Home({ isSignedIn = false }) {
           >
             {/* Comb: straight bar with teeth, rotated to cross the scissors like an X */}
             <g transform="rotate(45 130 130)">
-              <rect x="60" y="122" width="140" height="16" fill="currentColor" />
+              <rect
+                x="60"
+                y="122"
+                width="140"
+                height="16"
+                fill="currentColor"
+              />
               <rect x="66" y="138" width="6" height="26" fill="currentColor" />
               <rect x="82" y="138" width="6" height="26" fill="currentColor" />
               <rect x="98" y="138" width="6" height="26" fill="currentColor" />
