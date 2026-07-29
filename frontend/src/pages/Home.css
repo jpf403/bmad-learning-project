@@ -1,0 +1,75 @@
+.home__hero {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 480px;
+  overflow: hidden;
+}
+
+.home__hero-white {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: var(--spacing-4);
+  padding: var(--spacing-12) var(--spacing-gutter-mobile);
+  background: var(--color-background);
+  z-index: 1;
+}
+
+.home__headline {
+  font-family: var(--font-family-base);
+  font-size: var(--typography-display-size);
+  font-weight: var(--typography-display-weight);
+  line-height: var(--typography-display-line-height);
+  letter-spacing: var(--typography-display-letter-spacing);
+  color: var(--color-text);
+  margin: 0;
+}
+
+.home__tagline {
+  font-family: var(--font-family-base);
+  font-size: var(--typography-body-size);
+  font-weight: var(--typography-body-weight);
+  line-height: var(--typography-body-line-height);
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.home__hero-teal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+}
+
+/* Tablet and up: diagonal white/teal split, side by side */
+@media (min-width: 640px) {
+  .home__hero {
+    flex-direction: row;
+    min-height: 520px;
+  }
+
+  .home__hero-white {
+    flex: 1 1 55%;
+    padding: var(--spacing-16) var(--spacing-gutter-desktop);
+  }
+
+  .home__hero-teal {
+    flex: 1 1 45%;
+    min-height: unset;
+    margin-left: calc(-1 * var(--spacing-16));
+    /* Both x-offsets must exceed --spacing-16 (64px) -- the negative margin
+       above hides anything closer to the left edge than that, which would
+       otherwise flatten the diagonal into a straight seam. */
+    clip-path: polygon(140px 0, 100% 0, 100% 100%, 80px 100%);
+  }
+}
+
+@media (min-width: 1024px) {
+  .home__hero {
+    min-height: 600px;
+  }
+}

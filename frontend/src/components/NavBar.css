@@ -33,6 +33,16 @@
   text-decoration: none;
 }
 
+.nav-bar__link--active {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-decoration-color: var(--color-primary);
+}
+
+.nav-bar__link--inert {
+  cursor: default;
+}
+
 .nav-bar__actions {
   display: flex;
   align-items: center;

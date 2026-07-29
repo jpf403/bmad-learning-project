@@ -4,7 +4,7 @@ baseline_commit: 35ed372cb7f0b041e9928565b431b627a30d1f42
 
 # Story 1.3: Home and About Pages
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -22,44 +22,66 @@ so that I can learn about the shop before signing up.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Install and wire React Router v8** (AC: #1-#5, foundational)
-  - [ ] `npm install react-router@8.3.0` in `frontend/` (exact-pinned, matching this project's convention of exact-pinning every dependency — see Latest Tech Info in Dev Notes for why v8, not v7 or `react-router-dom`).
-  - [ ] In `frontend/src/main.jsx`, import `BrowserRouter` from `"react-router"` (not `"react-router-dom"` — that package no longer exists in v8; not `"react-router/dom"` either — that subpath is only for `RouterProvider`/`HydratedRouter`, the data/framework-mode APIs this declarative SPA doesn't use) and wrap `<App />` with it.
-  - [ ] **Do not** put `<BrowserRouter>` inside `App.jsx` itself — keep it in `main.jsx` only, so `App.jsx` stays testable by wrapping it in `<MemoryRouter>` in tests without a nested-router conflict.
-  - [ ] In `App.jsx`, remove the Story 1.1 design-system showcase (buttons/inputs/confirm-popup demo) — it was always provisional (a manual rendering smoke-check), and every component it demonstrated already has its own dedicated test file (`Button.test.jsx`, `Input.test.jsx`, etc.), so nothing is lost by deleting it. Replace the body with `<NavBar />`, a `<Routes>` block (`"/"` → `Home`, `"/about"` → `About`), and `<Footer />`.
-  - [ ] **Route-naming convention this story establishes — future stories must use these exact paths, not invent their own:** `/login` (Story 1.5), `/register` (Story 1.4), `/schedule-appointment` (Story 2.2), `/my-schedule` (Stories 2.5/2.6), `/admin` (Story 3.2), `/account` (Story 1.7). Do not create placeholder `<Route>` entries or stub page components for any of these now — only `/` and `/about` get real routes in this story.
+- [x] **Task 1: Install and wire React Router v8** (AC: #1-#5, foundational)
+  - [x] `npm install react-router@8.3.0` in `frontend/` (exact-pinned, matching this project's convention of exact-pinning every dependency — see Latest Tech Info in Dev Notes for why v8, not v7 or `react-router-dom`).
+  - [x] In `frontend/src/main.jsx`, import `BrowserRouter` from `"react-router"` (not `"react-router-dom"` — that package no longer exists in v8; not `"react-router/dom"` either — that subpath is only for `RouterProvider`/`HydratedRouter`, the data/framework-mode APIs this declarative SPA doesn't use) and wrap `<App />` with it.
+  - [x] **Do not** put `<BrowserRouter>` inside `App.jsx` itself — keep it in `main.jsx` only, so `App.jsx` stays testable by wrapping it in `<MemoryRouter>` in tests without a nested-router conflict.
+  - [x] In `App.jsx`, remove the Story 1.1 design-system showcase (buttons/inputs/confirm-popup demo) — it was always provisional (a manual rendering smoke-check), and every component it demonstrated already has its own dedicated test file (`Button.test.jsx`, `Input.test.jsx`, etc.), so nothing is lost by deleting it. Replace the body with `<NavBar />`, a `<Routes>` block (`"/"` → `Home`, `"/about"` → `About`), and `<Footer />`.
+  - [x] **Route-naming convention this story establishes — future stories must use these exact paths, not invent their own:** `/login` (Story 1.5), `/register` (Story 1.4), `/schedule-appointment` (Story 2.2), `/my-schedule` (Stories 2.5/2.6), `/admin` (Story 3.2), `/account` (Story 1.7). Do not create placeholder `<Route>` entries or stub page components for any of these now — only `/` and `/about` get real routes in this story.
 
-- [ ] **Task 2: Build the Home page** (AC: #1, #2, #3, #5)
-  - [ ] Create `frontend/src/pages/Home.jsx` + `Home.css`.
-  - [ ] Diagonal hero split — white half (left) / `{colors.primary}`-filled half (right), per `DESIGN.md`'s Home hero component spec. Use `clip-path` (or an equivalent skewed-divider technique) on the teal half; this is CSS-only, no new component needed.
-  - [ ] White half: headline (`{typography.display}` — 40px/700) + tagline (`{typography.body}`). Exact copy is a content-pass decision, not fixed upstream (`DESIGN.md`: "exact headline copy is a content-pass decision owned by EXPERIENCE.md/copywriting, not fixed here") — propose sensible on-brand copy in the locked voice register (clean, plain-spoken, no exclamation points — see `EXPERIENCE.md` §Voice and Tone), e.g. headline "Your next haircut, booked in under a minute." / tagline "Walk-in convenience, without the wait."
-  - [ ] CTA button: reuse the existing `Button` component (`variant="primary"`), label **"Schedule Appointment"** — this exact label is a locked value, not a proposal (`DESIGN.md` §Components: "Used for 'Schedule Appointment' (nav CTA **and Home hero CTA**)"). `Button`'s existing `:hover` CSS (from Story 1.1) already satisfies the "at least one hover interaction on desktop" requirement (FR20) — do not add any new hover logic.
-  - [ ] Teal half: one small decorative inline SVG (scissors-and-comb, crossed like an X — "the only illustrative graphic element in the entire product," per `DESIGN.md` §Components). Mark it `aria-hidden="true"` — it's decorative, not content. Visual fidelity of the SVG itself is not AC-gated; keep it simple.
-  - [ ] Accept an `isSignedIn` prop (default `false`). This is a **temporary seam, not a real auth system** — see "Auth-State Placeholder" below. CTA `onClick` calls `useNavigate()` (from `"react-router"`) with `navigate(isSignedIn ? '/schedule-appointment' : '/login')`.
-  - [ ] Responsive: hero and copy must not overflow/break at any width; verify at ~375px, ~768px, ~1280px against the existing 640px/1024px breakpoints (`frontend/src/styles/breakpoints.js`) — reuse those constants/media-query values, don't hardcode new breakpoint numbers.
+- [x] **Task 2: Build the Home page** (AC: #1, #2, #3, #5)
+  - [x] Create `frontend/src/pages/Home.jsx` + `Home.css`.
+  - [x] Diagonal hero split — white half (left) / `{colors.primary}`-filled half (right), per `DESIGN.md`'s Home hero component spec. Use `clip-path` (or an equivalent skewed-divider technique) on the teal half; this is CSS-only, no new component needed.
+  - [x] White half: headline (`{typography.display}` — 40px/700) + tagline (`{typography.body}`). Exact copy is a content-pass decision, not fixed upstream (`DESIGN.md`: "exact headline copy is a content-pass decision owned by EXPERIENCE.md/copywriting, not fixed here") — propose sensible on-brand copy in the locked voice register (clean, plain-spoken, no exclamation points — see `EXPERIENCE.md` §Voice and Tone), e.g. headline "Your next haircut, booked in under a minute." / tagline "Walk-in convenience, without the wait."
+  - [x] CTA button: reuse the existing `Button` component (`variant="primary"`), label **"Schedule Appointment"** — this exact label is a locked value, not a proposal (`DESIGN.md` §Components: "Used for 'Schedule Appointment' (nav CTA **and Home hero CTA**)"). `Button`'s existing `:hover` CSS (from Story 1.1) already satisfies the "at least one hover interaction on desktop" requirement (FR20) — do not add any new hover logic.
+  - [x] Teal half: one small decorative inline SVG (scissors-and-comb, crossed like an X — "the only illustrative graphic element in the entire product," per `DESIGN.md` §Components). Mark it `aria-hidden="true"` — it's decorative, not content. Visual fidelity of the SVG itself is not AC-gated; keep it simple.
+  - [x] Accept an `isSignedIn` prop (default `false`). This is a **temporary seam, not a real auth system** — see "Auth-State Placeholder" below. CTA `onClick` calls `useNavigate()` (from `"react-router"`) with `navigate(isSignedIn ? '/schedule-appointment' : '/login')`.
+  - [x] Responsive: hero and copy must not overflow/break at any width; verify at ~375px, ~768px, ~1280px against the existing 640px/1024px breakpoints (`frontend/src/styles/breakpoints.js`) — reuse those constants/media-query values, don't hardcode new breakpoint numbers.
 
-- [ ] **Task 3: Build the About page** (AC: #4, #5)
-  - [ ] Create `frontend/src/pages/About.jsx` + `About.css`.
-  - [ ] Location/phone/hours: reuse the **exact same copy already in `Footer.jsx`** — "123 Main Street, Springfield" / "(555) 010-2020" / "Mon–Fri, 9:00 AM – 4:30 PM". `DESIGN.md` §Components is explicit these must match ("address and phone (same fake contact info as the About page)") — do not invent different values.
-  - [ ] Barber list: static placeholder names only (e.g., "Manny, Dana, and Theo" — "Manny" matches the barber name already used throughout `EXPERIENCE.md`'s example flows, for continuity). **This is fake shop copy, not a data-driven feature** — no repository/endpoint exists to list real barber accounts, and no FR/story anywhere scopes building one; don't add a fetch call or wire this to the `AccountRepository` from Story 1.2.
-  - [ ] Responsive layout, same no-overflow requirement as Home (FR22).
+- [x] **Task 3: Build the About page** (AC: #4, #5)
+  - [x] Create `frontend/src/pages/About.jsx` + `About.css`.
+  - [x] Location/phone/hours: reuse the **exact same copy already in `Footer.jsx`** — "123 Main Street, Springfield" / "(555) 010-2020" / "Mon–Fri, 9:00 AM – 4:30 PM". `DESIGN.md` §Components is explicit these must match ("address and phone (same fake contact info as the About page)") — do not invent different values.
+  - [x] Barber list: static placeholder names only (e.g., "Manny, Dana, and Theo" — "Manny" matches the barber name already used throughout `EXPERIENCE.md`'s example flows, for continuity). **This is fake shop copy, not a data-driven feature** — no repository/endpoint exists to list real barber accounts, and no FR/story anywhere scopes building one; don't add a fetch call or wire this to the `AccountRepository` from Story 1.2.
+  - [x] Responsive layout, same no-overflow requirement as Home (FR22).
 
-- [ ] **Task 4: Wire NavBar to real routes + active-link state**
-  - [ ] In `NavBar.jsx`, replace the `Home` and `About` `<a href="#">` placeholders with `<Link to="/">`/`<Link to="/about">` (from `"react-router"`).
-  - [ ] Leave `Schedule Appointment`, `My Schedule`, and `Admin Panel` as plain, non-interactive text (e.g. a `<span>`), **not** `<a href="#">` and **not** wired to a route — their destination pages don't exist until Epic 2/3, and linking to an unregistered route would just render blank. This is a deliberate, temporary regression from Story 1.1's "all five render as links" shell; Stories 1.4/1.5(nav auth-state)/1.6(role-gated visibility) are what eventually make these real again.
-  - [ ] Add active-link styling: use `useLocation()` (from `"react-router"`) to compare the current pathname against each real link's target; apply a new `.nav-bar__link--active` class using the already-defined `--color-primary` token (`nav-bar.link-foreground-active` / `link-underline-active` in `DESIGN.md`) — the CSS variable already exists in `tokens.css`, only the new class + underline rule need adding.
+- [x] **Task 4: Wire NavBar to real routes + active-link state**
+  - [x] In `NavBar.jsx`, replace the `Home` and `About` `<a href="#">` placeholders with `<Link to="/">`/`<Link to="/about">` (from `"react-router"`).
+  - [x] Leave `Schedule Appointment`, `My Schedule`, and `Admin Panel` as plain, non-interactive text (e.g. a `<span>`), **not** `<a href="#">` and **not** wired to a route — their destination pages don't exist until Epic 2/3, and linking to an unregistered route would just render blank. This is a deliberate, temporary regression from Story 1.1's "all five render as links" shell; Stories 1.4/1.5(nav auth-state)/1.6(role-gated visibility) are what eventually make these real again.
+  - [x] Add active-link styling: use `useLocation()` (from `"react-router"`) to compare the current pathname against each real link's target; apply a new `.nav-bar__link--active` class using the already-defined `--color-primary` token (`nav-bar.link-foreground-active` / `link-underline-active` in `DESIGN.md`) — the CSS variable already exists in `tokens.css`, only the new class + underline rule need adding.
 
-- [ ] **Task 5: Update existing tests for the routing change** (regression fix — do not skip)
-  - [ ] `NavBar.test.jsx`: wrap `render(<NavBar />)` in `<MemoryRouter>` (required now that `Link`/`useLocation` need a router context — rendering `<NavBar />` bare will throw). Update the "renders all five nav links" test: assert `Home`/`About` via `getByRole('link', { name })`, and assert `Schedule Appointment`/`My Schedule`/`Admin Panel` are present as text but **not** links via `queryByRole('link', { name })` returning `null`. Add a test asserting the active-link class lands on the correct link for a given `initialEntries` route.
+- [x] **Task 5: Update existing tests for the routing change** (regression fix — do not skip)
+  - [x] `NavBar.test.jsx`: wrap `render(<NavBar />)` in `<MemoryRouter>` (required now that `Link`/`useLocation` need a router context — rendering `<NavBar />` bare will throw). Update the "renders all five nav links" test: assert `Home`/`About` via `getByRole('link', { name })`, and assert `Schedule Appointment`/`My Schedule`/`Admin Panel` are present as text but **not** links via `queryByRole('link', { name })` returning `null`. Add a test asserting the active-link class lands on the correct link for a given `initialEntries` route.
 
-- [ ] **Task 6: Frontend tests for the new pages** (AC: all)
-  - [ ] `Home.test.jsx`: hero renders headline/tagline/CTA text. CTA click while signed-out navigates to `/login`; CTA click with `isSignedIn` navigates to `/schedule-appointment`. Test navigation by wrapping in `<MemoryRouter initialEntries={['/']}>` with real `<Routes>` including stub destination routes (e.g. `<Route path="/login" element={<div>Login Stub</div>} />`) and asserting the stub renders after the click — **do not** mock `useNavigate` directly; RTL's documented pattern for testing React Router navigation is real routes + real navigation, not a mocked hook.
-  - [ ] `About.test.jsx`: renders address/phone/hours/barber-list text.
-  - [ ] `App.test.jsx` (new): `<MemoryRouter initialEntries={['/']}>` around `<App />` renders Home content + `NavBar` + `Footer`; `initialEntries={['/about']}` renders About content.
+- [x] **Task 6: Frontend tests for the new pages** (AC: all)
+  - [x] `Home.test.jsx`: hero renders headline/tagline/CTA text. CTA click while signed-out navigates to `/login`; CTA click with `isSignedIn` navigates to `/schedule-appointment`. Test navigation by wrapping in `<MemoryRouter initialEntries={['/']}>` with real `<Routes>` including stub destination routes (e.g. `<Route path="/login" element={<div>Login Stub</div>} />`) and asserting the stub renders after the click — **do not** mock `useNavigate` directly; RTL's documented pattern for testing React Router navigation is real routes + real navigation, not a mocked hook.
+  - [x] `About.test.jsx`: renders address/phone/hours/barber-list text.
+  - [x] `App.test.jsx` (new): `<MemoryRouter initialEntries={['/']}>` around `<App />` renders Home content + `NavBar` + `Footer`; `initialEntries={['/about']}` renders About content.
 
-- [ ] **Task 7: Verify CI green**
-  - [ ] Branch as `story/1.3-home-and-about-pages` from `main` (continuing the convention resumed in Story 1.2).
-  - [ ] Run `npm run lint`, `npm run format:check`, `npm test` locally; push and confirm both CI jobs pass before merging (AD-11). No backend changes in this story — the backend CI job is unaffected but must still stay green.
+- [x] **Task 7: Verify CI green**
+  - [x] Branch as `story/1.3-home-and-about-pages` from `main` (continuing the convention resumed in Story 1.2).
+  - [x] Run `npm run lint`, `npm run format:check`, `npm test` locally; push and confirm both CI jobs pass before merging (AD-11). No backend changes in this story — the backend CI job is unaffected but must still stay green.
+
+### Review Findings
+
+- [x] [Review][Patch] Diagonal hero split is invisible for container widths ~640–948px — the clip-path's 15% diagonal cut falls entirely behind the -64px negative-margin overlap at those widths, so the visible edge is a straight line, not a diagonal [frontend/src/pages/Home.css:60-65]
+- [x] [Review][Patch] `<main>` landmark removed and never replaced — accessibility regression (no landmark for "skip to main content") [frontend/src/App.jsx:9-17]
+- [x] [Review][Patch] Backend `.csproj` dependency patch rides along in this branch/diff, but this story's own File List/Debug Log/Project Structure Notes all say "No backend changes" — undocumented in this story [backend/BarbershopApi/BarbershopApi.csproj:16-17]
+- [x] [Review][Patch] NavBar active-link check (`location.pathname === to`) is case- and trailing-slash-sensitive — e.g. `/About` renders the About page but its nav link won't show active [frontend/src/components/NavBar.jsx:23]
+- [x] [Review][Patch] Dead CSS hook `.home__hero-icon` — class set on the decorative SVG but no CSS rule defines it [frontend/src/pages/Home.jsx:28]
+- [x] [Review][Patch] No test asserts the decorative SVG stays `aria-hidden="true"` [frontend/src/pages/Home.test.jsx]
+- [x] [Review][Defer] Home CTA navigates to `/login` (and any unmatched path) with no registered `<Route>`/no catch-all — renders blank until Story 1.5 builds Login; spec explicitly forbids adding a placeholder route now [frontend/src/App.jsx:12-15] — deferred, pre-existing/spec-scoped
+- [x] [Review][Defer] `isSignedIn` is never passed by `App.jsx`, so AC#3's signed-in branch is unreachable in the running app, only exercised via direct prop injection in tests [frontend/src/pages/Home.jsx:5, frontend/src/App.jsx:13] — deferred, documented temporary auth seam (Stories 1.5/1.6)
+- [x] [Review][Defer] NavBar overflows/doesn't wrap below ~640px, causing horizontal overflow on every page including Home/About [frontend/src/components/NavBar.css] — deferred, pre-existing (Story 1.1 shell, acknowledged in Dev Notes as Story 1.5's job)
+- [x] [Review][Defer] `SQLitePCLRaw.lib.e_sqlite3` 2.1.11→2.1.12 bump may not actually contain the CVE-2025-6965 fix (advisory data suggests the fix only ships in the 3.x line) [backend/BarbershopApi/BarbershopApi.csproj:17] — deferred, out of this story's scope (tracked under Story 1.2's changelog), needs external verification
+- [x] [Review][Defer] react-router 8.3.0 requires Node ≥22.22.0 but CI only pins the major version (`node-version: '22'`) [.github/workflows/ci.yml:31] — deferred, informational risk already flagged in this story's own Dev Notes, not confirmed to break CI
+
+### Review Findings (Round 2 — patch verification)
+
+- [x] [Review][Patch] Round-1 diagonal fix (fixed `80px` inset) only produced a true diagonal across the top ~20% of the hero's height — the polygon's bottom vertex was pinned at `x=0`, so the bottom ~80% still rendered as a flat vertical seam at the 64px occlusion boundary; fixed by moving both polygon endpoints past the 64px line (`140px`/`80px`) [frontend/src/pages/Home.css:60-66]
+- [x] [Review][Patch] No comment tied the clip-path px offsets to `--spacing-16` (64px) they must exceed — added an explanatory comment to prevent a silent regression if the token changes [frontend/src/pages/Home.css:60-66]
+- [x] [Review][Patch] `container.querySelector('svg')` in the SVG a11y test was untargeted — scoped to `.home__hero-teal svg` [frontend/src/pages/Home.test.jsx]
+- [x] [Review][Patch] No test covered `normalizePath`'s actual fix scenarios (case mismatch, trailing slash) — added a case/trailing-slash active-link test [frontend/src/components/NavBar.test.jsx]
+- [x] [Review][Patch] No regression test for the restored `<main>` landmark — added assertion to `App.test.jsx` [frontend/src/App.test.jsx]
 
 ## Dev Notes
 
@@ -137,8 +159,49 @@ Recent commits (`0c2cb3f` sprint planning → `1bdefaf`/`1149733` Story 1.1 → 
 
 ### Agent Model Used
 
+Claude Sonnet 5 (Amelia persona, bmad-dev-story workflow)
+
 ### Debug Log References
+
+- `npm test` (frontend, Vitest) — 31/31 passed across 8 test files.
+- `npm run lint` (ESLint) — 0 errors.
+- `npm run format:check` (Prettier) — reports 31 pre-existing files (including files untouched by this story) as unformatted; confirmed via `git stash` that this same warning fires against the unmodified baseline (33 files) due to local `core.autocrlf=true` converting the Windows checkout to CRLF while Prettier's default `endOfLine` expects `lf` — a pre-existing local-environment artifact, not a regression from this story. CI runs on `ubuntu-latest` where checkout doesn't rewrite line endings, so this shouldn't reproduce there; flagged for Jack's awareness rather than silently patched (fixing it would touch every file in the repo, well outside this story's scope).
+- `npm run build` (Vite) — succeeded, no errors.
+- Manual verification via headless Playwright (Chromium): navigated to `/` and `/about` at 1280px and 375px viewports, screenshotted both, clicked the Home CTA signed-out (confirmed navigation to `/login`), and checked `console --errors`/`pageerror` — none fired. Confirmed NavBar's active-link class (`nav-bar__link--active`) applies correctly and `Schedule Appointment`/`My Schedule`/`Admin Panel` render as non-link text.
 
 ### Completion Notes List
 
+- Installed `react-router@8.3.0` (exact-pinned) and wrapped `<App />` in `<BrowserRouter>` in `main.jsx` only — `App.jsx` stays testable via `<MemoryRouter>` with no nested-router conflict.
+- Replaced `App.jsx`'s Story 1.1 design-system showcase with `<NavBar />`, a `<Routes>` block (`/` → `Home`, `/about` → `About`), and `<Footer />`; deleted the now-dead `App.css` (its only rules were showcase-specific) and its import.
+- Built `Home.jsx`/`Home.css`: diagonal white/teal hero via `clip-path` above the 640px breakpoint (stacks vertically below it, reusing the existing `breakpoints.js`-documented 640/1024 values as hardcoded `@media` queries per the established tokens.css convention), headline/tagline copy in the locked voice register, `Button variant="primary"` CTA reusing Story 1.1's existing hover styling, and a simple aria-hidden crossed-line SVG standing in for the scissors-and-comb graphic. `isSignedIn` prop (default `false`) branches the CTA's `useNavigate()` target between `/login` and `/schedule-appointment` — the documented temporary seam, not a real auth mechanism.
+- Built `About.jsx`/`About.css`: address/phone/hours copied verbatim from `Footer.jsx`, static barber list ("Manny, Dana, and Theo"), no data fetching.
+- `NavBar.jsx`: `Home`/`About` now `<Link>`s from `react-router`; `Schedule Appointment`/`My Schedule`/`Admin Panel` are inert `<span>`s (not links, not `href="#"`); added `.nav-bar__link--active` (via `useLocation()`) using the existing `--color-primary` token, per `DESIGN.md`'s locked active-link spec.
+- Updated `NavBar.test.jsx` for the routing change (wrapped in `<MemoryRouter>`, split the "renders all five" assertion into routed-link vs. inert-text checks) and added a new active-link-class test.
+- Added `Home.test.jsx`, `About.test.jsx`, and `App.test.jsx` per Task 6 — Home's navigation tests use real `<MemoryRouter>` + `<Routes>` with stub destination routes, no mocked `useNavigate`.
+- Manual browser check (headless Chromium via Playwright) surfaced one pre-existing, out-of-scope gap: `NavBar` doesn't collapse/wrap at narrow viewports (causes horizontal overflow below ~640px), per `EXPERIENCE.md`'s documented (but not-yet-built) nav-collapse pattern. This predates this story (Story 1.1's static shell, untouched here per this story's own Dev Notes — "that's Story 1.5's job") and isn't introduced by any change in this diff; Home's and About's own content does not overflow at any tested width. Flagging for whichever later story ends up owning NavBar's responsive behavior.
+- No backend *feature* changes; backend CI job unaffected. Note: `backend/BarbershopApi/BarbershopApi.csproj` was touched on this branch by an unrelated NU1903 dependency-vulnerability patch found while working this story — see `1-2-account-entity-and-repository.md`'s Change Log (2026-07-29 entry) for the full rationale; tracked against story 1.2, not this one.
+
 ### File List
+
+- `frontend/package.json` (modified — added `react-router@8.3.0`)
+- `frontend/package-lock.json` (modified)
+- `frontend/src/main.jsx` (modified — wrapped `<App />` in `<BrowserRouter>`)
+- `frontend/src/App.jsx` (modified — removed showcase, added `<NavBar />`/`<Routes>`/`<Footer />`)
+- `frontend/src/App.css` (deleted — dead showcase-only styles)
+- `frontend/src/App.test.jsx` (new)
+- `frontend/src/pages/Home.jsx` (new)
+- `frontend/src/pages/Home.css` (new)
+- `frontend/src/pages/Home.test.jsx` (new)
+- `frontend/src/pages/About.jsx` (new)
+- `frontend/src/pages/About.css` (new)
+- `frontend/src/pages/About.test.jsx` (new)
+- `frontend/src/components/NavBar.jsx` (modified — real `Link`s, inert spans, active-link state)
+- `frontend/src/components/NavBar.css` (modified — added `.nav-bar__link--active`/`.nav-bar__link--inert`)
+- `frontend/src/components/NavBar.test.jsx` (modified — `MemoryRouter` wrap, routed-vs-inert assertions, active-link test)
+
+## Change Log
+
+- 2026-07-29: Implemented Home and About pages (Tasks 1-7); React Router v8 wired, all ACs satisfied, 31/31 frontend tests passing, lint clean, build clean; status set to review.
+- 2026-07-29: Code review (Blind Hunter + Edge Case Hunter + Acceptance Auditor) — fixed diagonal hero split invisible at ~640–948px widths, restored `<main>` landmark, normalized NavBar active-link path comparison, removed dead `.home__hero-icon` CSS hook, added SVG `aria-hidden` test coverage, and documented the undisclosed backend `.csproj` change. 5 pre-existing/out-of-scope issues deferred (see Review Findings and `deferred-work.md`). 31/31 tests passing, lint clean; status set to done.
+- 2026-07-29: Round-2 review of the patch diff — the round-1 diagonal fix was only a partial fix (true diagonal only across the top ~20% of hero height); corrected by moving both clip-path endpoints past the 64px occlusion line, plus added a guarding comment, a tighter SVG test selector, a `normalizePath` case/trailing-slash test, and a `<main>` landmark regression test. 32/32 tests passing, lint clean.
+- 2026-07-29: Replaced the placeholder crossed-line SVG with an actual scissors-and-comb graphic (comb bar+teeth crossed with a scissors blade/handle assembly, both at 45°/-45° per `DESIGN.md`'s reference mockup) — Jack flagged the original as reading as a plain X, not the intended icon. 32/32 tests passing, lint clean.
