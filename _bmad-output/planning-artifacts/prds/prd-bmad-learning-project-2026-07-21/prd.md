@@ -2,7 +2,7 @@
 title: Barbershop Appointment Scheduler — PRD
 status: final
 created: 2026-07-21
-updated: 2026-07-24
+updated: 2026-07-29
 ---
 
 # Barbershop Appointment Scheduler — PRD
@@ -43,7 +43,7 @@ Any signed-in user — customer, barber, or admin — can sign out, ending their
 ## Functional Requirements
 
 ### Authentication & Accounts
-- FR1: Any visitor can self-register a customer account from the home page (email, password typed twice to confirm, first name, last name). A registration with an email already in use is rejected with an error message directing the user to use a different email; email is the unique key for an account. If the password and confirm-password fields don't match, submission is rejected with a "passwords do not match" error prompting the user to retype just those two fields — other entered fields are not cleared. This same mismatched-confirmation handling applies everywhere a password is typed twice in this PRD (FR1, FR18, FR19, FR28).
+- FR1: Any visitor can self-register a customer account from the home page (email, password typed twice to confirm, first name, last name). A registration with an email already in use is rejected with an error message directing the user to use a different email; email is the unique key for an account. If the password and confirm-password fields don't match, submission is rejected with a "passwords do not match" error prompting the user to retype just those two fields — other entered fields are not cleared. This same mismatched-confirmation handling applies everywhere a password is typed twice in this PRD (FR1, FR18, FR19, FR28). Email must be a plausible email address — at minimum, one `@` and a domain with a `.` (e.g. `name@domain.com`) — rejected with an error message otherwise; this format check applies everywhere an email is collected or edited (FR1, FR18, FR19).
 - FR2: Registered users sign in with email/password; passwords stored hashed. A failed attempt — whether the email isn't registered or the password is wrong — returns the same generic error (e.g., "Invalid email or password") in both cases, so failed logins never reveal whether a given email exists in the system.
 - FR3: Unauthenticated users cannot reach booking, barber dashboard, or admin pages; the Schedule Appointment nav button is hidden entirely for signed-out users. Signed-in users attempting to reach a page or action outside their role (e.g., a customer or barber hitting an admin-only URL, a barber viewing another barber's schedule) are rejected server-side the same way — this is not limited to the unauthenticated case. Navigation and UI controls for pages a user's role cannot access are hidden entirely for that role, not merely blocked after the fact.
 - FR4: On sign-in, customers land directly on the Schedule Appointment page; barbers and admins are routed directly to their schedule view.

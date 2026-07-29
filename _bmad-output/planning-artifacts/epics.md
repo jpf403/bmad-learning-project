@@ -20,7 +20,7 @@ This document provides the complete epic and story breakdown for the Barbershop 
 ### Functional Requirements
 
 **Authentication & Accounts**
-- FR1: Any visitor can self-register a customer account (email, password ×2, first name, last name). Duplicate email rejected with error; email is the unique account key. Mismatched password confirmation rejects with "passwords do not match," clearing only the two password fields (applies everywhere a password is typed twice: FR1, FR18, FR19, FR28).
+- FR1: Any visitor can self-register a customer account (email, password ×2, first name, last name). Duplicate email rejected with error; email is the unique account key. Email must be a plausible address (at minimum one `@` and a domain with a `.`) or it's rejected with an error — applies everywhere email is collected/edited: FR1, FR18, FR19. Mismatched password confirmation rejects with "passwords do not match," clearing only the two password fields (applies everywhere a password is typed twice: FR1, FR18, FR19, FR28).
 - FR2: Registered users sign in with email/password (hashed storage). Failed attempts (bad email or bad password) return the same generic "Invalid email or password" error — no user enumeration.
 - FR3: Unauthenticated users cannot reach booking, barber dashboard, or admin pages; nav items for inaccessible pages are hidden entirely, not just blocked after the fact. Signed-in users hitting a page/action outside their role are rejected server-side the same way.
 - FR4: On sign-in, customers land on Schedule Appointment; barbers/admins land on their schedule view.
@@ -51,8 +51,8 @@ This document provides the complete epic and story breakdown for the Barbershop 
 - FR15: Admin lands on the same schedule view as barbers, plus a Select Barber dropdown defaulting to the first barber (never an empty state).
 - FR16: A separate Admin Panel hosts account management.
 - FR17: Admin can search for a customer or barber account by name or email (partial match), then select from results. The single admin account is not part of this searchable/manageable set.
-- FR18: Admin can edit any field of a selected customer/barber account — email, first name, last name, permission level, or password (×2). No account can be promoted to admin. Duplicate email edit rejected. Requires explicit confirm step. Demoting a barber to customer cancels and deletes that barber's future appointments; past/Finished appointments retained as history.
-- FR19: Admin can create new barber accounts via a Create Account button (password ×2). Creates barber accounts only — never another admin.
+- FR18: Admin can edit any field of a selected customer/barber account — email, first name, last name, permission level, or password (×2). No account can be promoted to admin. Duplicate email edit rejected; email must also be a plausible address (FR1). Requires explicit confirm step. Demoting a barber to customer cancels and deletes that barber's future appointments; past/Finished appointments retained as history.
+- FR19: Admin can create new barber accounts via a Create Account button (password ×2). Creates barber accounts only — never another admin. Email must be a plausible address, same rule as FR1.
 - FR27: From their schedule view (including via Select Barber), an admin can cancel any appointment the same way a barber does.
 - FR30: Every cancellation (FR25–FR27) requires an explicit confirm step. Cancellation is transactional and idempotent — a second cancellation attempt on an already-cancelled appointment is rejected with an error, not a silent success or crash. Same handling applies to a cancellation racing a new booking for the freed slot.
 - FR34: There is exactly one admin account, acting as the shop's owner (created per FR31); it can never be promoted-to, demoted-from, or deleted — Admin Panel edit/delete/permission actions (FR17–FR19, FR40) apply only to customer and barber accounts.
@@ -314,6 +314,10 @@ So that I can access booking features.
 **Given** an email already registered
 **When** submitted
 **Then** registration is rejected with an error directing the user to a different email, and the email field is retained (FR1)
+
+**Given** an email with no `@` or no domain `.` (e.g. "testbademail")
+**When** submitted
+**Then** registration is rejected with an error and the email field is retained (FR1)
 
 **Given** mismatched password/confirm-password fields
 **When** submitted
@@ -672,6 +676,10 @@ So that I can correct mistakes or manage staff without touching the database.
 **When** submitted
 **Then** it's rejected with "That email is already in use." and the email field is retained (FR18)
 
+**Given** an email with no `@` or no domain `.`
+**When** submitted
+**Then** it's rejected with an error and the email field is retained (FR18/FR1)
+
 **Given** demoting a barber to customer
 **When** saved
 **Then** that barber's future appointments are cancelled and past ones retained as history (FR18)
@@ -699,6 +707,10 @@ So that I can add staff without a self-registration flow.
 **Given** a duplicate email
 **When** submitted
 **Then** it's rejected the same way as registration/edit
+
+**Given** an email with no `@` or no domain `.`
+**When** submitted
+**Then** it's rejected the same way as registration/edit (FR19/FR1)
 
 **Given** mismatched passwords
 **When** submitted
