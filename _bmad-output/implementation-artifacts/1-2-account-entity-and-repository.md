@@ -189,6 +189,7 @@ Claude Sonnet 5 (Amelia persona, bmad-dev-story workflow)
 - `_bmad-output/planning-artifacts/prds/prd-bmad-learning-project-2026-07-21/prd.md` (modified)
 - `_bmad-output/planning-artifacts/prds/prd-bmad-learning-project-2026-07-21/.memlog.md` (modified)
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` (modified)
+- `backend/BarbershopApi/BarbershopApi.csproj` (modified — dependency-vulnerability patch, see Change Log 2026-07-29)
 
 ## Change Log
 
@@ -197,3 +198,4 @@ Claude Sonnet 5 (Amelia persona, bmad-dev-story workflow)
 - 2026-07-29: Code review patches applied — `Update` now trims+lowercases `Email` and reloads `RowVersion` after save; `Create`/`FindByEmail` now trim in addition to lowercasing; added regression tests for email normalization on `Update` and for `FindById` on a never-existed id; `SqliteApiFactory.Dispose()` wrapped in try/catch for the Windows file-lock edge case. 15/15 backend tests passing; status set to done.
 - 2026-07-29: Round-2 review of the above patch — added a regression test proving `ReloadAsync` fixes the double-`Update` concurrency bug, test coverage for `.Trim()` on `Create`/`FindByEmail`, hardened `SqliteApiFactory.Dispose()`'s cleanup (independent per-file delete, wider exception catch), and corrected stale Completion Notes prose. 18/18 backend tests passing.
 - 2026-07-29: Round-3 review of the round-2 patch — strengthened the two new tests to verify via a fresh `DbContext` reload rather than the in-memory instance, added `-journal` to `SqliteApiFactory`'s sidecar cleanup, and dropped a redundant `File.Exists` guard. 18/18 backend tests passing.
+- 2026-07-29: Dependency-vulnerability patch (found while working Story 1.3) — pinned transitive packages flagged by `dotnet restore`'s NU1903 advisories: `Microsoft.OpenApi` 2.0.0 → 2.11.0 (CVE-2026-49451, stack-overflow DoS parsing untrusted OpenAPI documents) and `SQLitePCLRaw.lib.e_sqlite3` 2.1.11 → 2.1.12 (CVE-2025-6965, native SQLite memory-corruption bug); both stayed within their existing major version — did not adopt `SQLitePCLRaw`'s v3 `SourceGear.sqlite3` rename/restructure, which drops classic-Xamarin support and wasn't warranted for a same-family patch fix. Verified via `dotnet build` (0 warnings, 0 errors) and `dotnet test` (18/18 passing), plus a manual `dotnet run` + `curl` smoke check confirming EF Core migrations still execute correctly against real SQLite with the new native binary.

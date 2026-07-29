@@ -13,6 +13,10 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.10" />
+    <!-- Transitive-dependency overrides to resolve NU1903 advisories (Microsoft.AspNetCore.OpenApi
+         and Microsoft.EntityFrameworkCore.Sqlite 10.0.10 still reference vulnerable versions). -->
+    <PackageReference Include="Microsoft.OpenApi" Version="2.11.0" />
+    <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.12" />
   </ItemGroup>
 
 </Project>
