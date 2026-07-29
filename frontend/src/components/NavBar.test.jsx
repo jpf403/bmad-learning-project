@@ -15,12 +15,10 @@ describe('NavBar', () => {
       expect(screen.getByRole('link', { name: label })).toBeInTheDocument()
     })
 
-    ;['Schedule Appointment', 'My Schedule', 'Admin Panel'].forEach(
-      (label) => {
-        expect(screen.queryByRole('link', { name: label })).toBeNull()
-        expect(screen.getByText(label)).toBeInTheDocument()
-      },
-    )
+    ;['Schedule Appointment', 'My Schedule', 'Admin Panel'].forEach((label) => {
+      expect(screen.queryByRole('link', { name: label })).toBeNull()
+      expect(screen.getByText(label)).toBeInTheDocument()
+    })
   })
 
   it('renders a static Sign In / Register area', () => {

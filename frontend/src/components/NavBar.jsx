@@ -32,9 +32,7 @@ export default function NavBar() {
         ))}
         {INERT_LINKS.map((label) => (
           <li key={label}>
-            <span className="nav-bar__link nav-bar__link--inert">
-              {label}
-            </span>
+            <span className="nav-bar__link nav-bar__link--inert">{label}</span>
           </li>
         ))}
       </ul>
