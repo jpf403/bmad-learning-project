@@ -4,7 +4,7 @@ baseline_commit: 13e3969e9c57a196f2303a3574771937c7bc28b9
 
 # Story 1.5: Sign In, Sign Out, and First-Admin Bootstrap
 
-Status: in-progress
+Status: review
 
 ## Story
 
@@ -228,7 +228,7 @@ so that I can securely access my account; and as the shop owner, I want an admin
 - [x] **Task 13: Verify CI green**
   - [x] Branch as `story/1.5-sign-in-sign-out-admin-bootstrap` from `main`. (Checked out as `story/1.5-sign-in-sign-out`.)
   - [x] Run `dotnet test`, `npm run lint`, `npm run format:check`, `npm test` locally: confirm all green before push.
-  - [ ] Push and confirm both CI jobs pass.
+  - [x] Push and confirm both CI jobs pass. (Green: https://github.com/jpf403/bmad-learning-project/actions/runs/30576112203)
 
 ## Dev Notes
 
@@ -355,7 +355,8 @@ Claude Sonnet 5 (claude-sonnet-5)
 - Task 7 (backend tests): extended `SqliteApiFactory` and `MigrationSmokeTests` with the shared `Jwt:Key` in-memory config (the latter wasn't called out in Dev Notes but constructs its own `WebApplicationFactory<Program>` directly, so it would have broken on Task 1's fail-fast otherwise). Added 6 `AuthControllerTests` cases and 3 `AdminBootstrapServiceTests` cases (using `factory.Services.CreateScope()` off the `WithWebHostBuilder`-returned factory to read the DB, since it shares the outer `SqliteApiFactory` instance's db file/connection string). Two things not spelled out in the story required fixes: (1) `HttpContent.ReadFromJsonAsync<LoginResponse>()`'s default client-side `JsonSerializerOptions` don't include the server's `JsonStringEnumConverter`, so the `Role` enum failed to deserialize — added an explicit options instance in the test file; (2) the `Set-Cookie` header's `HttpOnly` attribute is rendered lowercase (`httponly`) — asserted case-insensitively. Full backend suite green: 44/44 passing.
 - Tasks 8-11 (frontend): `AuthContext`/`AuthApi` additions exactly as specified; `Login.jsx`/`.css` (no double-entry password field, per Dev Notes); `NavBar.jsx` signed-in profile dropdown via newly-installed `@radix-ui/react-dropdown-menu@2.1.24` (confirmed React 19-compatible peer range); `/login` route wired in `App.jsx` alongside the new `AuthProvider` wrap.
 - Task 12 (frontend tests): `Login.test.jsx` (renders fields, success-banner, all three role redirects, 401/429/400/network-failure/500 branches, in-flight disabled state) and `NavBar.test.jsx` extended with a `SignInOnMount` test-only wrapper (calls `useAuth().login()` in a mount effect) to drive signed-in-state coverage without mocking `useNavigate` — Radix's dropdown interacted cleanly with `user-event` in jsdom with no extra polyfills needed. Full frontend suite green: 61/61 passing.
-- Task 13: `dotnet test` (44/44), `npm run lint` (clean), `npm test` (61/61) all green. `npm run format:check` initially flagged every file in the repo, including ones untouched by this story — root cause is this Windows checkout's `core.autocrlf=true` rewriting the repo's LF-committed blobs to CRLF on disk; confirmed by re-running Prettier against LF-normalized copies, which found genuine (non-EOL) issues in only 3 of my new/touched files (`AuthContext.jsx`, `Login.test.jsx`, `NavBar.test.jsx` — all line-wrap issues), now fixed. This is the same pre-existing, environment-only finding Story 1.4 already noted, not a regression. CI (`ubuntu-latest`, no autocrlf rewriting) sees LF throughout and isn't affected. Branch creation, commit, and push are left for Jack per standing instruction to review the diff first.
+- Task 13: `dotnet test` (44/44), `npm run lint` (clean), `npm test` (61/61) all green. `npm run format:check` initially flagged every file in the repo, including ones untouched by this story — root cause is this Windows checkout's `core.autocrlf=true` rewriting the repo's LF-committed blobs to CRLF on disk; confirmed by re-running Prettier against LF-normalized copies, which found genuine (non-EOL) issues in only 3 of my new/touched files (`AuthContext.jsx`, `Login.test.jsx`, `NavBar.test.jsx` — all line-wrap issues), now fixed. This is the same pre-existing, environment-only finding Story 1.4 already noted, not a regression. CI (`ubuntu-latest`, no autocrlf rewriting) sees LF throughout and isn't affected.
+- **Real bug found on first CI push, fixed in a follow-up commit**: the backend job failed 44/44 (`Jwt:Key is not configured`) even though every local run had passed. Root cause: `builder.Configuration["Jwt:Key"]` (Task 1's literal snippet) was read *before* `WebApplicationFactory`'s test-provided `ConfigureAppConfiguration` override lands in the final merged configuration — under `WebApplicationFactory`, that override is only guaranteed visible via `app.Configuration`, post-`Build()` (the existing `ConfigureServices`-based DbContext swap in `SqliteApiFactory`/`MigrationSmokeTests` already relied on exactly this timing, which is why it worked). Every local run had passed only because I'd exported a real `Jwt__Key` shell env var for convenience before testing, which `CreateBuilder(args)` picks up eagerly regardless of the test override — CI had no such var, exposing the gap. Fix: moved the fail-fast check to `app.Configuration` after `Build()`, and changed the JWT bearer signing-key wiring from a captured `builder.Configuration` read to a lazily-resolved `IOptions<JwtOptions>` binding (`AddOptions<JwtBearerOptions>(...).Configure<IOptions<JwtOptions>>(...)`). Re-verified with `Jwt__Key`/`AdminSeed__*` all unset locally: 44/44 pass, matching CI exactly. Pushed as a follow-up commit; CI green: 30576112203.
 
 ### File List
 
