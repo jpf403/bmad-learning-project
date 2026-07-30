@@ -8,4 +8,5 @@ public interface IAccountRepository
     Task<Account?> FindByEmail(string email);
     Task<Account?> FindById(int id);
     Task Update(Account account);
+    Task<bool> AdminExists();
 }

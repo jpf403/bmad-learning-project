@@ -2,6 +2,7 @@ using BarbershopApi.Data;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -16,6 +17,12 @@ public class MigrationSmokeTests : IDisposable
     {
         await using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
+            builder.ConfigureAppConfiguration((_, config) =>
+                config.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Jwt:Key"] = "test-signing-key-at-least-32-characters-long",
+                }));
+
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<DbContextOptions<BarbershopDbContext>>();

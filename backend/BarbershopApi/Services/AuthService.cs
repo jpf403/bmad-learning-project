@@ -1,13 +1,21 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
 using BarbershopApi.Dtos;
 using BarbershopApi.Entities;
 using BarbershopApi.Repositories;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 
 namespace BarbershopApi.Services;
 
-public class AuthService(IAccountRepository accountRepository, IPasswordHasher<Account> passwordHasher) : IAuthService
+public class AuthService(
+    IAccountRepository accountRepository,
+    IPasswordHasher<Account> passwordHasher,
+    IOptions<JwtOptions> jwtOptions) : IAuthService
 {
     private const int SqliteConstraintViolation = 19;
 
@@ -36,5 +44,71 @@ public class AuthService(IAccountRepository accountRepository, IPasswordHasher<A
         {
             throw new DuplicateEmailException();
         }
+    }
+
+    public async Task<(Account Account, string AccessToken, string RefreshToken)> Login(LoginRequest request)
+    {
+        var account = await accountRepository.FindByEmail(request.Email);
+        if (account is null)
+        {
+            throw new InvalidCredentialsException();
+        }
+
+        var result = passwordHasher.VerifyHashedPassword(account, account.PasswordHash, request.Password);
+        if (result == PasswordVerificationResult.Failed)
+        {
+            throw new InvalidCredentialsException();
+        }
+
+        var accessToken = GenerateAccessToken(account);
+        var refreshToken = GenerateRefreshToken(account);
+
+        return (account, accessToken, refreshToken);
+    }
+
+    public async Task Logout(int accountId)
+    {
+        var account = await accountRepository.FindById(accountId);
+        if (account is null)
+        {
+            return;
+        }
+
+        account.SessionVersion++;
+        await accountRepository.Update(account);
+    }
+
+    private string GenerateAccessToken(Account account)
+    {
+        var claims = new[] { new Claim(JwtRegisteredClaimNames.Sub, account.Id.ToString()) };
+        var token = new JwtSecurityToken(
+            issuer: "BarbershopApi",
+            audience: "BarbershopApi",
+            claims: claims,
+            expires: DateTime.UtcNow.AddMinutes(60),
+            signingCredentials: SigningCredentials());
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    private string GenerateRefreshToken(Account account)
+    {
+        var claims = new[]
+        {
+            new Claim(JwtRegisteredClaimNames.Sub, account.Id.ToString()),
+            new Claim("sessionVersion", account.SessionVersion.ToString()),
+        };
+        var token = new JwtSecurityToken(
+            issuer: "BarbershopApi",
+            audience: "BarbershopApi",
+            claims: claims,
+            expires: DateTime.UtcNow.AddDays(15),
+            signingCredentials: SigningCredentials());
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    private SigningCredentials SigningCredentials()
+    {
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.Value.Key));
+        return new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
     }
 }
