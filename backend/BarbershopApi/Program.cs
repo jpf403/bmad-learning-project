@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
 const string VitePolicy = "VitePolicy";
@@ -42,14 +43,17 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddHostedService<AdminBootstrapService>();
 
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
-var jwtKey = builder.Configuration["Jwt:Key"];
-if (string.IsNullOrWhiteSpace(jwtKey))
-{
-    throw new InvalidOperationException("Jwt:Key is not configured. Set the Jwt__Key environment variable.");
-}
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
+    .AddJwtBearer();
+
+// Configured via IOptions<JwtOptions> (not a captured builder.Configuration read) so the
+// signing key resolves from the FINAL merged configuration at options-materialization time
+// (post-Build) — under WebApplicationFactory, test-provided config overrides only land in
+// builder.Configuration after Build() completes, so an eager read here would silently see
+// the empty appsettings.json placeholder instead of the test's injected key.
+builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+    .Configure<IOptions<JwtOptions>>((options, jwtOptions) =>
     {
         options.MapInboundClaims = false;
         options.TokenValidationParameters = new TokenValidationParameters
@@ -60,7 +64,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidAudience = "BarbershopApi",
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.Value.Key)),
         };
     });
 builder.Services.AddAuthorization();
@@ -103,6 +107,11 @@ builder.Services.AddRateLimiter(options =>
 });
 
 var app = builder.Build();
+
+if (string.IsNullOrWhiteSpace(app.Configuration["Jwt:Key"]))
+{
+    throw new InvalidOperationException("Jwt:Key is not configured. Set the Jwt__Key environment variable.");
+}
 
 using (var scope = app.Services.CreateScope())
 {
