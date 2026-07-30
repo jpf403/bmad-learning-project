@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router'
+import { Link, useLocation, useNavigate } from 'react-router'
 import Button from './Button'
 import './NavBar.css'
 
@@ -15,6 +15,7 @@ function normalizePath(path) {
 
 export default function NavBar() {
   const location = useLocation()
+  const navigate = useNavigate()
   const currentPath = normalizePath(location.pathname)
 
   return (
@@ -43,7 +44,9 @@ export default function NavBar() {
       </ul>
       <div className="nav-bar__actions">
         <Button variant="secondary">Sign In</Button>
-        <Button variant="primary">Register</Button>
+        <Button variant="primary" onClick={() => navigate('/register')}>
+          Register
+        </Button>
       </div>
     </nav>
   )

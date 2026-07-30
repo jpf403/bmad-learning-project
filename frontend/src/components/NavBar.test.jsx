@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router'
+import userEvent from '@testing-library/user-event'
+import { MemoryRouter, Routes, Route } from 'react-router'
 import NavBar from './NavBar'
 
 describe('NavBar', () => {
@@ -21,7 +22,7 @@ describe('NavBar', () => {
     })
   })
 
-  it('renders a static Sign In / Register area', () => {
+  it('renders a static Sign In button and a Register button', () => {
     render(
       <MemoryRouter>
         <NavBar />
@@ -30,6 +31,22 @@ describe('NavBar', () => {
 
     expect(screen.getByRole('button', { name: 'Sign In' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Register' })).toBeInTheDocument()
+  })
+
+  it('navigates to /register when the Register button is clicked', async () => {
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route path="/" element={<NavBar />} />
+          <Route path="/register" element={<div>Register Stub</div>} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Register' }))
+
+    expect(screen.getByText('Register Stub')).toBeInTheDocument()
   })
 
   it('renders the wordmark', () => {

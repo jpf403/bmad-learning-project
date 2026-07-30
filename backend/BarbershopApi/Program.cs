@@ -1,5 +1,8 @@
 using BarbershopApi.Data;
+using BarbershopApi.Entities;
 using BarbershopApi.Repositories;
+using BarbershopApi.Services;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 const string VitePolicy = "VitePolicy";
@@ -26,6 +29,8 @@ var connectionString = builder.Configuration.GetConnectionString("BarbershopDb")
 
 builder.Services.AddDbContext<BarbershopDbContext>(options => options.UseSqlite(connectionString));
 builder.Services.AddScoped<IAccountRepository, AccountRepository>();
+builder.Services.AddScoped<IPasswordHasher<Account>, PasswordHasher<Account>>();
+builder.Services.AddScoped<IAuthService, AuthService>();
 
 var app = builder.Build();
 
