@@ -10,12 +10,12 @@ public class AccountRepositoryTests : IDisposable
 
     public void Dispose() => _factory.Dispose();
 
-    private static Account NewAccount(string email = "jack@example.com", Role role = Role.Customer) => new()
+    private static Account NewAccount(string email = "john@example.com", Role role = Role.Customer) => new()
     {
         Email = email,
         PasswordHash = "hashed-password",
-        FirstName = "Jack",
-        LastName = "Formato",
+        FirstName = "John",
+        LastName = "Smith",
         Role = role,
     };
 
@@ -39,9 +39,9 @@ public class AccountRepositoryTests : IDisposable
         await using var context = _factory.CreateDbContext();
         var repository = new AccountRepository(context);
 
-        var created = await repository.Create(NewAccount(email: "Jack@Example.com"));
+        var created = await repository.Create(NewAccount(email: "John@Example.com"));
 
-        Assert.Equal("jack@example.com", created.Email);
+        Assert.Equal("john@example.com", created.Email);
     }
 
     [Fact]
@@ -50,14 +50,14 @@ public class AccountRepositoryTests : IDisposable
         await using var context = _factory.CreateDbContext();
         var repository = new AccountRepository(context);
 
-        var created = await repository.Create(NewAccount(email: "  jack@example.com  "));
+        var created = await repository.Create(NewAccount(email: "  john@example.com  "));
 
         await using var verifyContext = _factory.CreateDbContext();
         var verifyRepository = new AccountRepository(verifyContext);
         var reloaded = await verifyRepository.FindById(created.Id);
 
         Assert.NotNull(reloaded);
-        Assert.Equal("jack@example.com", reloaded.Email);
+        Assert.Equal("john@example.com", reloaded.Email);
     }
 
     [Fact]
@@ -65,9 +65,9 @@ public class AccountRepositoryTests : IDisposable
     {
         await using var context = _factory.CreateDbContext();
         var repository = new AccountRepository(context);
-        await repository.Create(NewAccount(email: "jack@example.com"));
+        await repository.Create(NewAccount(email: "john@example.com"));
 
-        await Assert.ThrowsAsync<DbUpdateException>(() => repository.Create(NewAccount(email: "jack@example.com")));
+        await Assert.ThrowsAsync<DbUpdateException>(() => repository.Create(NewAccount(email: "john@example.com")));
     }
 
     [Fact]
@@ -75,9 +75,9 @@ public class AccountRepositoryTests : IDisposable
     {
         await using var context = _factory.CreateDbContext();
         var repository = new AccountRepository(context);
-        await repository.Create(NewAccount(email: "jack@example.com"));
+        await repository.Create(NewAccount(email: "john@example.com"));
 
-        await Assert.ThrowsAsync<DbUpdateException>(() => repository.Create(NewAccount(email: "Jack@Example.com")));
+        await Assert.ThrowsAsync<DbUpdateException>(() => repository.Create(NewAccount(email: "John@Example.com")));
     }
 
     [Fact]
@@ -85,12 +85,12 @@ public class AccountRepositoryTests : IDisposable
     {
         await using var context = _factory.CreateDbContext();
         var repository = new AccountRepository(context);
-        var first = await repository.Create(NewAccount(email: "jack@example.com"));
+        var first = await repository.Create(NewAccount(email: "john@example.com"));
 
         first.DeletedAt = DateTime.UtcNow;
         await repository.Update(first);
 
-        var second = await repository.Create(NewAccount(email: "jack@example.com"));
+        var second = await repository.Create(NewAccount(email: "john@example.com"));
 
         Assert.True(second.Id > 0);
         Assert.NotEqual(first.Id, second.Id);
@@ -101,9 +101,9 @@ public class AccountRepositoryTests : IDisposable
     {
         await using var context = _factory.CreateDbContext();
         var repository = new AccountRepository(context);
-        var created = await repository.Create(NewAccount(email: "jack@example.com"));
+        var created = await repository.Create(NewAccount(email: "john@example.com"));
 
-        var found = await repository.FindByEmail("Jack@Example.com");
+        var found = await repository.FindByEmail("John@Example.com");
 
         Assert.NotNull(found);
         Assert.Equal(created.Id, found.Id);
@@ -114,9 +114,9 @@ public class AccountRepositoryTests : IDisposable
     {
         await using var context = _factory.CreateDbContext();
         var repository = new AccountRepository(context);
-        var created = await repository.Create(NewAccount(email: "jack@example.com"));
+        var created = await repository.Create(NewAccount(email: "john@example.com"));
 
-        var found = await repository.FindByEmail("  jack@example.com  ");
+        var found = await repository.FindByEmail("  john@example.com  ");
 
         Assert.NotNull(found);
         Assert.Equal(created.Id, found.Id);
@@ -127,11 +127,11 @@ public class AccountRepositoryTests : IDisposable
     {
         await using var context = _factory.CreateDbContext();
         var repository = new AccountRepository(context);
-        var created = await repository.Create(NewAccount(email: "jack@example.com"));
+        var created = await repository.Create(NewAccount(email: "john@example.com"));
         created.DeletedAt = DateTime.UtcNow;
         await repository.Update(created);
 
-        var found = await repository.FindByEmail("jack@example.com");
+        var found = await repository.FindByEmail("john@example.com");
 
         Assert.Null(found);
     }
@@ -177,12 +177,12 @@ public class AccountRepositoryTests : IDisposable
     {
         await using var context = _factory.CreateDbContext();
         var repository = new AccountRepository(context);
-        var created = await repository.Create(NewAccount(email: "jack@example.com"));
+        var created = await repository.Create(NewAccount(email: "john@example.com"));
 
-        created.Email = " Jack@Example.com ";
+        created.Email = " John@Example.com ";
         await repository.Update(created);
 
-        Assert.Equal("jack@example.com", created.Email);
+        Assert.Equal("john@example.com", created.Email);
     }
 
     [Fact]
@@ -190,10 +190,10 @@ public class AccountRepositoryTests : IDisposable
     {
         await using var context = _factory.CreateDbContext();
         var repository = new AccountRepository(context);
-        await repository.Create(NewAccount(email: "jack@example.com"));
+        await repository.Create(NewAccount(email: "john@example.com"));
         var second = await repository.Create(NewAccount(email: "someone-else@example.com"));
 
-        second.Email = "Jack@Example.com";
+        second.Email = "John@Example.com";
 
         await Assert.ThrowsAsync<DbUpdateException>(() => repository.Update(second));
     }

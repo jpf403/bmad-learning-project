@@ -4,7 +4,7 @@ baseline_commit: 869f0b77e1e0a69266326774cb6dcc59083bfaa9
 
 # Story 1.4: Customer Self-Registration
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -22,76 +22,125 @@ so that I can access booking features.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Shared plausible-email validation** (AC: #3; reused by Stories 1.7, 3.1, 3.3, 3.4 — build it once, correctly)
-  - [ ] Create `backend/BarbershopApi/Dtos/PlausibleEmailAttribute.cs`: a `ValidationAttribute` requiring at least one `@` and a domain segment containing `.` (regex: `^[^@\s]+@[^@\s]+\.[^@\s]+$`). Placed in `Dtos/` (not a new top-level folder) to stay within the Architecture's locked Structural Seed (`Controllers/Services/Repositories/Entities/Dtos/Data` only) — see Dev Notes.
-  - [ ] **Do not use `[EmailAddress]`** — verified against current .NET behavior: `EmailAddressAttribute.IsValid` only checks for a single `@` not at the first/last character position; it does **not** require a domain dot, so `"testbademail@x"` would incorrectly pass it. This is exactly the gap AC#3 tests for.
-  - [ ] Default `ErrorMessage = "Enter a valid email address."` (no upstream-specified copy for this exact state — EXPERIENCE.md's State Patterns table only specifies copy for the *duplicate*-email state, not the *format*-invalid one; this is a proposed on-brand default, plain and specific per the locked voice register).
+- [x] **Task 1: Shared plausible-email validation** (AC: #3; reused by Stories 1.7, 3.1, 3.3, 3.4 — build it once, correctly)
+  - [x] Create `backend/BarbershopApi/Dtos/PlausibleEmailAttribute.cs`: a `ValidationAttribute` requiring at least one `@` and a domain segment containing `.` (regex: `^[^@\s]+@[^@\s]+\.[^@\s]+$`). Placed in `Dtos/` (not a new top-level folder) to stay within the Architecture's locked Structural Seed (`Controllers/Services/Repositories/Entities/Dtos/Data` only) — see Dev Notes.
+  - [x] **Do not use `[EmailAddress]`** — verified against current .NET behavior: `EmailAddressAttribute.IsValid` only checks for a single `@` not at the first/last character position; it does **not** require a domain dot, so `"testbademail@x"` would incorrectly pass it. This is exactly the gap AC#3 tests for.
+  - [x] Default `ErrorMessage = "Enter a valid email address."` (no upstream-specified copy for this exact state — EXPERIENCE.md's State Patterns table only specifies copy for the *duplicate*-email state, not the *format*-invalid one; this is a proposed on-brand default, plain and specific per the locked voice register).
 
-- [ ] **Task 2: Register DTOs** (AC: #1-#3)
-  - [ ] `backend/BarbershopApi/Dtos/RegisterRequest.cs`: `Email` (`[Required]`, `[PlausibleEmail]`), `Password` (`[Required]`), `FirstName` (`[Required]`), `LastName` (`[Required]`). No `ConfirmPassword` field — password-match checking is purely client-side (Task 5), since the confirm value is never persisted and re-checking it server-side adds no data-integrity guarantee (unlike AD-14's booking-date re-validation, which *is* server-revalidated because it protects real data integrity).
-  - [ ] `backend/BarbershopApi/Dtos/RegisterResponse.cs`: `Id`, `Email`, `FirstName`, `LastName` (no `PasswordHash`, no `Role` — nothing the frontend needs, since registration does not auto-sign-in).
+- [x] **Task 2: Register DTOs** (AC: #1-#3)
+  - [x] `backend/BarbershopApi/Dtos/RegisterRequest.cs`: `Email` (`[Required]`, `[PlausibleEmail]`), `Password` (`[Required]`), `FirstName` (`[Required]`), `LastName` (`[Required]`). No `ConfirmPassword` field — password-match checking is purely client-side (Task 5), since the confirm value is never persisted and re-checking it server-side adds no data-integrity guarantee (unlike AD-14's booking-date re-validation, which *is* server-revalidated because it protects real data integrity).
+  - [x] `backend/BarbershopApi/Dtos/RegisterResponse.cs`: `Id`, `Email`, `FirstName`, `LastName` (no `PasswordHash`, no `Role` — nothing the frontend needs, since registration does not auto-sign-in).
 
-- [ ] **Task 3: `AuthService.Register`** (AC: #1, #2) — first content in `Services/`; this is the **Auth** domain trio (AD-1) that Story 1.5 will extend with Login/Logout/Refresh/Me — do not create a separate `RegistrationService`.
-  - [ ] Create `backend/BarbershopApi/Services/DuplicateEmailException.cs` (plain `Exception` subclass, no special members needed).
-  - [ ] Create `backend/BarbershopApi/Services/IAuthService.cs` / `AuthService.cs`, constructor-injecting `IAccountRepository` and `IPasswordHasher<Account>`.
-  - [ ] `Task<Account> Register(RegisterRequest request)`:
+- [x] **Task 3: `AuthService.Register`** (AC: #1, #2) — first content in `Services/`; this is the **Auth** domain trio (AD-1) that Story 1.5 will extend with Login/Logout/Refresh/Me — do not create a separate `RegistrationService`.
+  - [x] Create `backend/BarbershopApi/Services/DuplicateEmailException.cs` (plain `Exception` subclass, no special members needed).
+  - [x] Create `backend/BarbershopApi/Services/IAuthService.cs` / `AuthService.cs`, constructor-injecting `IAccountRepository` and `IPasswordHasher<Account>`.
+  - [x] `Task<Account> Register(RegisterRequest request)`:
     1. `FindByEmail(request.Email)` — if a match exists, `throw new DuplicateEmailException()`.
     2. Build `new Account { Email = request.Email, FirstName = request.FirstName, LastName = request.LastName, Role = Role.Customer }` (leave `SessionVersion`/`DeletedAt`/`RowVersion` at their EF defaults — same defaults Story 1.2 already tests for).
     3. `account.PasswordHash = _passwordHasher.HashPassword(account, request.Password)` — `PasswordHasher<TUser>.HashPassword` only uses the user object as a generic type parameter, so passing the not-yet-persisted account is fine.
     4. `try { return await _accountRepository.Create(account); } catch (DbUpdateException) { throw new DuplicateEmailException(); }` — defense-in-depth mirroring AD-9's check-then-insert-plus-DB-backstop pattern (Story 1.2's partial unique index on `Email WHERE DeletedAt IS NULL` is the backstop here), for the race where two registrations for the same email land between the check and the insert. This is a deliberate reuse of an established pattern, not new scope.
-  - [ ] Register `IPasswordHasher<Account>` → `PasswordHasher<Account>` and `IAuthService` → `AuthService` as `Scoped` in `Program.cs`. **No NuGet package needed for `PasswordHasher<T>`** — `Microsoft.AspNetCore.Identity` ships inside the ASP.NET Core shared framework that `Microsoft.NET.Sdk.Web` already references; project-context.md already notes this as "bundled." Do not add an `Identity`-family `PackageReference`.
+  - [x] Register `IPasswordHasher<Account>` → `PasswordHasher<Account>` and `IAuthService` → `AuthService` as `Scoped` in `Program.cs`. **No NuGet package needed for `PasswordHasher<T>`** — `Microsoft.AspNetCore.Identity` ships inside the ASP.NET Core shared framework that `Microsoft.NET.Sdk.Web` already references; project-context.md already notes this as "bundled." Do not add an `Identity`-family `PackageReference`.
 
-- [ ] **Task 4: `AuthController`** (AC: #1, #2, #3) — first content in `Controllers/`.
-  - [ ] Create `backend/BarbershopApi/Controllers/AuthController.cs`: `[ApiController] [Route("api/auth")]`.
-  - [ ] `[HttpPost("register")] public async Task<IActionResult> Register(RegisterRequest request)`:
+- [x] **Task 4: `AuthController`** (AC: #1, #2, #3) — first content in `Controllers/`.
+  - [x] Create `backend/BarbershopApi/Controllers/AuthController.cs`: `[ApiController] [Route("api/auth")]`.
+  - [x] `[HttpPost("register")] public async Task<IActionResult> Register(RegisterRequest request)`:
     - Model-invalid (missing field, bad email format) → automatic 400 `ValidationProblemDetails` from `[ApiController]` — **no manual code**, that's the point of Task 1/2's attributes.
     - Success → `try { var account = await _authService.Register(request); return StatusCode(201, new RegisterResponse(account.Id, account.Email, account.FirstName, account.LastName)); }`.
     - `catch (DuplicateEmailException) { return Problem(statusCode: StatusCodes.Status409Conflict, title: "That email is already in use."); }`.
-  - [ ] Delete `Controllers/.gitkeep` and `Services/.gitkeep` (same pattern Story 1.2 used for `Entities/`/`Repositories/`).
+  - [x] Delete `Controllers/.gitkeep` and `Services/.gitkeep` (same pattern Story 1.2 used for `Entities/`/`Repositories/`).
 
-- [ ] **Task 5: Backend tests** (AC: #1-#3) — reuse `SqliteApiFactory` (it's already a `WebApplicationFactory<Program>` subclass — `factory.CreateClient()` works as-is, no new fixture needed) in a new `AuthControllerTests.cs`.
-  - [ ] `Register_with_new_email_creates_customer_account` — POST valid payload, assert 201, then verify via `IAccountRepository.FindByEmail` that a row exists with `Role == Role.Customer`.
-  - [ ] `Register_hashes_password_not_stored_plaintext` — assert persisted `PasswordHash != request.Password`, and that `new PasswordHasher<Account>().VerifyHashedPassword(account, storedHash, "the-plaintext-password")` returns `PasswordVerificationResult.Success`.
-  - [ ] `Register_with_duplicate_email_returns_409` and `Register_with_differently_cased_duplicate_email_returns_409` (reuses Story 1.2's case-insensitive `FindByEmail`).
-  - [ ] `Register_with_missing_at_sign_returns_400` (e.g. `"testbademail"`) and `Register_with_no_domain_dot_returns_400` (e.g. `"test@bademail"`).
-  - [ ] `Register_with_missing_required_field_returns_400` (omit `FirstName`).
-  - [ ] **Inspect and record the actual JSON key casing** of the 400 response's `errors` dictionary (e.g. `errors.Email` vs `errors.email`) via one of the above tests' raw response body — do not assume either casing. `Register.jsx` (Task 6) must key its field-error lookup off whatever this test observes, since ASP.NET Core's `ModelState`-driven validation-error keys and the app's normal camelCase JSON convention are populated by different code paths and are not guaranteed to agree.
+- [x] **Task 5: Backend tests** (AC: #1-#3) — reuse `SqliteApiFactory` (it's already a `WebApplicationFactory<Program>` subclass — `factory.CreateClient()` works as-is, no new fixture needed) in a new `AuthControllerTests.cs`.
+  - [x] `Register_with_new_email_creates_customer_account` — POST valid payload, assert 201, then verify via `IAccountRepository.FindByEmail` that a row exists with `Role == Role.Customer`.
+  - [x] `Register_hashes_password_not_stored_plaintext` — assert persisted `PasswordHash != request.Password`, and that `new PasswordHasher<Account>().VerifyHashedPassword(account, storedHash, "the-plaintext-password")` returns `PasswordVerificationResult.Success`.
+  - [x] `Register_with_duplicate_email_returns_409` and `Register_with_differently_cased_duplicate_email_returns_409` (reuses Story 1.2's case-insensitive `FindByEmail`).
+  - [x] `Register_with_missing_at_sign_returns_400` (e.g. `"testbademail"`) and `Register_with_no_domain_dot_returns_400` (e.g. `"test@bademail"`).
+  - [x] `Register_with_missing_required_field_returns_400` (omit `FirstName`).
+  - [x] **Inspect and record the actual JSON key casing** of the 400 response's `errors` dictionary (e.g. `errors.Email` vs `errors.email`) via one of the above tests' raw response body — do not assume either casing. `Register.jsx` (Task 6) must key its field-error lookup off whatever this test observes, since ASP.NET Core's `ModelState`-driven validation-error keys and the app's normal camelCase JSON convention are populated by different code paths and are not guaranteed to agree.
 
-- [ ] **Task 6: Frontend API base URL** (AC: #1-#3) — first real `fetch` call in the app; centralize now so Stories 1.5/1.7/2.x/3.x don't each invent their own base URL.
-  - [ ] Create `frontend/src/api/ApiConfig.js` exporting `export const API_BASE_URL = 'https://localhost:7113'` — the **HTTPS** launch profile port (`backend/BarbershopApi/Properties/launchSettings.json`), not the HTTP port (`5290`). Program.cs's `UseHttpsRedirection()` would otherwise 307-redirect every HTTP-port request to HTTPS, adding an avoidable extra hop/CORS-preflight-on-redirect risk. If the browser fetch fails with a TLS error during manual verification, run `dotnet dev-certs https --trust` locally (a one-time machine setup step, not a code fix).
-  - [ ] Delete `frontend/src/api/.gitkeep`.
+    **Observed: PascalCase (`errors.Email`)** — confirmed by `Register_400_error_body_uses_PascalCase_field_keys`.
 
-- [ ] **Task 7: `AuthApi.js`** (AC: #1-#3) — PascalCase filename per project-context.md's "non-component JS (utilities, API wrapper modules) also PascalCase" rule.
-  - [ ] Create `frontend/src/api/AuthApi.js` exporting `async function registerAccount({ email, password, firstName, lastName })`: `fetch(`${API_BASE_URL}/api/auth/register`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password, firstName, lastName }) })` (`credentials: 'include'` per AD-13's blanket rule for every fetch touching the `/api/auth` surface, even though this particular call sets no cookie yet).
-  - [ ] On `response.ok`, return `{ ok: true }`. On failure, parse the JSON body (`response.json()`, guarded with `.catch(() => null)` in case the body isn't JSON) and return `{ ok: false, status: response.status, problem }`. Do not throw — `Register.jsx` branches on the return value, not a try/catch, matching a plain `fetch`-stubbing test style (AD-4, no MSW).
+- [x] **Task 6: Frontend API base URL** (AC: #1-#3) — first real `fetch` call in the app; centralize now so Stories 1.5/1.7/2.x/3.x don't each invent their own base URL.
+  - [x] Create `frontend/src/api/ApiConfig.js` exporting `export const API_BASE_URL = 'https://localhost:7113'` — the **HTTPS** launch profile port (`backend/BarbershopApi/Properties/launchSettings.json`), not the HTTP port (`5290`). Program.cs's `UseHttpsRedirection()` would otherwise 307-redirect every HTTP-port request to HTTPS, adding an avoidable extra hop/CORS-preflight-on-redirect risk. If the browser fetch fails with a TLS error during manual verification, run `dotnet dev-certs https --trust` locally (a one-time machine setup step, not a code fix).
+  - [x] Delete `frontend/src/api/.gitkeep`.
 
-- [ ] **Task 8: Build the `form-section` component** (AC: #5) — first page to need it; DESIGN.md already tokenizes `{components.form-section}` but Story 1.1 didn't build it (only Button/Input/NavBar-shell/Footer/Modal/ConfirmPopup).
-  - [ ] Create `frontend/src/components/FormSection.jsx` + `.css`: a simple wrapper — `{colors.neutral}` fill, no border, `{rounded.lg}` corners, `{spacing.6}` padding (`--color-neutral`, `--rounded-lg`, `--spacing-6` — all already in `tokens.css`). Renders `children` inside a `<div className="form-section">`. No test file needed beyond what `Register.test.jsx` already exercises (it's a trivial styled wrapper, same tier as `Footer`).
-  - [ ] This component will be reused as-is by Login (1.5) and Account (1.7) — do not build Register-specific styling into it.
+- [x] **Task 7: `AuthApi.js`** (AC: #1-#3) — PascalCase filename per project-context.md's "non-component JS (utilities, API wrapper modules) also PascalCase" rule.
+  - [x] Create `frontend/src/api/AuthApi.js` exporting `async function registerAccount({ email, password, firstName, lastName })`: `fetch(`${API_BASE_URL}/api/auth/register`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password, firstName, lastName }) })` (`credentials: 'include'` per AD-13's blanket rule for every fetch touching the `/api/auth` surface, even though this particular call sets no cookie yet).
+  - [x] On `response.ok`, return `{ ok: true }`. On failure, parse the JSON body (`response.json()`, guarded with `.catch(() => null)` in case the body isn't JSON) and return `{ ok: false, status: response.status, problem }`. Do not throw — `Register.jsx` branches on the return value, not a try/catch, matching a plain `fetch`-stubbing test style (AD-4, no MSW).
 
-- [ ] **Task 9: Build the Register page** (AC: #1-#5)
-  - [ ] Create `frontend/src/pages/Register.jsx` + `Register.css` + `Register.test.jsx`.
-  - [ ] Controlled fields via existing `Input` component: `email`, `firstName`, `lastName`, `password`, `confirmPassword` — plain `useState` per field (no form library; matches this project's "plain fetch + React state" convention, same spirit for forms).
-  - [ ] On submit: `e.preventDefault()`. If `password !== confirmPassword`: set an error caption ("Passwords do not match") on both password `Input`s via their `error` prop (already wired to `{colors.error}` styling in `Input.css` — no new CSS needed), clear `password`/`confirmPassword` state, **do not call the API** (a pure client-side check needs no round trip). Otherwise call `registerAccount(...)`.
-  - [ ] On `{ ok: true }`: `navigate('/login', { state: { message: 'Account created. Sign in to continue.' } })`.
-  - [ ] On `{ ok: false, status: 409 }`: set the email `Input`'s `error` prop to `"That email is already in use."`; retain every field's value (controlled inputs already do this by default — just don't clear state).
-  - [ ] On `{ ok: false, status: 400 }`: read the email-format error out of `problem.errors` using whatever key casing Task 5 determined, set it on the email `Input`'s `error` prop; retain all fields.
-  - [ ] Wrap the form in `<FormSection>` (Task 8); every field uses `Input`; submit button is `<Button variant="primary" type="submit">Register</Button>`.
-  - [ ] **Do not build a Login page or a `/login` route in this story** — AC#1's redirect target does not exist yet (Story 1.5). This exactly mirrors Story 1.3's Home-CTA situation: the route is not registered, so the running app shows a blank page at `/login` until 1.5 lands. This is expected, not a bug to fix here.
+- [x] **Task 8: Build the `form-section` component** (AC: #5) — first page to need it; DESIGN.md already tokenizes `{components.form-section}` but Story 1.1 didn't build it (only Button/Input/NavBar-shell/Footer/Modal/ConfirmPopup).
+  - [x] Create `frontend/src/components/FormSection.jsx` + `.css`: a simple wrapper — `{colors.neutral}` fill, no border, `{rounded.lg}` corners, `{spacing.6}` padding (`--color-neutral`, `--rounded-lg`, `--spacing-6` — all already in `tokens.css`). Renders `children` inside a `<div className="form-section">`. No test file needed beyond what `Register.test.jsx` already exercises (it's a trivial styled wrapper, same tier as `Footer`).
+  - [x] This component will be reused as-is by Login (1.5) and Account (1.7) — do not build Register-specific styling into it.
 
-- [ ] **Task 10: Wire the `/register` route** (AC: #1-#5)
-  - [ ] In `App.jsx`, add `<Route path="/register" element={<Register />} />` — the exact path Story 1.3 already locked in its Route Naming Convention table. Do not add `/login` (still not this story's route to add, per Task 9).
-  - [ ] Wire `NavBar`'s existing `Register` button (`<Button variant="primary">Register</Button>`, currently inert) to navigate to `/register` — either `<Link>`-wrap it consistent with Story 1.3's `Home`/`About` pattern, or use `useNavigate()` on click; either is fine, but it must become a real, reachable link (not still a bare `<Button>` with no destination).
+- [x] **Task 9: Build the Register page** (AC: #1-#5)
+  - [x] Create `frontend/src/pages/Register.jsx` + `Register.css` + `Register.test.jsx`.
+  - [x] Controlled fields via existing `Input` component: `email`, `firstName`, `lastName`, `password`, `confirmPassword` — plain `useState` per field (no form library; matches this project's "plain fetch + React state" convention, same spirit for forms).
+  - [x] On submit: `e.preventDefault()`. If `password !== confirmPassword`: set an error caption ("Passwords do not match") on both password `Input`s via their `error` prop (already wired to `{colors.error}` styling in `Input.css` — no new CSS needed), clear `password`/`confirmPassword` state, **do not call the API** (a pure client-side check needs no round trip). Otherwise call `registerAccount(...)`.
+  - [x] On `{ ok: true }`: `navigate('/login', { state: { message: 'Account created. Sign in to continue.' } })`.
+  - [x] On `{ ok: false, status: 409 }`: set the email `Input`'s `error` prop to `"That email is already in use."`; retain every field's value (controlled inputs already do this by default — just don't clear state).
+  - [x] On `{ ok: false, status: 400 }`: read the email-format error out of `problem.errors` using whatever key casing Task 5 determined, set it on the email `Input`'s `error` prop; retain all fields.
+  - [x] Wrap the form in `<FormSection>` (Task 8); every field uses `Input`; submit button is `<Button variant="primary" type="submit">Register</Button>`.
+  - [x] **Do not build a Login page or a `/login` route in this story** — AC#1's redirect target does not exist yet (Story 1.5). This exactly mirrors Story 1.3's Home-CTA situation: the route is not registered, so the running app shows a blank page at `/login` until 1.5 lands. This is expected, not a bug to fix here.
 
-- [ ] **Task 11: Frontend tests** (AC: #1-#5)
-  - [ ] `Register.test.jsx`: renders all five fields inside the form-section wrapper; submitting matching-but-new email navigates to `/login` with the confirmation message (assert via a stub `<Route path="/login" element={<div>{/* read location.state.message */}</div>} />` inside `<MemoryRouter>` + real `<Routes>`, same pattern Story 1.3 established for `Home.test.jsx` — no mocked `useNavigate`). Stub `global.fetch` via `vi.fn()` (AD-4, no MSW) for the success/409/400 cases.
-  - [ ] Mismatched-password case: assert the error caption text, that both password fields are now empty, and that `firstName`/`lastName`/`email` retain their previously entered values — **and that `fetch` was never called** for this case (Task 9's "no round trip" behavior).
-  - [ ] Duplicate-email (409) and bad-format (400) cases: assert the email field's error caption and that its value is retained.
-  - [ ] `NavBar.test.jsx`: update/add an assertion that "Register" is now a real link to `/register` (it was previously excluded from the "not a link" assertion set — recheck Story 1.3's exact NavBar test structure before editing, since `Register`/`Sign In` were never part of either the routed-links or inert-links lists there, only `Home`/`About` vs. `Schedule Appointment`/`My Schedule`/`Admin Panel`).
+    **Implementation note:** the email `Input` does **not** use `type="email"`. That would enable native browser/jsdom constraint validation, which silently blocks form submission (and our custom `onSubmit` handler) for a malformed address before it ever reaches the server — defeating AC#3's server-driven red-caption error entirely. Plain `type="text"` (the `Input` default) lets every value reach `registerAccount` so the 400 path actually renders.
 
-- [ ] **Task 12: Verify CI green**
-  - [ ] Branch as `story/1.4-customer-self-registration` from `main`.
-  - [ ] Run `dotnet test` (backend), `npm run lint`, `npm run format:check`, `npm test` (frontend) locally; push and confirm both CI jobs pass before merging (AD-11).
+- [x] **Task 10: Wire the `/register` route** (AC: #1-#5)
+  - [x] In `App.jsx`, add `<Route path="/register" element={<Register />} />` — the exact path Story 1.3 already locked in its Route Naming Convention table. Do not add `/login` (still not this story's route to add, per Task 9).
+  - [x] Wire `NavBar`'s existing `Register` button (`<Button variant="primary">Register</Button>`, currently inert) to navigate to `/register` — either `<Link>`-wrap it consistent with Story 1.3's `Home`/`About` pattern, or use `useNavigate()` on click; either is fine, but it must become a real, reachable link (not still a bare `<Button>` with no destination).
+
+    **Implementation note:** used `useNavigate()` on click (kept it a `<Button>`, not a `<Link>`) since `Register`/`Sign In` are visually button-styled actions in the design, not nav links like `Home`/`About`.
+
+- [x] **Task 11: Frontend tests** (AC: #1-#5)
+  - [x] `Register.test.jsx`: renders all five fields inside the form-section wrapper; submitting matching-but-new email navigates to `/login` with the confirmation message (assert via a stub `<Route path="/login" element={<div>{/* read location.state.message */}</div>} />` inside `<MemoryRouter>` + real `<Routes>`, same pattern Story 1.3 established for `Home.test.jsx` — no mocked `useNavigate`). Stub `globalThis.fetch` via `vi.spyOn` (AD-4, no MSW) for the success/409/400 cases (`global` is not a recognized identifier under this project's ESLint browser config — `globalThis` is the portable equivalent).
+  - [x] Mismatched-password case: assert the error caption text (on both password fields via `findAllByText` — the message renders twice, once per field), that both password fields are now empty, and that `firstName`/`lastName`/`email` retain their previously entered values — **and that `fetch` was never called** for this case (Task 9's "no round trip" behavior).
+  - [x] Duplicate-email (409) and bad-format (400) cases: assert the email field's error caption and that its value is retained.
+  - [x] `NavBar.test.jsx`: update/add an assertion that "Register" is now a real link to `/register` (it was previously excluded from the "not a link" assertion set — recheck Story 1.3's exact NavBar test structure before editing, since `Register`/`Sign In` were never part of either the routed-links or inert-links lists there, only `Home`/`About` vs. `Schedule Appointment`/`My Schedule`/`Admin Panel`).
+
+    **Implementation note:** since Task 10 kept `Register` as a `<Button>` (not a `<Link>`), added a click-navigates-to-`/register` test (stub route) instead of a "real link" role assertion — there is no `link` role to query since it's intentionally not an `<a>`.
+
+- [x] **Task 12: Verify CI green**
+  - [x] Branch as `story/1.4-customer-self-registration` from `main`.
+  - [x] Run `dotnet test` (backend), `npm run lint`, `npm run format:check`, `npm test` (frontend) locally: all green (26/26 backend tests, 38/38 frontend tests, lint clean, and every file this story touched is Prettier-clean).
+
+  - [x] Pushed and confirmed both CI jobs pass.
+
+    **Note on `npm run format:check`:** run against the whole repo it flags ~36 pre-existing files (not touched by this story) as needing reformatting. Root cause: this Windows checkout has `core.autocrlf=true`, so previously-committed files are checked out with CRLF while Prettier's default `endOfLine` is `lf`. This is a pre-existing local-checkout artifact, not a regression — GitHub Actions checks out on Linux (LF-native) so it won't reproduce there. Every file this story added or modified was verified individually with `npx prettier --check` and is clean.
+
+### Review Findings
+
+- [x] [Review][Patch] No password strength/minimum-length policy anywhere in the stack — a password of `"a"` passes `[Required]` and is hashed/stored as-is. **Resolved:** added an 8-character minimum, enforced server-side (`[MinLength(8)]` on `RegisterRequest.Password`) and mirrored client-side (a caption on the Password `Input` before calling the API). **Bonus (Jack's request):** password field also rejects/strips all whitespace (spaces/tabs) client-side (`onChange` strips as-typed) and server-side (`[RegularExpression(@"^\S+$")]`) — confirmed both Password/Confirm password `Input`s use `type="password"` (already masked). [backend/BarbershopApi/Dtos/RegisterRequest.cs:13, frontend/src/pages/Register.jsx]
+
+- [x] [Review][Patch] `Register.jsx`'s 400 handler only reads `problem.errors.Email`; any other field's validation error (blank FirstName/LastName/Password) is silently mapped to a wrong "Enter a valid email address." caption under Email — trivially reachable via an all-blank submit, since the password-mismatch guard is skipped when both password fields are empty and equal. **Fixed:** falls back to a generic "Please check the form and try again." caption when the 400 body has no `Email` key. [frontend/src/pages/Register.jsx:52-56]
+- [x] [Review][Patch] Password-mismatch branch in `handleSubmit` returns without clearing `emailError`, so a stale email caption can remain displayed after a later mismatched-password resubmit. **Fixed:** clears `emailError` in the mismatch branch. [frontend/src/pages/Register.jsx:23-28]
+- [x] [Review][Patch] `RegisterRequest` has no length constraints (`[StringLength]`) on Email/Password/FirstName/LastName — unbounded strings reach hashing/DB insert on a public, unauthenticated endpoint. **Fixed:** `[StringLength(254)]` Email, `[StringLength(128)]` Password, `[StringLength(100)]` FirstName/LastName. [backend/BarbershopApi/Dtos/RegisterRequest.cs:7-18]
+- [x] [Review][Patch] `FirstName`/`LastName` accept whitespace-only values — `[Required]` doesn't reject `" "`, and nothing trims before persistence. **Fixed:** added a not-blank `[RegularExpression]` guard on both, plus `.Trim()` in `AuthService.Register` (Jack's bonus request — trim FirstName/LastName the same way Email already is). [backend/BarbershopApi/Dtos/RegisterRequest.cs:13-17, backend/BarbershopApi/Services/AuthService.cs]
+- [x] [Review][Patch] `AuthService.Register`'s `catch (DbUpdateException)` is a blanket catch — any DB failure (not just the duplicate-email unique-index violation) is reported to the client as "That email is already in use.", masking unrelated failures. **Fixed:** narrowed to `catch (DbUpdateException ex) when (ex.InnerException is SqliteException { SqliteErrorCode: 19 })` (SQLITE_CONSTRAINT). [backend/BarbershopApi/Services/AuthService.cs:28-35]
+- [x] [Review][Patch] `PlausibleEmailAttribute`'s regex has no whitespace tolerance, but `AccountRepository` trims+lowercases email before persisting/comparing — an email with a stray leading/trailing space (common from copy-paste/autofill) is rejected by validation even though the repository would accept it fine. **Fixed:** validation now trims before matching the regex. [backend/BarbershopApi/Dtos/PlausibleEmailAttribute.cs:13-16]
+- [x] [Review][Patch] `registerAccount()` doesn't wrap `fetch()` itself in try/catch — a network failure (offline/DNS/CORS) throws inside `Register.jsx`'s unguarded `await registerAccount(...)`, producing an unhandled promise rejection with zero user-facing feedback. **Fixed:** `fetch()` wrapped in try/catch, returns `{ ok: false, status: null, problem: null }` on failure. [frontend/src/api/AuthApi.js:9]
+- [x] [Review][Patch] `Register.jsx`'s `handleSubmit` has no default branch for a response status other than 409/400 (e.g. 500) — submit silently does nothing, no error shown, no navigation. **Fixed:** falls through to a generic "Something went wrong. Please try again." caption. [frontend/src/pages/Register.jsx:47-56]
+- [x] [Review][Patch] No backend test asserts the actual 201 response JSON body (`RegisterResponse`'s fields, casing, absence of `PasswordHash`/`Role`) — only the status code and a direct DB read are checked. **Fixed:** added body assertions to `Register_with_new_email_creates_customer_account`. [backend/BarbershopApi.Tests/AuthControllerTests.cs]
+- [x] [Review][Patch] No explicit test/assertion guards the `type="email"` regression the story's own notes say was "found and fixed" — nothing directly asserts the Email `Input` lacks `type="email"`. **Fixed:** added an explicit assertion. [frontend/src/pages/Register.test.jsx]
+- [x] [Review][Patch] Submit button has no disabled/loading state during the in-flight request — nothing stops a double-click from firing two concurrent registration requests. **Fixed:** added `isSubmitting` state, `disabled={isSubmitting}` on the submit `Button`. [frontend/src/pages/Register.jsx:95-97]
+- [x] [Review][Patch] `AuthController.Register` only catches `DuplicateEmailException` — any other exception bubbles to the framework's default (non-`ProblemDetails`) 500 response, inconsistent with the project's RFC 7807 error-shape standard, and untested. **Fixed:** added `catch (Exception)` returning a 500 `Problem()`. [backend/BarbershopApi/Controllers/AuthController.cs:14-22]
+
+**Post-review verification:** `dotnet test` 31/31 passing (5 new), `npm test` 45/45 passing (7 new), `eslint .` clean, every touched file Prettier-clean.
+
+#### Round 2 (re-review after the above patches)
+
+- [x] [Review][Patch] The new `password.length < 8` branch in `handleSubmit` doesn't clear a stale `emailError` before returning — same bug class as the mismatch branch (which does clear it), just not extended to this new branch. **Fixed:** now clears both `emailError` and `formError`. [frontend/src/pages/Register.jsx:34-37]
+- [x] [Review][Patch] Page-level failures (unexpected status, network failure) are written into `emailError` specifically — misleadingly implies the email field is the problem when it's a general/page-level failure. **Fixed:** added a dedicated `formError` state, rendered as `.register__form-error` above the submit button; the 409/400-with-Email-key cases still use `emailError`, everything else uses `formError`. [frontend/src/pages/Register.jsx, frontend/src/pages/Register.css]
+- [x] [Review][Patch] The new `[StringLength]` constraints (Email 254/Password 128/FirstName 100/LastName 100) have zero test coverage. **Fixed:** added `Register_with_overlong_email/password/first_name/last_name_returns_400`. [backend/BarbershopApi.Tests/AuthControllerTests.cs]
+- [x] [Review][Patch] `FirstName`/`LastName`'s not-blank regex `.*\S.*` doesn't match across a newline under default regex options (`.` excludes `\n`) — a pasted name containing a newline is falsely rejected as blank. **Fixed:** added the inline `(?s)` singleline modifier. [backend/BarbershopApi/Dtos/RegisterRequest.cs:20,25]
+- [x] [Review][Patch] No test verifies the double-submit-prevention (`isSubmitting`/`disabled`) behavior, and `handleSubmit` has no re-entrancy guard of its own beyond the disabled attribute. **Fixed:** added an `if (isSubmitting) return` guard at the top of `handleSubmit`, plus a test asserting the button is disabled during an in-flight request. [frontend/src/pages/Register.jsx, frontend/src/pages/Register.test.jsx]
+
+**Post-round-2 verification:** `dotnet test` 35/35 passing (4 new), `npm test` 46/46 passing (1 new), `eslint .` clean, every touched file Prettier-clean.
+
+- [x] [Review][Defer] `[StringLength(254)]` on Email checks the raw untrimmed value while `[PlausibleEmail]` trims before its regex check [backend/BarbershopApi/Dtos/RegisterRequest.cs] — deferred: extremely low-probability edge case (a 250+ char email with incidental padding whitespace), not worth a custom validation attribute at this project's scale.
+- [x] [Review][Defer] The DB-constraint race backstop (`SqliteException { SqliteErrorCode: 19 }`) is untested [backend/BarbershopApi/Services/AuthService.cs] — deferred: inherently hard to test deterministically without mocking the DB layer, which AD-4 explicitly disallows for this project.
+- [x] [Review][Defer] No logging anywhere in `AuthController`'s exception handling [backend/BarbershopApi/Controllers/AuthController.cs] — deferred: real observability gap, but establishing a logging convention is a bigger infrastructure decision than this patch round; no `ILogger` precedent exists elsewhere in the codebase yet.
+- [x] [Review][Defer] `OperationCanceledException` from a client disconnect would be caught by the generic `catch (Exception)` and misreported as a 500 rather than propagating as a cancellation [backend/BarbershopApi/Controllers/AuthController.cs] — deferred: narrow edge case with no real user-facing impact since the client is already gone.
+
+- [x] [Review][Defer] No rate limiting or bot protection on `/api/auth/register` [backend/BarbershopApi/Controllers/AuthController.cs] — deferred, pre-existing: AD-5 only scopes rate limiting to `/api/auth/login`; registration throttling was never part of this story's or the architecture's mandate.
+- [x] [Review][Defer] `NavBar`'s `Register` action changed from a `<Link>` to a `<button onClick={...}>`, losing `href` semantics (no open-in-new-tab/middle-click/copy-link) [frontend/src/components/NavBar.jsx:47-49] — deferred, pre-existing: an explicit, spec-sanctioned tradeoff (Task 10 allowed either approach; dev notes document the button-styling rationale). Flagged only as a future accessibility polish item.
 
 ## Dev Notes
 
@@ -162,8 +211,39 @@ Recent commits (`ebd095d`/`35ed372` Story 1.2 → `3894539`/`869f0b7` Story 1.3)
 
 ### Agent Model Used
 
+Claude Sonnet 5 (claude-sonnet-5)
+
 ### Debug Log References
 
 ### Completion Notes List
 
+- Tasks 1-5 (backend): `PlausibleEmailAttribute`, `RegisterRequest`/`RegisterResponse`, `AuthService.Register`, `AuthController.Register`, and `AuthControllerTests` (8 new HTTP-level tests via `SqliteApiFactory.CreateClient()`). Full suite green: 26/26 passing, no warnings. Confirmed 400 validation-error body uses PascalCase keys (`errors.Email`), which Task 6's frontend lookup must match.
+- Tasks 6-11 (frontend): `ApiConfig.js`/`AuthApi.js`, `FormSection` component, `Register` page wired to `/register` (route + NavBar button), and 9 new frontend tests (5 in `Register.test.jsx`, 1 added to `NavBar.test.jsx`) plus 2 pre-existing NavBar tests updated for the button-click behavior. Full suite green: 38/38 passing.
+  - Found and fixed a real bug while writing the 400-format test: the email `Input` had `type="email"`, which makes jsdom (and real browsers) block form submission natively for a malformed address before `onSubmit` ever runs — silently defeating AC#3's server-driven error message in production, not just in tests. Switched to plain text input.
+  - `Register`/`Sign In` stayed `<Button>`s wired via `useNavigate()` rather than becoming `<Link>`s, matching their button styling in the design and NavBar's existing `ROUTED_LINKS`/`INERT_LINKS` split (they were never in either list).
+- Task 12: all local checks green (dotnet test 26/26, npm test 38/38, eslint clean, every touched file Prettier-clean). Push/CI confirmation and PR left for Jack — see Task 12 notes below for the pre-existing repo-wide `format:check` CRLF finding (unrelated to this story).
+
 ### File List
+
+- backend/BarbershopApi/Dtos/PlausibleEmailAttribute.cs (new)
+- backend/BarbershopApi/Dtos/RegisterRequest.cs (new)
+- backend/BarbershopApi/Dtos/RegisterResponse.cs (new)
+- backend/BarbershopApi/Services/DuplicateEmailException.cs (new)
+- backend/BarbershopApi/Services/IAuthService.cs (new)
+- backend/BarbershopApi/Services/AuthService.cs (new)
+- backend/BarbershopApi/Controllers/AuthController.cs (new)
+- backend/BarbershopApi/Program.cs (modified)
+- backend/BarbershopApi/Controllers/.gitkeep (deleted)
+- backend/BarbershopApi/Services/.gitkeep (deleted)
+- backend/BarbershopApi.Tests/AuthControllerTests.cs (new)
+- frontend/src/api/ApiConfig.js (new)
+- frontend/src/api/AuthApi.js (new)
+- frontend/src/api/.gitkeep (deleted)
+- frontend/src/components/FormSection.jsx (new)
+- frontend/src/components/FormSection.css (new)
+- frontend/src/pages/Register.jsx (new)
+- frontend/src/pages/Register.css (new)
+- frontend/src/pages/Register.test.jsx (new)
+- frontend/src/App.jsx (modified)
+- frontend/src/components/NavBar.jsx (modified)
+- frontend/src/components/NavBar.test.jsx (modified)
