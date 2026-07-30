@@ -20,5 +20,9 @@ public class AuthController(IAuthService authService) : ControllerBase
         {
             return Problem(statusCode: StatusCodes.Status409Conflict, title: "That email is already in use.");
         }
+        catch (Exception)
+        {
+            return Problem(statusCode: StatusCodes.Status500InternalServerError, title: "Something went wrong. Please try again.");
+        }
     }
 }

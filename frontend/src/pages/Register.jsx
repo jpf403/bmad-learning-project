@@ -16,19 +16,38 @@ export default function Register() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [emailError, setEmailError] = useState('')
   const [passwordError, setPasswordError] = useState('')
+  const [formError, setFormError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const stripWhitespace = (value) => value.replace(/\s/g, '')
 
   const handleSubmit = async (event) => {
     event.preventDefault()
 
+    if (isSubmitting) {
+      return
+    }
+
     if (password !== confirmPassword) {
+      setEmailError('')
+      setFormError('')
       setPasswordError('Passwords do not match')
       setPassword('')
       setConfirmPassword('')
       return
     }
 
+    if (password.length < 8) {
+      setEmailError('')
+      setFormError('')
+      setPasswordError('Password must be at least 8 characters.')
+      return
+    }
+
     setEmailError('')
     setPasswordError('')
+    setFormError('')
+    setIsSubmitting(true)
 
     const result = await registerAccount({
       email,
@@ -36,6 +55,8 @@ export default function Register() {
       firstName,
       lastName,
     })
+
+    setIsSubmitting(false)
 
     if (result.ok) {
       navigate('/login', {
@@ -50,10 +71,16 @@ export default function Register() {
     }
 
     if (result.status === 400) {
-      const message =
-        result.problem?.errors?.Email?.[0] ?? 'Enter a valid email address.'
-      setEmailError(message)
+      const message = result.problem?.errors?.Email?.[0]
+      if (message) {
+        setEmailError(message)
+      } else {
+        setFormError('Please check the form and try again.')
+      }
+      return
     }
+
+    setFormError('Something went wrong. Please try again.')
   }
 
   return (
@@ -83,16 +110,21 @@ export default function Register() {
             type="password"
             value={password}
             error={passwordError}
-            onChange={(event) => setPassword(event.target.value)}
+            onChange={(event) =>
+              setPassword(stripWhitespace(event.target.value))
+            }
           />
           <Input
             label="Confirm password"
             type="password"
             value={confirmPassword}
             error={passwordError}
-            onChange={(event) => setConfirmPassword(event.target.value)}
+            onChange={(event) =>
+              setConfirmPassword(stripWhitespace(event.target.value))
+            }
           />
-          <Button variant="primary" type="submit">
+          {formError && <p className="register__form-error">{formError}</p>}
+          <Button variant="primary" type="submit" disabled={isSubmitting}>
             Register
           </Button>
         </form>

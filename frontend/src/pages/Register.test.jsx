@@ -24,7 +24,7 @@ async function fillForm(
   user,
   {
     email = 'john@example.com',
-    password = 'hunter2',
+    password = 'hunter222',
     confirmPassword = password,
   } = {},
 ) {
@@ -49,6 +49,36 @@ describe('Register', () => {
     expect(screen.getByLabelText('Email')).toBeInTheDocument()
     expect(screen.getByLabelText('Password')).toBeInTheDocument()
     expect(screen.getByLabelText('Confirm password')).toBeInTheDocument()
+  })
+
+  it('does not use type="email" on the Email field, so malformed addresses still reach the server', () => {
+    renderRegister()
+
+    expect(screen.getByLabelText('Email')).not.toHaveAttribute('type', 'email')
+  })
+
+  it('masks both password fields as actual password inputs', () => {
+    renderRegister()
+
+    expect(screen.getByLabelText('Password')).toHaveAttribute(
+      'type',
+      'password',
+    )
+    expect(screen.getByLabelText('Confirm password')).toHaveAttribute(
+      'type',
+      'password',
+    )
+  })
+
+  it('strips spaces and tabs as they are typed into the password fields', async () => {
+    const user = userEvent.setup()
+    renderRegister()
+
+    await user.type(screen.getByLabelText('Password'), 'a b\tc')
+    await user.type(screen.getByLabelText('Confirm password'), 'x y\tz')
+
+    expect(screen.getByLabelText('Password')).toHaveValue('abc')
+    expect(screen.getByLabelText('Confirm password')).toHaveValue('xyz')
   })
 
   it('navigates to /login with the confirmation message on successful registration', async () => {
@@ -119,5 +149,87 @@ describe('Register', () => {
       await screen.findByText('Enter a valid email address.'),
     ).toBeInTheDocument()
     expect(screen.getByLabelText('Email')).toHaveValue('testbademail')
+  })
+
+  it('shows a fallback message and never calls fetch for a too-short password', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+    const user = userEvent.setup()
+    renderRegister()
+
+    await fillForm(user, { password: 'short1', confirmPassword: 'short1' })
+    await user.click(screen.getByRole('button', { name: 'Register' }))
+
+    expect(
+      await screen.findAllByText('Password must be at least 8 characters.'),
+    ).toHaveLength(2)
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('shows a generic fallback message on a 400 with no Email-specific error', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({ errors: { FirstName: ['Required'] } }),
+    })
+    const user = userEvent.setup()
+    renderRegister()
+
+    await fillForm(user)
+    await user.click(screen.getByRole('button', { name: 'Register' }))
+
+    expect(
+      await screen.findByText('Please check the form and try again.'),
+    ).toBeInTheDocument()
+  })
+
+  it('shows a generic error on an unexpected response status', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({ title: 'Something went wrong. Please try again.' }),
+    })
+    const user = userEvent.setup()
+    renderRegister()
+
+    await fillForm(user)
+    await user.click(screen.getByRole('button', { name: 'Register' }))
+
+    expect(
+      await screen.findByText('Something went wrong. Please try again.'),
+    ).toBeInTheDocument()
+  })
+
+  it('disables the submit button while the request is in flight', async () => {
+    let resolveFetch
+    vi.spyOn(globalThis, 'fetch').mockReturnValue(
+      new Promise((resolve) => {
+        resolveFetch = resolve
+      }),
+    )
+    const user = userEvent.setup()
+    renderRegister()
+
+    await fillForm(user)
+    await user.click(screen.getByRole('button', { name: 'Register' }))
+
+    expect(screen.getByRole('button', { name: 'Register' })).toBeDisabled()
+
+    resolveFetch({ ok: true, status: 201 })
+    await screen.findByText('Login Stub: Account created. Sign in to continue.')
+  })
+
+  it('shows a generic error when fetch itself throws (network failure)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(
+      new TypeError('Failed to fetch'),
+    )
+    const user = userEvent.setup()
+    renderRegister()
+
+    await fillForm(user)
+    await user.click(screen.getByRole('button', { name: 'Register' }))
+
+    expect(
+      await screen.findByText('Something went wrong. Please try again.'),
+    ).toBeInTheDocument()
   })
 })

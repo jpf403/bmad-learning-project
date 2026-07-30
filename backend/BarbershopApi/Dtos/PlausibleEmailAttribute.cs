@@ -12,7 +12,7 @@ public partial class PlausibleEmailAttribute : ValidationAttribute
 
     public override bool IsValid(object? value)
     {
-        return value is string email && EmailPattern().IsMatch(email);
+        return value is string email && EmailPattern().IsMatch(email.Trim());
     }
 
     [GeneratedRegex(@"^[^@\s]+@[^@\s]+\.[^@\s]+$")]

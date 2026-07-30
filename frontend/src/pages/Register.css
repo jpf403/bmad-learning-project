@@ -22,6 +22,13 @@
   gap: var(--spacing-4);
 }
 
+.register__form-error {
+  color: var(--color-error);
+  font-family: var(--font-family-base);
+  font-size: var(--typography-caption-size);
+  margin: 0;
+}
+
 @media (min-width: 640px) {
   .register {
     padding: var(--spacing-16) var(--spacing-gutter-desktop);

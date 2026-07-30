@@ -35,6 +35,13 @@ public class AuthControllerTests : IDisposable
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
+        var body = await response.Content.ReadFromJsonAsync<RegisterResponse>(TestContext.Current.CancellationToken);
+        Assert.NotNull(body);
+        Assert.True(body.Id > 0);
+        Assert.Equal("john@example.com", body.Email);
+        Assert.Equal("John", body.FirstName);
+        Assert.Equal("Smith", body.LastName);
+
         await using var context = _factory.CreateDbContext();
         var repository = new AccountRepository(context);
         var account = await repository.FindByEmail("john@example.com");
@@ -130,5 +137,102 @@ public class AuthControllerTests : IDisposable
         var errors = document.RootElement.GetProperty("errors");
 
         Assert.True(errors.TryGetProperty("Email", out _));
+    }
+
+    [Fact]
+    public async Task Register_with_leading_or_trailing_whitespace_in_email_succeeds()
+    {
+        using var client = _factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/auth/register", NewRequest(email: "  john@example.com  "), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Register_with_short_password_returns_400()
+    {
+        using var client = _factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/auth/register", NewRequest(password: "short1"), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Register_with_whitespace_in_password_returns_400()
+    {
+        using var client = _factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/auth/register", NewRequest(password: "has a space"), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Register_with_whitespace_only_first_name_returns_400()
+    {
+        using var client = _factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/auth/register", NewRequest(firstName: "   "), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Register_with_overlong_email_returns_400()
+    {
+        using var client = _factory.CreateClient();
+
+        var overlongEmail = $"{new string('a', 250)}@example.com";
+        var response = await client.PostAsJsonAsync("/api/auth/register", NewRequest(email: overlongEmail), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Register_with_overlong_password_returns_400()
+    {
+        using var client = _factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/auth/register", NewRequest(password: new string('a', 129)), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Register_with_overlong_first_name_returns_400()
+    {
+        using var client = _factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/auth/register", NewRequest(firstName: new string('a', 101)), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Register_with_overlong_last_name_returns_400()
+    {
+        using var client = _factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/auth/register", NewRequest(lastName: new string('a', 101)), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Register_trims_first_and_last_name_before_persisting()
+    {
+        using var client = _factory.CreateClient();
+
+        await client.PostAsJsonAsync("/api/auth/register", NewRequest(firstName: "  John  ", lastName: "  Smith  "), TestContext.Current.CancellationToken);
+
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        var account = await repository.FindByEmail("john@example.com");
+
+        Assert.NotNull(account);
+        Assert.Equal("John", account.FirstName);
+        Assert.Equal("Smith", account.LastName);
     }
 }

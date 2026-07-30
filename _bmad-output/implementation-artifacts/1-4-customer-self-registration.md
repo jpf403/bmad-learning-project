@@ -4,7 +4,7 @@ baseline_commit: 869f0b77e1e0a69266326774cb6dcc59083bfaa9
 
 # Story 1.4: Customer Self-Registration
 
-Status: review
+Status: done
 
 ## Story
 
@@ -101,9 +101,46 @@ so that I can access booking features.
   - [x] Branch as `story/1.4-customer-self-registration` from `main`.
   - [x] Run `dotnet test` (backend), `npm run lint`, `npm run format:check`, `npm test` (frontend) locally: all green (26/26 backend tests, 38/38 frontend tests, lint clean, and every file this story touched is Prettier-clean).
 
-    **Not yet done: push and confirm both CI jobs pass.** Left for Jack to trigger after reviewing the diff — pushing/opening a PR is a shared-visibility action outside this workflow's scope to do unprompted.
+  - [x] Pushed and confirmed both CI jobs pass.
 
     **Note on `npm run format:check`:** run against the whole repo it flags ~36 pre-existing files (not touched by this story) as needing reformatting. Root cause: this Windows checkout has `core.autocrlf=true`, so previously-committed files are checked out with CRLF while Prettier's default `endOfLine` is `lf`. This is a pre-existing local-checkout artifact, not a regression — GitHub Actions checks out on Linux (LF-native) so it won't reproduce there. Every file this story added or modified was verified individually with `npx prettier --check` and is clean.
+
+### Review Findings
+
+- [x] [Review][Patch] No password strength/minimum-length policy anywhere in the stack — a password of `"a"` passes `[Required]` and is hashed/stored as-is. **Resolved:** added an 8-character minimum, enforced server-side (`[MinLength(8)]` on `RegisterRequest.Password`) and mirrored client-side (a caption on the Password `Input` before calling the API). **Bonus (Jack's request):** password field also rejects/strips all whitespace (spaces/tabs) client-side (`onChange` strips as-typed) and server-side (`[RegularExpression(@"^\S+$")]`) — confirmed both Password/Confirm password `Input`s use `type="password"` (already masked). [backend/BarbershopApi/Dtos/RegisterRequest.cs:13, frontend/src/pages/Register.jsx]
+
+- [x] [Review][Patch] `Register.jsx`'s 400 handler only reads `problem.errors.Email`; any other field's validation error (blank FirstName/LastName/Password) is silently mapped to a wrong "Enter a valid email address." caption under Email — trivially reachable via an all-blank submit, since the password-mismatch guard is skipped when both password fields are empty and equal. **Fixed:** falls back to a generic "Please check the form and try again." caption when the 400 body has no `Email` key. [frontend/src/pages/Register.jsx:52-56]
+- [x] [Review][Patch] Password-mismatch branch in `handleSubmit` returns without clearing `emailError`, so a stale email caption can remain displayed after a later mismatched-password resubmit. **Fixed:** clears `emailError` in the mismatch branch. [frontend/src/pages/Register.jsx:23-28]
+- [x] [Review][Patch] `RegisterRequest` has no length constraints (`[StringLength]`) on Email/Password/FirstName/LastName — unbounded strings reach hashing/DB insert on a public, unauthenticated endpoint. **Fixed:** `[StringLength(254)]` Email, `[StringLength(128)]` Password, `[StringLength(100)]` FirstName/LastName. [backend/BarbershopApi/Dtos/RegisterRequest.cs:7-18]
+- [x] [Review][Patch] `FirstName`/`LastName` accept whitespace-only values — `[Required]` doesn't reject `" "`, and nothing trims before persistence. **Fixed:** added a not-blank `[RegularExpression]` guard on both, plus `.Trim()` in `AuthService.Register` (Jack's bonus request — trim FirstName/LastName the same way Email already is). [backend/BarbershopApi/Dtos/RegisterRequest.cs:13-17, backend/BarbershopApi/Services/AuthService.cs]
+- [x] [Review][Patch] `AuthService.Register`'s `catch (DbUpdateException)` is a blanket catch — any DB failure (not just the duplicate-email unique-index violation) is reported to the client as "That email is already in use.", masking unrelated failures. **Fixed:** narrowed to `catch (DbUpdateException ex) when (ex.InnerException is SqliteException { SqliteErrorCode: 19 })` (SQLITE_CONSTRAINT). [backend/BarbershopApi/Services/AuthService.cs:28-35]
+- [x] [Review][Patch] `PlausibleEmailAttribute`'s regex has no whitespace tolerance, but `AccountRepository` trims+lowercases email before persisting/comparing — an email with a stray leading/trailing space (common from copy-paste/autofill) is rejected by validation even though the repository would accept it fine. **Fixed:** validation now trims before matching the regex. [backend/BarbershopApi/Dtos/PlausibleEmailAttribute.cs:13-16]
+- [x] [Review][Patch] `registerAccount()` doesn't wrap `fetch()` itself in try/catch — a network failure (offline/DNS/CORS) throws inside `Register.jsx`'s unguarded `await registerAccount(...)`, producing an unhandled promise rejection with zero user-facing feedback. **Fixed:** `fetch()` wrapped in try/catch, returns `{ ok: false, status: null, problem: null }` on failure. [frontend/src/api/AuthApi.js:9]
+- [x] [Review][Patch] `Register.jsx`'s `handleSubmit` has no default branch for a response status other than 409/400 (e.g. 500) — submit silently does nothing, no error shown, no navigation. **Fixed:** falls through to a generic "Something went wrong. Please try again." caption. [frontend/src/pages/Register.jsx:47-56]
+- [x] [Review][Patch] No backend test asserts the actual 201 response JSON body (`RegisterResponse`'s fields, casing, absence of `PasswordHash`/`Role`) — only the status code and a direct DB read are checked. **Fixed:** added body assertions to `Register_with_new_email_creates_customer_account`. [backend/BarbershopApi.Tests/AuthControllerTests.cs]
+- [x] [Review][Patch] No explicit test/assertion guards the `type="email"` regression the story's own notes say was "found and fixed" — nothing directly asserts the Email `Input` lacks `type="email"`. **Fixed:** added an explicit assertion. [frontend/src/pages/Register.test.jsx]
+- [x] [Review][Patch] Submit button has no disabled/loading state during the in-flight request — nothing stops a double-click from firing two concurrent registration requests. **Fixed:** added `isSubmitting` state, `disabled={isSubmitting}` on the submit `Button`. [frontend/src/pages/Register.jsx:95-97]
+- [x] [Review][Patch] `AuthController.Register` only catches `DuplicateEmailException` — any other exception bubbles to the framework's default (non-`ProblemDetails`) 500 response, inconsistent with the project's RFC 7807 error-shape standard, and untested. **Fixed:** added `catch (Exception)` returning a 500 `Problem()`. [backend/BarbershopApi/Controllers/AuthController.cs:14-22]
+
+**Post-review verification:** `dotnet test` 31/31 passing (5 new), `npm test` 45/45 passing (7 new), `eslint .` clean, every touched file Prettier-clean.
+
+#### Round 2 (re-review after the above patches)
+
+- [x] [Review][Patch] The new `password.length < 8` branch in `handleSubmit` doesn't clear a stale `emailError` before returning — same bug class as the mismatch branch (which does clear it), just not extended to this new branch. **Fixed:** now clears both `emailError` and `formError`. [frontend/src/pages/Register.jsx:34-37]
+- [x] [Review][Patch] Page-level failures (unexpected status, network failure) are written into `emailError` specifically — misleadingly implies the email field is the problem when it's a general/page-level failure. **Fixed:** added a dedicated `formError` state, rendered as `.register__form-error` above the submit button; the 409/400-with-Email-key cases still use `emailError`, everything else uses `formError`. [frontend/src/pages/Register.jsx, frontend/src/pages/Register.css]
+- [x] [Review][Patch] The new `[StringLength]` constraints (Email 254/Password 128/FirstName 100/LastName 100) have zero test coverage. **Fixed:** added `Register_with_overlong_email/password/first_name/last_name_returns_400`. [backend/BarbershopApi.Tests/AuthControllerTests.cs]
+- [x] [Review][Patch] `FirstName`/`LastName`'s not-blank regex `.*\S.*` doesn't match across a newline under default regex options (`.` excludes `\n`) — a pasted name containing a newline is falsely rejected as blank. **Fixed:** added the inline `(?s)` singleline modifier. [backend/BarbershopApi/Dtos/RegisterRequest.cs:20,25]
+- [x] [Review][Patch] No test verifies the double-submit-prevention (`isSubmitting`/`disabled`) behavior, and `handleSubmit` has no re-entrancy guard of its own beyond the disabled attribute. **Fixed:** added an `if (isSubmitting) return` guard at the top of `handleSubmit`, plus a test asserting the button is disabled during an in-flight request. [frontend/src/pages/Register.jsx, frontend/src/pages/Register.test.jsx]
+
+**Post-round-2 verification:** `dotnet test` 35/35 passing (4 new), `npm test` 46/46 passing (1 new), `eslint .` clean, every touched file Prettier-clean.
+
+- [x] [Review][Defer] `[StringLength(254)]` on Email checks the raw untrimmed value while `[PlausibleEmail]` trims before its regex check [backend/BarbershopApi/Dtos/RegisterRequest.cs] — deferred: extremely low-probability edge case (a 250+ char email with incidental padding whitespace), not worth a custom validation attribute at this project's scale.
+- [x] [Review][Defer] The DB-constraint race backstop (`SqliteException { SqliteErrorCode: 19 }`) is untested [backend/BarbershopApi/Services/AuthService.cs] — deferred: inherently hard to test deterministically without mocking the DB layer, which AD-4 explicitly disallows for this project.
+- [x] [Review][Defer] No logging anywhere in `AuthController`'s exception handling [backend/BarbershopApi/Controllers/AuthController.cs] — deferred: real observability gap, but establishing a logging convention is a bigger infrastructure decision than this patch round; no `ILogger` precedent exists elsewhere in the codebase yet.
+- [x] [Review][Defer] `OperationCanceledException` from a client disconnect would be caught by the generic `catch (Exception)` and misreported as a 500 rather than propagating as a cancellation [backend/BarbershopApi/Controllers/AuthController.cs] — deferred: narrow edge case with no real user-facing impact since the client is already gone.
+
+- [x] [Review][Defer] No rate limiting or bot protection on `/api/auth/register` [backend/BarbershopApi/Controllers/AuthController.cs] — deferred, pre-existing: AD-5 only scopes rate limiting to `/api/auth/login`; registration throttling was never part of this story's or the architecture's mandate.
+- [x] [Review][Defer] `NavBar`'s `Register` action changed from a `<Link>` to a `<button onClick={...}>`, losing `href` semantics (no open-in-new-tab/middle-click/copy-link) [frontend/src/components/NavBar.jsx:47-49] — deferred, pre-existing: an explicit, spec-sanctioned tradeoff (Task 10 allowed either approach; dev notes document the button-styling rationale). Flagged only as a future accessibility polish item.
 
 ## Dev Notes
 
