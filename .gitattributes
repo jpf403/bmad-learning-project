@@ -1,0 +1,7 @@
+# Force LF line endings on checkout regardless of a contributor's local
+# core.autocrlf setting -- prevents Windows checkouts from rewriting this
+# repo's LF-committed text files to CRLF, which was tripping `prettier
+# --check` (Prettier's default endOfLine is "lf") on every file, not just
+# ones actually touched by a given change. Flagged (but never fixed) in
+# Stories 1.4, 1.5, and 1.6's Dev Notes.
+* text=auto eol=lf

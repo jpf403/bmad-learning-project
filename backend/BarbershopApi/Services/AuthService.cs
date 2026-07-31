@@ -78,12 +78,57 @@ public class AuthService(
         await accountRepository.Update(account);
     }
 
+    public async Task<(Account Account, string AccessToken)> Refresh(string refreshToken)
+    {
+        var handler = new JwtSecurityTokenHandler { MapInboundClaims = false };
+        ClaimsPrincipal principal;
+        try
+        {
+            principal = handler.ValidateToken(refreshToken, ValidationParameters(), out _);
+        }
+        catch (SecurityTokenException)
+        {
+            throw new InvalidSessionException();
+        }
+
+        var subClaim = principal.FindFirstValue(JwtRegisteredClaimNames.Sub);
+        var sessionVersionClaim = principal.FindFirstValue("sessionVersion");
+        if (subClaim is null || !int.TryParse(subClaim, out var accountId) ||
+            sessionVersionClaim is null || !int.TryParse(sessionVersionClaim, out var tokenSessionVersion))
+        {
+            throw new InvalidSessionException();
+        }
+
+        var account = await accountRepository.FindById(accountId);
+        if (account is null || account.SessionVersion != tokenSessionVersion)
+        {
+            throw new InvalidSessionException();
+        }
+
+        return (account, GenerateAccessToken(account));
+    }
+
+    private TokenValidationParameters ValidationParameters() => new()
+    {
+        ValidateIssuer = true,
+        ValidIssuer = "BarbershopApi",
+        ValidateAudience = true,
+        ValidAudience = TokenAudiences.Refresh,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.Value.Key)),
+    };
+
     private string GenerateAccessToken(Account account)
     {
-        var claims = new[] { new Claim(JwtRegisteredClaimNames.Sub, account.Id.ToString()) };
+        var claims = new[]
+        {
+            new Claim(JwtRegisteredClaimNames.Sub, account.Id.ToString()),
+            new Claim("sessionVersion", account.SessionVersion.ToString()),
+        };
         var token = new JwtSecurityToken(
             issuer: "BarbershopApi",
-            audience: "BarbershopApi",
+            audience: TokenAudiences.Access,
             claims: claims,
             expires: DateTime.UtcNow.AddMinutes(60),
             signingCredentials: SigningCredentials());
@@ -99,7 +144,7 @@ public class AuthService(
         };
         var token = new JwtSecurityToken(
             issuer: "BarbershopApi",
-            audience: "BarbershopApi",
+            audience: TokenAudiences.Refresh,
             claims: claims,
             expires: DateTime.UtcNow.AddDays(15),
             signingCredentials: SigningCredentials());

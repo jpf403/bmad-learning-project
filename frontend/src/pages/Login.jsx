@@ -5,13 +5,8 @@ import { useAuth } from '../context/AuthContext'
 import Input from '../components/Input'
 import Button from '../components/Button'
 import FormSection from '../components/FormSection'
+import { LANDING_ROUTE } from '../landingRoutes'
 import './Login.css'
-
-const LANDING_ROUTE = {
-  Customer: '/schedule-appointment',
-  Barber: '/my-schedule',
-  Admin: '/my-schedule',
-}
 
 export default function Login() {
   const navigate = useNavigate()

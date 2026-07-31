@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using BarbershopApi.Dtos;
+using BarbershopApi.Entities;
 using BarbershopApi.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -64,5 +65,38 @@ public class AuthController(IAuthService authService) : ControllerBase
         await authService.Logout(accountId);
         Response.Cookies.Delete("refreshToken");
         return NoContent();
+    }
+
+    [HttpGet("me")]
+    [Authorize]
+    public IActionResult Me()
+    {
+        var account = (Account)HttpContext.Items["Account"]!;
+        return Ok(new MeResponse(account.Id, account.Email, account.FirstName, account.LastName, account.Role));
+    }
+
+    [HttpPost("refresh")]
+    [EnableRateLimiting("RefreshPolicy")]
+    public async Task<IActionResult> Refresh()
+    {
+        var refreshToken = Request.Cookies["refreshToken"];
+        if (string.IsNullOrEmpty(refreshToken))
+        {
+            return Problem(statusCode: StatusCodes.Status401Unauthorized, title: "Session expired. Please sign in again.");
+        }
+
+        try
+        {
+            var (_, accessToken) = await authService.Refresh(refreshToken);
+            return Ok(new RefreshResponse(accessToken));
+        }
+        catch (InvalidSessionException)
+        {
+            return Problem(statusCode: StatusCodes.Status401Unauthorized, title: "Session expired. Please sign in again.");
+        }
+        catch (Exception)
+        {
+            return Problem(statusCode: StatusCodes.Status500InternalServerError, title: "Something went wrong. Please try again.");
+        }
     }
 }

@@ -57,3 +57,45 @@ export async function logoutAccount(accessToken) {
     // best-effort: caller clears local session regardless of network outcome
   }
 }
+
+export async function getCurrentUser(accessToken) {
+  let response
+  try {
+    response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+      credentials: 'include',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+  } catch {
+    return { ok: false, status: null }
+  }
+
+  if (!response.ok) {
+    return { ok: false, status: response.status }
+  }
+  const identity = await response.json().catch(() => null)
+  if (identity === null) {
+    return { ok: false, status: response.status }
+  }
+  return { ok: true, identity }
+}
+
+export async function refreshSession() {
+  let response
+  try {
+    response = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+      method: 'POST',
+      credentials: 'include',
+    })
+  } catch {
+    return { ok: false }
+  }
+
+  if (!response.ok) {
+    return { ok: false }
+  }
+  const body = await response.json().catch(() => null)
+  if (body === null) {
+    return { ok: false }
+  }
+  return { ok: true, accessToken: body.accessToken }
+}

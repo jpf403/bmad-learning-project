@@ -27,7 +27,7 @@ builder.Services.AddOpenApi();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(VitePolicy, policy =>
-        policy.WithOrigins("http://localhost:5173")
+        policy.WithOrigins("http://localhost:5173", "https://localhost:5173")
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials());
@@ -61,13 +61,15 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
             ValidateIssuer = true,
             ValidIssuer = "BarbershopApi",
             ValidateAudience = true,
-            ValidAudience = "BarbershopApi",
+            ValidAudience = TokenAudiences.Access,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.Value.Key)),
         };
     });
 builder.Services.AddAuthorization();
+
+builder.Services.AddProblemDetails();
 
 builder.Services.AddRateLimiter(options =>
 {
@@ -106,6 +108,17 @@ builder.Services.AddRateLimiter(options =>
             QueueLimit = 0,
         });
     });
+    options.AddPolicy("RefreshPolicy", httpContext =>
+    {
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetSlidingWindowLimiter(ip, _ => new SlidingWindowRateLimiterOptions
+        {
+            PermitLimit = 60,
+            Window = TimeSpan.FromMinutes(15),
+            SegmentsPerWindow = 3,
+            QueueLimit = 0,
+        });
+    });
 });
 
 var app = builder.Build();
@@ -137,8 +150,9 @@ if (app.Environment.IsDevelopment())
 
 app.UseRateLimiter();
 
-app.UseAuthentication();
-app.UseAuthorization();
+app.UseAuthentication();                            // Who are you
+app.UseMiddleware<SessionLivenessMiddleware>();     // Has the session been killed (logout, password changed by admin)
+app.UseAuthorization();                             // Do you have access to page
 
 app.MapControllers();
 
