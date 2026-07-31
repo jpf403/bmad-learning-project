@@ -15,5 +15,9 @@ export function AuthProvider({ children }) {
 
 // eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
-  return useContext(AuthContext)
+  const context = useContext(AuthContext)
+  if (context === null) {
+    throw new Error('useAuth must be used within an AuthProvider')
+  }
+  return context
 }

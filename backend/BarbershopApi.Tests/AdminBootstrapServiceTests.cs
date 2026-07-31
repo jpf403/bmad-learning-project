@@ -81,4 +81,39 @@ public class AdminBootstrapServiceTests : IDisposable
 
         Assert.Empty(admins);
     }
+
+    [Fact]
+    public async Task Admin_bootstrap_skips_without_throwing_when_seed_email_collides_with_existing_customer()
+    {
+        await using (var seedContext = _factory.CreateDbContext())
+        {
+            var repository = new AccountRepository(seedContext);
+            var passwordHasher = new PasswordHasher<Account>();
+            var existingCustomer = new Account
+            {
+                Email = "admin@test.local",
+                FirstName = "John",
+                LastName = "Smith",
+                Role = Role.Customer,
+            };
+            existingCustomer.PasswordHash = passwordHasher.HashPassword(existingCustomer, "ExistingPassword123!");
+            await repository.Create(existingCustomer);
+        }
+
+        using var factory = _factory.WithWebHostBuilder(builder =>
+            builder.ConfigureAppConfiguration((_, config) =>
+                config.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["AdminSeed:Email"] = "admin@test.local",
+                    ["AdminSeed:Password"] = "TestPassword123!",
+                })));
+
+        using var client = factory.CreateClient();
+
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<BarbershopDbContext>();
+        var admins = await context.Accounts.Where(a => a.Role == Role.Admin).ToListAsync(TestContext.Current.CancellationToken);
+
+        Assert.Empty(admins);
+    }
 }

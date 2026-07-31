@@ -297,6 +297,32 @@ public class AuthControllerTests : IDisposable
     }
 
     [Fact]
+    public async Task Login_unregistered_email_and_wrong_password_produce_identical_response_bodies()
+    {
+        using var client = _factory.CreateClient();
+        await client.PostAsJsonAsync("/api/auth/register", NewRequest(), TestContext.Current.CancellationToken);
+
+        var unregisteredResponse = await client.PostAsJsonAsync(
+            "/api/auth/login", NewLoginRequest(email: "unregistered@example.com"), TestContext.Current.CancellationToken);
+        var wrongPasswordResponse = await client.PostAsJsonAsync(
+            "/api/auth/login", NewLoginRequest(password: "wrong-password"), TestContext.Current.CancellationToken);
+
+        using var unregisteredBody = JsonDocument.Parse(
+            await unregisteredResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        using var wrongPasswordBody = JsonDocument.Parse(
+            await wrongPasswordResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+
+        // Compare status/title only — ProblemDetails also carries a per-request traceId,
+        // which legitimately differs between the two calls.
+        Assert.Equal(
+            wrongPasswordBody.RootElement.GetProperty("status").GetInt32(),
+            unregisteredBody.RootElement.GetProperty("status").GetInt32());
+        Assert.Equal(
+            wrongPasswordBody.RootElement.GetProperty("title").GetString(),
+            unregisteredBody.RootElement.GetProperty("title").GetString());
+    }
+
+    [Fact]
     public async Task Login_sixth_attempt_within_window_returns_429_with_rate_limit_message()
     {
         using var client = _factory.CreateClient();
@@ -307,6 +333,11 @@ public class AuthControllerTests : IDisposable
         {
             response = await client.PostAsJsonAsync(
                 "/api/auth/login", NewLoginRequest(password: "wrong-password"), TestContext.Current.CancellationToken);
+
+            if (attempt < 5)
+            {
+                Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+            }
         }
 
         Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import { loginAccount } from '../api/AuthApi'
 import { useAuth } from '../context/AuthContext'
@@ -18,10 +18,18 @@ export default function Login() {
   const location = useLocation()
   const { login } = useAuth()
 
+  const [successMessage] = useState(location.state?.message ?? '')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [formError, setFormError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (location.state?.message) {
+      navigate(location.pathname, { replace: true, state: {} })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleSubmit = async (event) => {
     event.preventDefault()
@@ -65,8 +73,8 @@ export default function Login() {
     <div className="login">
       <h1 className="login__title">Sign In</h1>
 
-      {location.state?.message && (
-        <p className="login__success-banner">{location.state.message}</p>
+      {successMessage && !formError && !isSubmitting && (
+        <p className="login__success-banner">{successMessage}</p>
       )}
 
       <FormSection>

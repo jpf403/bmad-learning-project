@@ -4,7 +4,7 @@ baseline_commit: 13e3969e9c57a196f2303a3574771937c7bc28b9
 
 # Story 1.5: Sign In, Sign Out, and First-Admin Bootstrap
 
-Status: review
+Status: done
 
 ## Story
 
@@ -229,6 +229,38 @@ so that I can securely access my account; and as the shop owner, I want an admin
   - [x] Branch as `story/1.5-sign-in-sign-out-admin-bootstrap` from `main`. (Checked out as `story/1.5-sign-in-sign-out`.)
   - [x] Run `dotnet test`, `npm run lint`, `npm run format:check`, `npm test` locally: confirm all green before push.
   - [x] Push and confirm both CI jobs pass. (Green: https://github.com/jpf403/bmad-learning-project/actions/runs/30576112203)
+
+### Review Findings
+
+- [x] [Review][Defer] Rate limiter throttles every login attempt (success or failure) toward the same 5-per-15-min email+IP cap, not just failed ones [backend/BarbershopApi/Program.cs:80-106] — deferred, per Jack: the odds of a legitimate user hitting 6 same-email-same-IP logins in 15 minutes are vanishingly low, and if it does happen it reads as spam sign-in behavior anyway, so the false-positive 429 is an acceptable outcome.
+
+- [x] [Review][Patch] `AdminBootstrapService` crashes app startup on an admin-seed email collision [backend/BarbershopApi/Services/AdminBootstrapService.cs:40]
+- [x] [Review][Patch] Rate-limiter partition-key resolver throws unhandled `InvalidOperationException` on a non-object JSON body (e.g. `42` or `[]`), producing a raw 500 instead of a handled 400 [backend/BarbershopApi/Program.cs:90]
+- [x] [Review][Patch] `Jwt:Key` fail-fast check only validates non-blank, not minimum byte length for HMACSHA256 — a too-short key passes startup and throws later at first sign attempt [backend/BarbershopApi/Program.cs:111]
+- [x] [Review][Patch] `useAuth()` returns `null` with no guard when called outside `AuthProvider`, so destructuring throws a raw `TypeError` [frontend/src/context/AuthContext.jsx:17]
+- [x] [Review][Patch] Login success banner has no dismiss mechanism — persists alongside a subsequent form error and reappears on browser back/forward nav to `/login` [frontend/src/pages/Login.jsx:68]
+- [x] [Review][Patch] `Login_sixth_attempt_within_window_returns_429...` only asserts the final (6th) response, never that attempts 1–5 returned 401 [backend/BarbershopApi.Tests/AuthControllerTests.cs:300]
+- [x] [Review][Patch] The two 401 test cases assert a hardcoded substring independently rather than diffing the two response bodies against each other, weaker than Task 7's literal "assert both produce the exact same response body" instruction [backend/BarbershopApi.Tests/AuthControllerTests.cs:274-297]
+
+- [x] [Review][Defer] Rate-limiter partition-key resolver uses a blocking sync-over-async body read (`ReadToEndAsync().GetAwaiter().GetResult()`) [backend/BarbershopApi/Program.cs:84] — deferred, pre-existing (this is the story's own literal Dev Notes — Rate-Limiter Partition-Key Recipe, not a shortcut introduced independently)
+- [x] [Review][Defer] Partition-key email lookup (`JsonDocument.TryGetProperty`) is case-sensitive, mismatching ASP.NET's case-insensitive model binder — an email sent with different casing falls into the shared "unknown" bucket instead of its own per-account bucket [backend/BarbershopApi/Program.cs:91] — deferred, pre-existing (same spec-mandated recipe)
+- [x] [Review][Defer] CORS is pinned to `http://localhost:5173` while the new refresh-token cookie requires `Secure` (HTTPS-only) — a scheme mismatch risk for local dev depending on HTTPS cert trust setup [backend/BarbershopApi/Program.cs:27-34, Controllers/AuthController.cs:40-46] — deferred, pre-existing (CORS/`UseHttpsRedirection` setup predates this story; `Secure` cookie is spec-mandated by AC #1)
+- [x] [Review][Defer] Frontend tests stub `fetch` with plain object literals rather than real `Response` instances, so nothing asserts `credentials: 'include'`/headers are actually sent (the code itself is correct — verified `AuthApi.js` sets `credentials: 'include'` on every auth fetch per AD-13) [frontend/src/pages/Login.test.jsx, frontend/src/components/NavBar.test.jsx] — deferred, pre-existing test pattern
+- [x] [Review][Defer] Rate-limit tests likely never exercise the IP half of the partition key, since `TestServer`'s `RemoteIpAddress` is commonly unpopulated under `WebApplicationFactory` [backend/BarbershopApi.Tests/AuthControllerTests.cs:300] — deferred, pre-existing `WebApplicationFactory`/`TestServer` limitation
+- [x] [Review][Defer] `AuthApi.js`'s `loginAccount` would crash on `result.session.role` if a 200 response ever returned a malformed/empty body [frontend/src/api/AuthApi.js:42] — deferred, pre-existing pattern, unreachable under the server's current contract (always returns a valid `LoginResponse` on 200)
+
+### Review Findings — Round 2 (verifying the round-1 patches)
+
+- [x] [Review][Patch] Rate-limiter partition-key resolver still crashes on `{"email": 42}` / `{"email": []}` — the round-1 fix only guarded the "body isn't an object" case; `emailProp.GetString()` is still called unconditionally and throws `InvalidOperationException` (uncaught) when the `email` property exists but isn't a JSON string [backend/BarbershopApi/Program.cs:91-95]
+- [x] [Review][Patch] `AdminBootstrapService`'s new `catch (DbUpdateException)` is broader than the codebase's own established pattern for this exact failure class — `AuthService.Register` narrows to `catch (DbUpdateException ex) when (ex.InnerException is SqliteException { SqliteErrorCode: SqliteConstraintViolation })` so only a genuine unique-email violation is treated as "duplicate"; the new catch swallows any `DbUpdateException` (disk I/O, locked file, unrelated constraint) and mislabels it as an email collision in the log [backend/BarbershopApi/Services/AdminBootstrapService.cs:41-49]
+- [x] [Review][Patch] No test added for the actual collision scenario (existing non-admin account whose email matches `AdminSeed:Email`) — the riskiest fix in the round-1 patch set ships with zero verification that it actually works [backend/BarbershopApi.Tests/AdminBootstrapServiceTests.cs]
+- [x] [Review][Patch] Login success banner briefly flashes back on every resubmission — `setFormError('')` and `setIsSubmitting(true)` are batched into one render before the request resolves, so `successMessage && !formError` is briefly true again with the banner visible mid-retry, undermining the fix's own goal [frontend/src/pages/Login.jsx:33-34,76]
+- [x] [Review][Patch] `Jwt:Key` fail-fast message says "must be at least 32 characters" but the check measures UTF-8 byte count, which diverges for any multi-byte key — misleads whoever's debugging a rejected key [backend/BarbershopApi/Program.cs:117-120]
+
+- [x] [Review][Defer] Login success banner is captured once via a `useState` initializer on mount — if `Login` is ever reached a second time via client-side navigation with a new `location.state.message` while already mounted (not currently a real path in this app's routing), the new message would never render [frontend/src/pages/Login.jsx:21] — deferred, no current navigation path triggers this
+
+- [x] [Review][Dismiss] "`Login_sixth_attempt_within_window` keeps looping past a failing early assertion" — incorrect: `Assert.Equal` throws on failure, which unwinds the test method immediately; the loop cannot continue past a failed assertion
+- [x] [Review][Dismiss] "Broad `DbUpdateException` catch has an undocumented, unverified side effect of also handling concurrent multi-instance startup races" — the story's own Dev Notes explicitly rule concurrent multi-instance startup out of scope (NFR7, local-only single SQLite instance)
 
 ## Dev Notes
 

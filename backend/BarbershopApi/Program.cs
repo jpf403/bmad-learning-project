@@ -88,7 +88,9 @@ builder.Services.AddRateLimiter(options =>
         try
         {
             using var doc = JsonDocument.Parse(body);
-            if (doc.RootElement.TryGetProperty("email", out var emailProp))
+            if (doc.RootElement.ValueKind == JsonValueKind.Object &&
+                doc.RootElement.TryGetProperty("email", out var emailProp) &&
+                emailProp.ValueKind == JsonValueKind.String)
             {
                 email = emailProp.GetString()?.Trim().ToLowerInvariant() ?? "unknown";
             }
@@ -108,9 +110,14 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
-if (string.IsNullOrWhiteSpace(app.Configuration["Jwt:Key"]))
+var jwtKey = app.Configuration["Jwt:Key"];
+if (string.IsNullOrWhiteSpace(jwtKey))
 {
     throw new InvalidOperationException("Jwt:Key is not configured. Set the Jwt__Key environment variable.");
+}
+if (jwtKey.Length < 32)
+{
+    throw new InvalidOperationException("Jwt:Key must be at least 32 characters.");
 }
 
 using (var scope = app.Services.CreateScope())
