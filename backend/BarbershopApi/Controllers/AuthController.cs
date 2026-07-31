@@ -1,6 +1,10 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using BarbershopApi.Dtos;
 using BarbershopApi.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace BarbershopApi.Controllers;
 
@@ -24,5 +28,41 @@ public class AuthController(IAuthService authService) : ControllerBase
         {
             return Problem(statusCode: StatusCodes.Status500InternalServerError, title: "Something went wrong. Please try again.");
         }
+    }
+
+    [HttpPost("login")]
+    [EnableRateLimiting("LoginPolicy")]
+    public async Task<IActionResult> Login(LoginRequest request)
+    {
+        try
+        {
+            var (account, accessToken, refreshToken) = await authService.Login(request);
+            Response.Cookies.Append("refreshToken", refreshToken, new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.Strict,
+                Expires = DateTimeOffset.UtcNow.AddDays(15),
+            });
+            return Ok(new LoginResponse(accessToken, account.Id, account.Email, account.FirstName, account.LastName, account.Role));
+        }
+        catch (InvalidCredentialsException)
+        {
+            return Problem(statusCode: StatusCodes.Status401Unauthorized, title: "Invalid email or password.");
+        }
+        catch (Exception)
+        {
+            return Problem(statusCode: StatusCodes.Status500InternalServerError, title: "Something went wrong. Please try again.");
+        }
+    }
+
+    [HttpPost("logout")]
+    [Authorize]
+    public async Task<IActionResult> Logout()
+    {
+        var accountId = int.Parse(User.FindFirstValue(JwtRegisteredClaimNames.Sub)!);
+        await authService.Logout(accountId);
+        Response.Cookies.Delete("refreshToken");
+        return NoContent();
     }
 }

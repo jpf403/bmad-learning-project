@@ -34,4 +34,9 @@ public class AccountRepository(BarbershopDbContext context) : IAccountRepository
         await context.SaveChangesAsync();
         await context.Entry(account).ReloadAsync();
     }
+
+    public async Task<bool> AdminExists()
+    {
+        return await context.Accounts.AnyAsync(a => a.Role == Role.Admin && a.DeletedAt == null);
+    }
 }

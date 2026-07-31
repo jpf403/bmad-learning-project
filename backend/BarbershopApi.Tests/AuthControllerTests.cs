@@ -1,6 +1,8 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using BarbershopApi.Dtos;
 using BarbershopApi.Entities;
 using BarbershopApi.Repositories;
@@ -11,6 +13,11 @@ namespace BarbershopApi.Tests;
 public class AuthControllerTests : IDisposable
 {
     private readonly SqliteApiFactory _factory = new();
+
+    private static readonly JsonSerializerOptions LoginResponseJsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter() },
+    };
 
     public void Dispose() => _factory.Dispose();
 
@@ -24,6 +31,14 @@ public class AuthControllerTests : IDisposable
         Password = password,
         FirstName = firstName,
         LastName = lastName,
+    };
+
+    private static LoginRequest NewLoginRequest(
+        string email = "john@example.com",
+        string password = "correct-horse-battery-staple") => new()
+    {
+        Email = email,
+        Password = password,
     };
 
     [Fact]
@@ -234,5 +249,130 @@ public class AuthControllerTests : IDisposable
         Assert.NotNull(account);
         Assert.Equal("John", account.FirstName);
         Assert.Equal("Smith", account.LastName);
+    }
+
+    [Fact]
+    public async Task Login_with_valid_credentials_returns_200_with_access_token_and_sets_refresh_cookie()
+    {
+        using var client = _factory.CreateClient();
+        await client.PostAsJsonAsync("/api/auth/register", NewRequest(), TestContext.Current.CancellationToken);
+
+        var response = await client.PostAsJsonAsync("/api/auth/login", NewLoginRequest(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<LoginResponse>(LoginResponseJsonOptions, TestContext.Current.CancellationToken);
+        Assert.NotNull(body);
+        Assert.False(string.IsNullOrWhiteSpace(body.AccessToken));
+        Assert.Equal("john@example.com", body.Email);
+
+        Assert.True(response.Headers.TryGetValues("Set-Cookie", out var cookies));
+        Assert.Contains(cookies!, c => c.StartsWith("refreshToken=") && c.Contains("httponly", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task Login_with_unregistered_email_returns_401_generic_message()
+    {
+        using var client = _factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/auth/login", NewLoginRequest(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Contains("Invalid email or password.", body);
+    }
+
+    [Fact]
+    public async Task Login_with_wrong_password_returns_401_generic_message()
+    {
+        using var client = _factory.CreateClient();
+        await client.PostAsJsonAsync("/api/auth/register", NewRequest(), TestContext.Current.CancellationToken);
+
+        var response = await client.PostAsJsonAsync(
+            "/api/auth/login", NewLoginRequest(password: "wrong-password"), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Contains("Invalid email or password.", body);
+    }
+
+    [Fact]
+    public async Task Login_unregistered_email_and_wrong_password_produce_identical_response_bodies()
+    {
+        using var client = _factory.CreateClient();
+        await client.PostAsJsonAsync("/api/auth/register", NewRequest(), TestContext.Current.CancellationToken);
+
+        var unregisteredResponse = await client.PostAsJsonAsync(
+            "/api/auth/login", NewLoginRequest(email: "unregistered@example.com"), TestContext.Current.CancellationToken);
+        var wrongPasswordResponse = await client.PostAsJsonAsync(
+            "/api/auth/login", NewLoginRequest(password: "wrong-password"), TestContext.Current.CancellationToken);
+
+        using var unregisteredBody = JsonDocument.Parse(
+            await unregisteredResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        using var wrongPasswordBody = JsonDocument.Parse(
+            await wrongPasswordResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+
+        // Compare status/title only — ProblemDetails also carries a per-request traceId,
+        // which legitimately differs between the two calls.
+        Assert.Equal(
+            wrongPasswordBody.RootElement.GetProperty("status").GetInt32(),
+            unregisteredBody.RootElement.GetProperty("status").GetInt32());
+        Assert.Equal(
+            wrongPasswordBody.RootElement.GetProperty("title").GetString(),
+            unregisteredBody.RootElement.GetProperty("title").GetString());
+    }
+
+    [Fact]
+    public async Task Login_sixth_attempt_within_window_returns_429_with_rate_limit_message()
+    {
+        using var client = _factory.CreateClient();
+        await client.PostAsJsonAsync("/api/auth/register", NewRequest(), TestContext.Current.CancellationToken);
+
+        HttpResponseMessage response = null!;
+        for (var attempt = 0; attempt < 6; attempt++)
+        {
+            response = await client.PostAsJsonAsync(
+                "/api/auth/login", NewLoginRequest(password: "wrong-password"), TestContext.Current.CancellationToken);
+
+            if (attempt < 5)
+            {
+                Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+            }
+        }
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Contains("Too many attempts. Try again in a few minutes.", body);
+    }
+
+    [Fact]
+    public async Task Logout_with_valid_access_token_returns_204_and_increments_session_version()
+    {
+        using var client = _factory.CreateClient();
+        await client.PostAsJsonAsync("/api/auth/register", NewRequest(), TestContext.Current.CancellationToken);
+        var loginResponse = await client.PostAsJsonAsync("/api/auth/login", NewLoginRequest(), TestContext.Current.CancellationToken);
+        var session = await loginResponse.Content.ReadFromJsonAsync<LoginResponse>(LoginResponseJsonOptions, TestContext.Current.CancellationToken);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/logout");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session!.AccessToken);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        var account = await repository.FindByEmail("john@example.com");
+        Assert.NotNull(account);
+        Assert.Equal(1, account.SessionVersion);
+    }
+
+    [Fact]
+    public async Task Logout_without_access_token_returns_401()
+    {
+        using var client = _factory.CreateClient();
+
+        var response = await client.PostAsync("/api/auth/logout", null, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 }
