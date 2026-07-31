@@ -236,7 +236,10 @@ describe('RequireRole', () => {
     expect(screen.queryByText('Login Stub')).not.toBeInTheDocument()
     expect(screen.queryByText('Protected Content')).not.toBeInTheDocument()
 
-    resolveRefresh({ ok: true, json: async () => ({ accessToken: 'token-abc' }) })
+    resolveRefresh({
+      ok: true,
+      json: async () => ({ accessToken: 'token-abc' }),
+    })
 
     expect(await screen.findByText('Protected Content')).toBeInTheDocument()
   })
