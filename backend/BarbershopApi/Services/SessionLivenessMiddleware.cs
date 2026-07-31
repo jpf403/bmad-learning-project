@@ -40,6 +40,15 @@ public class SessionLivenessMiddleware(RequestDelegate next)
     private static async Task Reject(HttpContext context)
     {
         context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-        await context.Response.WriteAsJsonAsync(new { title = "Session expired. Please sign in again." });
+        var problemDetailsService = context.RequestServices.GetRequiredService<IProblemDetailsService>();
+        await problemDetailsService.WriteAsync(new ProblemDetailsContext
+        {
+            HttpContext = context,
+            ProblemDetails =
+            {
+                Status = StatusCodes.Status401Unauthorized,
+                Title = "Session expired. Please sign in again.",
+            },
+        });
     }
 }

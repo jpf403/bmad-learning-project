@@ -61,13 +61,15 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
             ValidateIssuer = true,
             ValidIssuer = "BarbershopApi",
             ValidateAudience = true,
-            ValidAudience = "BarbershopApi",
+            ValidAudience = TokenAudiences.Access,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.Value.Key)),
         };
     });
 builder.Services.AddAuthorization();
+
+builder.Services.AddProblemDetails();
 
 builder.Services.AddRateLimiter(options =>
 {
@@ -101,6 +103,17 @@ builder.Services.AddRateLimiter(options =>
         return RateLimitPartition.GetSlidingWindowLimiter($"{ip}:{email}", _ => new SlidingWindowRateLimiterOptions
         {
             PermitLimit = 5,
+            Window = TimeSpan.FromMinutes(15),
+            SegmentsPerWindow = 3,
+            QueueLimit = 0,
+        });
+    });
+    options.AddPolicy("RefreshPolicy", httpContext =>
+    {
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetSlidingWindowLimiter(ip, _ => new SlidingWindowRateLimiterOptions
+        {
+            PermitLimit = 60,
             Window = TimeSpan.FromMinutes(15),
             SegmentsPerWindow = 3,
             QueueLimit = 0,

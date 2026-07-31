@@ -72,7 +72,10 @@ export async function getCurrentUser(accessToken) {
   if (!response.ok) {
     return { ok: false, status: response.status }
   }
-  const identity = await response.json()
+  const identity = await response.json().catch(() => null)
+  if (identity === null) {
+    return { ok: false, status: response.status }
+  }
   return { ok: true, identity }
 }
 
@@ -90,6 +93,9 @@ export async function refreshSession() {
   if (!response.ok) {
     return { ok: false }
   }
-  const body = await response.json()
+  const body = await response.json().catch(() => null)
+  if (body === null) {
+    return { ok: false }
+  }
   return { ok: true, accessToken: body.accessToken }
 }

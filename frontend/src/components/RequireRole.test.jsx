@@ -58,6 +58,7 @@ function renderGuarded({ signedIn = false, roles = ['Barber', 'Admin'] } = {}) {
             path="/schedule-appointment"
             element={<div>Schedule Appointment Stub</div>}
           />
+          <Route path="/" element={<div>Home Stub</div>} />
         </Routes>
       </MemoryRouter>
     </AuthProvider>,
@@ -123,6 +124,119 @@ describe('RequireRole', () => {
     })
 
     renderGuarded({ signedIn: true, roles: ['Barber', 'Admin'] })
+
+    expect(await screen.findByText('Protected Content')).toBeInTheDocument()
+  })
+
+  it('retries once after a transient network failure and renders children on success', async () => {
+    let meCallCount = 0
+    vi.spyOn(globalThis, 'fetch').mockImplementation((url) => {
+      if (url.toString().endsWith('/api/auth/me')) {
+        meCallCount += 1
+        if (meCallCount === 1) {
+          return Promise.reject(new Error('network error'))
+        }
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            id: 1,
+            email: 'john@example.com',
+            firstName: 'John',
+            lastName: 'Smith',
+            role: 'Barber',
+          }),
+        })
+      }
+      return Promise.resolve({ ok: false, status: 401 })
+    })
+
+    renderGuarded({ signedIn: true, roles: ['Barber', 'Admin'] })
+
+    expect(await screen.findByText('Protected Content')).toBeInTheDocument()
+    expect(meCallCount).toBe(2)
+  })
+
+  it('redirects to /login when /me fails on both the initial attempt and the retry', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((url) => {
+      if (url.toString().endsWith('/api/auth/me')) {
+        return Promise.reject(new Error('network error'))
+      }
+      return Promise.resolve({ ok: false, status: 401 })
+    })
+
+    renderGuarded({ signedIn: true, roles: ['Barber', 'Admin'] })
+
+    expect(await screen.findByText('Login Stub')).toBeInTheDocument()
+  })
+
+  it("falls back to '/' when the wrong-role redirect target is an unrecognized role", async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((url) => {
+      if (url.toString().endsWith('/api/auth/me')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            id: 1,
+            email: 'john@example.com',
+            firstName: 'John',
+            lastName: 'Smith',
+            role: 'Unknown',
+          }),
+        })
+      }
+      return Promise.resolve({ ok: false, status: 401 })
+    })
+
+    renderGuarded({ signedIn: true, roles: ['Barber', 'Admin'] })
+
+    expect(await screen.findByText('Home Stub')).toBeInTheDocument()
+  })
+
+  it('does not redirect to /login while the session bootstrap is still in flight on a fresh load', async () => {
+    let resolveRefresh
+    const refreshPromise = new Promise((resolve) => {
+      resolveRefresh = resolve
+    })
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation((url) => {
+      const u = url.toString()
+      if (u.endsWith('/api/auth/refresh')) return refreshPromise
+      if (u.endsWith('/api/auth/me')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            id: 1,
+            email: 'john@example.com',
+            firstName: 'John',
+            lastName: 'Smith',
+            role: 'Barber',
+          }),
+        })
+      }
+      return Promise.resolve({ ok: false, status: 401 })
+    })
+
+    render(
+      <AuthProvider>
+        <MemoryRouter initialEntries={['/my-schedule']}>
+          <Routes>
+            <Route
+              path="/my-schedule"
+              element={
+                <RequireRole roles={['Barber', 'Admin']}>
+                  <div>Protected Content</div>
+                </RequireRole>
+              }
+            />
+            <Route path="/login" element={<div>Login Stub</div>} />
+          </Routes>
+        </MemoryRouter>
+      </AuthProvider>,
+    )
+
+    expect(screen.queryByText('Login Stub')).not.toBeInTheDocument()
+    expect(screen.queryByText('Protected Content')).not.toBeInTheDocument()
+
+    resolveRefresh({ ok: true, json: async () => ({ accessToken: 'token-abc' }) })
 
     expect(await screen.findByText('Protected Content')).toBeInTheDocument()
   })

@@ -113,7 +113,7 @@ public class AuthService(
         ValidateIssuer = true,
         ValidIssuer = "BarbershopApi",
         ValidateAudience = true,
-        ValidAudience = "BarbershopApi",
+        ValidAudience = TokenAudiences.Refresh,
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true,
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.Value.Key)),
@@ -128,7 +128,7 @@ public class AuthService(
         };
         var token = new JwtSecurityToken(
             issuer: "BarbershopApi",
-            audience: "BarbershopApi",
+            audience: TokenAudiences.Access,
             claims: claims,
             expires: DateTime.UtcNow.AddMinutes(60),
             signingCredentials: SigningCredentials());
@@ -144,7 +144,7 @@ public class AuthService(
         };
         var token = new JwtSecurityToken(
             issuer: "BarbershopApi",
-            audience: "BarbershopApi",
+            audience: TokenAudiences.Refresh,
             claims: claims,
             expires: DateTime.UtcNow.AddDays(15),
             signingCredentials: SigningCredentials());

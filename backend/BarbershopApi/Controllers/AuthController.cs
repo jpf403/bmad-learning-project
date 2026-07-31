@@ -76,6 +76,7 @@ public class AuthController(IAuthService authService) : ControllerBase
     }
 
     [HttpPost("refresh")]
+    [EnableRateLimiting("RefreshPolicy")]
     public async Task<IActionResult> Refresh()
     {
         var refreshToken = Request.Cookies["refreshToken"];
@@ -92,6 +93,10 @@ public class AuthController(IAuthService authService) : ControllerBase
         catch (InvalidSessionException)
         {
             return Problem(statusCode: StatusCodes.Status401Unauthorized, title: "Session expired. Please sign in again.");
+        }
+        catch (Exception)
+        {
+            return Problem(statusCode: StatusCodes.Status500InternalServerError, title: "Something went wrong. Please try again.");
         }
     }
 }

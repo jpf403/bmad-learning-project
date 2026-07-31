@@ -1,5 +1,11 @@
 # Deferred Work
 
+## Deferred from: code review of story-1-6-server-side-role-gating-and-protected-routing (2026-07-31)
+
+- `SessionLivenessMiddleware` 401s any authenticated request regardless of whether the target endpoint requires authorization at all — no current endpoint is reachable this way since no anonymous-but-optionally-authenticated endpoint exists yet in this app's own flows. Worth a `context.GetEndpoint()` metadata check when that need actually arises. [backend/BarbershopApi/Services/SessionLivenessMiddleware.cs:11]
+- No test covers the "missing/unparseable `sessionVersion` claim" 401 branch of `SessionLivenessMiddleware`, a path the story's own Task 2 notes call out as a hard requirement to guard — the guarded code (`TryParse` checks) reads as correct, just untested. [backend/BarbershopApi.Tests/RoleGatingTests.cs, MeEndpointTests.cs, RefreshEndpointTests.cs]
+- `RequireRole.jsx` has no default/guard for a missing `roles` prop (`roles.includes(...)` would throw) — not reachable today since no route in `App.jsx` uses the component yet. [frontend/src/components/RequireRole.jsx:12,25]
+
 ## Deferred from: code review of story-1-5-sign-in-sign-out-and-first-admin-bootstrap, round 2 (2026-07-30)
 
 - Login success banner is captured once via a `useState` initializer on mount — if `Login` is ever reached a second time via client-side navigation with a new `location.state.message` while already mounted, the new message would never render. Not currently a real path in this app's routing. [frontend/src/pages/Login.jsx:21]

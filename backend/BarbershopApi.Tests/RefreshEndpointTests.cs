@@ -67,6 +67,47 @@ public class RefreshEndpointTests : IDisposable
     }
 
     [Fact]
+    public async Task Refresh_with_access_token_as_cookie_returns_401()
+    {
+        using var loginClient = _factory.CreateClient();
+        await loginClient.PostAsJsonAsync("/api/auth/register", NewRequest(), TestContext.Current.CancellationToken);
+        var loginResponse = await loginClient.PostAsJsonAsync(
+            "/api/auth/login",
+            new LoginRequest { Email = "john@example.com", Password = "correct-horse-battery-staple" },
+            TestContext.Current.CancellationToken);
+        var session = await loginResponse.Content.ReadFromJsonAsync<LoginResponse>(ResponseJsonOptions, TestContext.Current.CancellationToken);
+
+        using var attackClient = _factory.CreateClient();
+        using var refreshRequest = new HttpRequestMessage(HttpMethod.Post, "/api/auth/refresh");
+        refreshRequest.Headers.Add("Cookie", $"refreshToken={session!.AccessToken}");
+
+        var response = await attackClient.SendAsync(refreshRequest, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Refresh_61st_attempt_within_window_returns_429()
+    {
+        using var client = _factory.CreateClient();
+
+        HttpResponseMessage response = null!;
+        for (var attempt = 0; attempt < 61; attempt++)
+        {
+            response = await client.PostAsync("/api/auth/refresh", null, TestContext.Current.CancellationToken);
+
+            if (attempt < 60)
+            {
+                Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+            }
+        }
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Contains("Too many attempts. Try again in a few minutes.", body);
+    }
+
+    [Fact]
     public async Task Refresh_after_logout_returns_401()
     {
         using var client = _factory.CreateClient();

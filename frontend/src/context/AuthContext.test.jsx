@@ -63,6 +63,35 @@ describe('AuthContext', () => {
     expect(await screen.findByText('Ready: signed-out')).toBeInTheDocument()
   })
 
+  it('stays signed out with no unhandled rejection when /me returns a malformed body', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((url) => {
+      if (url.toString().endsWith('/api/auth/refresh')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ accessToken: 'new-access-token' }),
+        })
+      }
+      if (url.toString().endsWith('/api/auth/me')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => {
+            throw new SyntaxError('Unexpected end of JSON input')
+          },
+        })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    )
+
+    expect(await screen.findByText('Ready: signed-out')).toBeInTheDocument()
+  })
+
   it('throws when useAuth is used outside an AuthProvider', () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
 
