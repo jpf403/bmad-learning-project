@@ -27,7 +27,7 @@ builder.Services.AddOpenApi();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(VitePolicy, policy =>
-        policy.WithOrigins("http://localhost:5173")
+        policy.WithOrigins("http://localhost:5173", "https://localhost:5173")
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials());
@@ -137,8 +137,9 @@ if (app.Environment.IsDevelopment())
 
 app.UseRateLimiter();
 
-app.UseAuthentication();
-app.UseAuthorization();
+app.UseAuthentication();                            // Who are you
+app.UseMiddleware<SessionLivenessMiddleware>();     // Has the session been killed (logout, password changed by admin)
+app.UseAuthorization();                             // Do you have access to page
 
 app.MapControllers();
 

@@ -10,7 +10,15 @@ const ROUTED_LINKS = [
   { label: 'About', to: '/about' },
 ]
 
-const INERT_LINKS = ['Schedule Appointment', 'My Schedule', 'Admin Panel']
+const ROLE_LINKS = [
+  {
+    label: 'Schedule Appointment',
+    to: '/schedule-appointment',
+    roles: ['Customer', 'Barber', 'Admin'],
+  },
+  { label: 'My Schedule', to: '/my-schedule', roles: ['Barber', 'Admin'] },
+  { label: 'Admin Panel', to: '/admin', roles: ['Admin'] },
+]
 
 function normalizePath(path) {
   return path.toLowerCase().replace(/\/$/, '') || '/'
@@ -46,9 +54,20 @@ export default function NavBar() {
             </Link>
           </li>
         ))}
-        {INERT_LINKS.map((label) => (
+        {ROLE_LINKS.filter(
+          (link) => user && link.roles.includes(user.role),
+        ).map(({ label, to }) => (
           <li key={label}>
-            <span className="nav-bar__link nav-bar__link--inert">{label}</span>
+            <Link
+              className={
+                currentPath === normalizePath(to)
+                  ? 'nav-bar__link nav-bar__link--active'
+                  : 'nav-bar__link'
+              }
+              to={to}
+            >
+              {label}
+            </Link>
           </li>
         ))}
       </ul>

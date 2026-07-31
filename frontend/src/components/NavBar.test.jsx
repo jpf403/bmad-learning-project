@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { useEffect } from 'react'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -26,7 +26,13 @@ function SignInOnMount({ user, children }) {
   return children
 }
 
-function renderNavBar({ signedIn = false, initialEntries = ['/'] } = {}) {
+function renderNavBar({
+  signedIn = false,
+  role = 'Customer',
+  initialEntries = ['/'],
+} = {}) {
+  const user = { ...SIGNED_IN_USER, role }
+
   return render(
     <AuthProvider>
       <MemoryRouter initialEntries={initialEntries}>
@@ -35,7 +41,7 @@ function renderNavBar({ signedIn = false, initialEntries = ['/'] } = {}) {
             path="/"
             element={
               signedIn ? (
-                <SignInOnMount user={SIGNED_IN_USER}>
+                <SignInOnMount user={user}>
                   <NavBar />
                 </SignInOnMount>
               ) : (
@@ -46,6 +52,12 @@ function renderNavBar({ signedIn = false, initialEntries = ['/'] } = {}) {
           <Route path="/about" element={<div>About Stub</div>} />
           <Route path="/login" element={<div>Login Stub</div>} />
           <Route path="/register" element={<div>Register Stub</div>} />
+          <Route
+            path="/schedule-appointment"
+            element={<div>Schedule Appointment Stub</div>}
+          />
+          <Route path="/my-schedule" element={<div>My Schedule Stub</div>} />
+          <Route path="/admin" element={<div>Admin Panel Stub</div>} />
         </Routes>
       </MemoryRouter>
     </AuthProvider>,
@@ -53,20 +65,22 @@ function renderNavBar({ signedIn = false, initialEntries = ['/'] } = {}) {
 }
 
 describe('NavBar', () => {
+  beforeEach(() => {
+    // AuthProvider bootstraps a session on mount via /api/auth/refresh; stub it
+    // so every test gets a deterministic, no-network "no session" result unless
+    // the test overrides this stub itself.
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: false, status: 401 })
+  })
+
   afterEach(() => {
     vi.restoreAllMocks()
   })
 
-  it('renders Home and About as real links, and the rest as inert text', () => {
+  it('renders Home and About as real links', () => {
     renderNavBar()
 
     ;['Home', 'About'].forEach((label) => {
       expect(screen.getByRole('link', { name: label })).toBeInTheDocument()
-    })
-
-    ;['Schedule Appointment', 'My Schedule', 'Admin Panel'].forEach((label) => {
-      expect(screen.queryByRole('link', { name: label })).toBeNull()
-      expect(screen.getByText(label)).toBeInTheDocument()
     })
   })
 
@@ -104,6 +118,55 @@ describe('NavBar', () => {
     expect(screen.getByRole('link', { name: 'About' })).toHaveClass(
       'nav-bar__link--active',
     )
+  })
+
+  describe('role-gated links', () => {
+    it('renders none of the role-gated links when signed out', () => {
+      renderNavBar()
+
+      ;['Schedule Appointment', 'My Schedule', 'Admin Panel'].forEach(
+        (label) => {
+          expect(screen.queryByText(label)).toBeNull()
+          expect(screen.queryByRole('link', { name: label })).toBeNull()
+        },
+      )
+    })
+
+    it('renders only Schedule Appointment for a signed-in Customer', async () => {
+      renderNavBar({ signedIn: true, role: 'Customer' })
+
+      expect(
+        await screen.findByRole('link', { name: 'Schedule Appointment' }),
+      ).toBeInTheDocument()
+      expect(screen.queryByText('My Schedule')).toBeNull()
+      expect(screen.queryByText('Admin Panel')).toBeNull()
+    })
+
+    it('renders Schedule Appointment and My Schedule, but not Admin Panel, for a signed-in Barber', async () => {
+      renderNavBar({ signedIn: true, role: 'Barber' })
+
+      expect(
+        await screen.findByRole('link', { name: 'Schedule Appointment' }),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByRole('link', { name: 'My Schedule' }),
+      ).toBeInTheDocument()
+      expect(screen.queryByText('Admin Panel')).toBeNull()
+    })
+
+    it('renders all three role-gated links for a signed-in Admin', async () => {
+      renderNavBar({ signedIn: true, role: 'Admin' })
+
+      expect(
+        await screen.findByRole('link', { name: 'Schedule Appointment' }),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByRole('link', { name: 'My Schedule' }),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByRole('link', { name: 'Admin Panel' }),
+      ).toBeInTheDocument()
+    })
   })
 
   describe('when signed out', () => {
@@ -149,7 +212,12 @@ describe('NavBar', () => {
     })
 
     it('clears the session and navigates to / on Logout', async () => {
-      vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true })
+      vi.spyOn(globalThis, 'fetch').mockImplementation((url) => {
+        if (url.toString().endsWith('/api/auth/logout')) {
+          return Promise.resolve({ ok: true })
+        }
+        return Promise.resolve({ ok: false, status: 401 })
+      })
       const user = userEvent.setup()
       renderNavBar({ signedIn: true })
 

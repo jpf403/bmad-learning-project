@@ -1,4 +1,5 @@
 using BarbershopApi.Data;
+using BarbershopApi.Tests.TestOnly;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
@@ -27,7 +28,16 @@ public class SqliteApiFactory : WebApplicationFactory<Program>
         {
             services.RemoveAll<DbContextOptions<BarbershopDbContext>>();
             services.AddDbContext<BarbershopDbContext>(options => options.UseSqlite(ConnectionString));
+            services.AddControllers().AddApplicationPart(typeof(RoleGateTestController).Assembly);
         });
+    }
+
+    public new HttpClient CreateClient()
+    {
+        // The login endpoint sets the refresh cookie with Secure=true; HttpClient's
+        // CookieContainer withholds Secure cookies from non-https requests, so the
+        // default http://localhost base address would silently drop it on refresh.
+        return CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
     }
 
     public BarbershopDbContext CreateDbContext()
