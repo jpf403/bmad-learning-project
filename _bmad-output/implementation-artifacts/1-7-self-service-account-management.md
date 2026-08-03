@@ -4,7 +4,7 @@ baseline_commit: 9f5d702d207c21ff6f6bd8b37f07ac94554ae477
 
 # Story 1.7: Self-Service Account Management
 
-Status: in-progress
+Status: review
 
 ## Story
 
@@ -334,7 +334,7 @@ so that I can keep my profile current without needing an admin.
 - [x] **Task 7: Verify CI green**
   - [x] Branch as `story/1.7-self-service-account-management` from `main`.
   - [x] Run `dotnet test`, `npm run lint`, `npm run format:check`, `npm test` locally; confirm all green before push.
-  - [ ] Push and confirm both CI jobs pass.
+  - [x] Push and confirm both CI jobs pass.
 
 ## Dev Notes
 
@@ -419,7 +419,7 @@ Claude Sonnet 5 (BMad Amelia dev agent)
 - Re-ran `npx vitest run`, `npm run lint`, `npm run format:check` after these two fixes — 85/85 tests, lint clean, format clean.
 - **Post-implementation app-shell layout fix (Jack, live review, out of story scope):** the footer floated up under the content on short pages instead of sitting at the bottom of the viewport, app-wide (not specific to Account). Wrapped `NavBar`/`main`/`Footer` in a new `.app-shell` flex column (`min-height: 100vh`) in `App.jsx`, with `main` taking `flex: 1` to push the footer down — new `App.css`. Confirmed `App.test.jsx` (structural assertions only, no DOM-shape coupling) still passes.
 - Re-ran `npx vitest run`, `npm run lint`, `npm run format:check` after the app-shell fix — 85/85 tests, lint clean, format clean.
-- Not yet done: push to remote and confirm both GitHub Actions CI jobs pass (pending explicit go-ahead per project convention to review the diff before commit/push).
+- Committed (`5b6ddf8`) and pushed to `story/1.7-self-service-account-management`. GitHub Actions run #34 completed `success` on both jobs: **Frontend (Vite/React)** (lint, format check, test) and **Backend (.NET)** (restore, build, test).
 
 ### File List
 

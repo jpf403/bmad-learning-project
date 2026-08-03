@@ -55,7 +55,7 @@ development_status:
   1-4-customer-self-registration: done
   1-5-sign-in-sign-out-and-first-admin-bootstrap: done
   1-6-server-side-role-gating-and-protected-routing: done
-  1-7-self-service-account-management: in-progress
+  1-7-self-service-account-management: review
   epic-1-retrospective: optional
 
   epic-2: backlog
