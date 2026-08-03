@@ -40,6 +40,7 @@ builder.Services.AddDbContext<BarbershopDbContext>(options => options.UseSqlite(
 builder.Services.AddScoped<IAccountRepository, AccountRepository>();
 builder.Services.AddScoped<IPasswordHasher<Account>, PasswordHasher<Account>>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddHostedService<AdminBootstrapService>();
 
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
