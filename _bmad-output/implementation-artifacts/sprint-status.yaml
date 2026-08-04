@@ -42,6 +42,7 @@
 
 generated: 2026-07-27
 last_updated: 2026-08-04
+
 project: bmad-learning-project
 project_key: NOKEY
 tracking_system: file-system
@@ -59,7 +60,7 @@ development_status:
   epic-1-retrospective: done
 
   epic-2: in-progress
-  2-1-appointment-entity-and-repository: ready-for-dev
+  2-1-appointment-entity-and-repository: in-progress
   2-2-customer-books-an-appointment: backlog
   2-3-double-booking-and-self-conflict-guards: backlog
   2-4-my-appointments-view-cancel-and-race-safety: backlog
