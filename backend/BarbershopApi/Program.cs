@@ -40,6 +40,7 @@ builder.Services.AddDbContext<BarbershopDbContext>(options => options.UseSqlite(
 builder.Services.AddScoped<IAccountRepository, AccountRepository>();
 builder.Services.AddScoped<IPasswordHasher<Account>, PasswordHasher<Account>>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddHostedService<AdminBootstrapService>();
 
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
@@ -119,6 +120,53 @@ builder.Services.AddRateLimiter(options =>
             QueueLimit = 0,
         });
     });
+    options.AddPolicy("PasswordChangePolicy", httpContext =>
+    {
+        httpContext.Request.EnableBuffering();
+        using var reader = new StreamReader(httpContext.Request.Body, leaveOpen: true);
+        var body = reader.ReadToEndAsync().GetAwaiter().GetResult();
+        httpContext.Request.Body.Position = 0;
+
+        var isPasswordChangeAttempt = false;
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.ValueKind == JsonValueKind.Object)
+            {
+                // Case-insensitive lookup — model binding is case-insensitive by default,
+                // so a differently-cased "NewPassword" key still succeeds as a real
+                // password change and must still count toward the rate limit.
+                var newPasswordProp = doc.RootElement.EnumerateObject()
+                    .FirstOrDefault(p => string.Equals(p.Name, "newPassword", StringComparison.OrdinalIgnoreCase));
+                if (newPasswordProp.Value.ValueKind == JsonValueKind.String &&
+                    !string.IsNullOrEmpty(newPasswordProp.Value.GetString()))
+                {
+                    isPasswordChangeAttempt = true;
+                }
+            }
+        }
+        catch (JsonException) { /* malformed body — not a password-change attempt as far as rate limiting cares; model binding will 400 it anyway */ }
+
+        // Only requests that actually attempt a password change count toward this limit —
+        // plain name-only edits go through GetNoLimiter and are never throttled here.
+        if (!isPasswordChangeAttempt)
+        {
+            return RateLimitPartition.GetNoLimiter("no-password-change-attempt");
+        }
+
+        // Requires UseRateLimiter() to run after SessionLivenessMiddleware so
+        // HttpContext.Items["Account"] is already populated with the authenticated caller.
+        var account = httpContext.Items["Account"] as Account;
+        var accountKey = account?.Id.ToString() ?? "unknown";
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetSlidingWindowLimiter($"{ip}:{accountKey}", _ => new SlidingWindowRateLimiterOptions
+        {
+            PermitLimit = 5,
+            Window = TimeSpan.FromMinutes(15),
+            SegmentsPerWindow = 3,
+            QueueLimit = 0,
+        });
+    });
 });
 
 var app = builder.Build();
@@ -148,10 +196,15 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.UseRateLimiter();
-
 app.UseAuthentication();                            // Who are you
 app.UseMiddleware<SessionLivenessMiddleware>();     // Has the session been killed (logout, password changed by admin)
+
+// Runs after SessionLivenessMiddleware (not before, like Login/Refresh's policies could
+// afford) so PasswordChangePolicy's partition resolver can key off the authenticated
+// caller's account id via HttpContext.Items["Account"] — Login/Refresh remain unaffected
+// since neither carries a bearer token for UseAuthentication()/SessionLivenessMiddleware to act on.
+app.UseRateLimiter();
+
 app.UseAuthorization();                             // Do you have access to page
 
 app.MapControllers();

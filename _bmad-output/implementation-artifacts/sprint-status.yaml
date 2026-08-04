@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-27
-last_updated: 2026-07-31
+last_updated: 2026-08-03
 project: bmad-learning-project
 project_key: NOKEY
 tracking_system: file-system
@@ -55,7 +55,7 @@ development_status:
   1-4-customer-self-registration: done
   1-5-sign-in-sign-out-and-first-admin-bootstrap: done
   1-6-server-side-role-gating-and-protected-routing: done
-  1-7-self-service-account-management: ready-for-dev
+  1-7-self-service-account-management: done
   epic-1-retrospective: optional
 
   epic-2: backlog
