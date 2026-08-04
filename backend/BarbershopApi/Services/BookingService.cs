@@ -63,7 +63,20 @@ public class BookingService(IAppointmentRepository appointmentRepository, IAccou
         return views;
     }
 
-    public Task Cancel(int appointmentId) => appointmentRepository.Cancel(appointmentId);
+    public async Task Cancel(int appointmentId)
+    {
+        var appointment = await appointmentRepository.FindById(appointmentId);
+        if (appointment is null)
+        {
+            throw new AppointmentNotFoundException();
+        }
+        if (appointment.CancelledAt is not null)
+        {
+            throw new AppointmentAlreadyCancelledException();
+        }
+
+        await appointmentRepository.Cancel(appointment);
+    }
 
     private static DateTime GetNowEst() => TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, EasternTimeZone);
 

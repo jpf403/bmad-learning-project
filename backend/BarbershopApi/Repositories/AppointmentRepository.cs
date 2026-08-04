@@ -1,6 +1,5 @@
 using BarbershopApi.Data;
 using BarbershopApi.Entities;
-using BarbershopApi.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace BarbershopApi.Repositories;
@@ -12,6 +11,11 @@ public class AppointmentRepository(BarbershopDbContext context) : IAppointmentRe
         context.Appointments.Add(appointment);
         await context.SaveChangesAsync();
         return appointment;
+    }
+
+    public async Task<Appointment?> FindById(int id)
+    {
+        return await context.Appointments.FirstOrDefaultAsync(a => a.Id == id);
     }
 
     public async Task<List<Appointment>> FindByBarberAndDate(int barberId, string date)
@@ -33,14 +37,8 @@ public class AppointmentRepository(BarbershopDbContext context) : IAppointmentRe
             .ToListAsync();
     }
 
-    public async Task Cancel(int appointmentId)
+    public async Task Cancel(Appointment appointment)
     {
-        var appointment = await context.Appointments.FirstOrDefaultAsync(a => a.Id == appointmentId);
-        if (appointment is null || appointment.CancelledAt is not null)
-        {
-            throw new AppointmentAlreadyCancelledException();
-        }
-
         appointment.CancelledAt = DateTime.UtcNow;
         await context.SaveChangesAsync();
     }

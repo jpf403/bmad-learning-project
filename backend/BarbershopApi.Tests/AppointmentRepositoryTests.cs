@@ -1,7 +1,7 @@
 using BarbershopApi.Data;
 using BarbershopApi.Entities;
 using BarbershopApi.Repositories;
-using BarbershopApi.Services;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
 namespace BarbershopApi.Tests;
@@ -62,7 +62,9 @@ public class AppointmentRepositoryTests : IDisposable
         await using var contextB = _factory.CreateDbContext();
         var repositoryB = new AppointmentRepository(contextB);
 
-        await Assert.ThrowsAsync<DbUpdateException>(() => repositoryB.Create(NewAppointment(customerB.Id, barber.Id)));
+        var exception = await Assert.ThrowsAsync<DbUpdateException>(() => repositoryB.Create(NewAppointment(customerB.Id, barber.Id)));
+        var sqliteException = Assert.IsType<SqliteException>(exception.InnerException);
+        Assert.Equal(19, sqliteException.SqliteErrorCode);
     }
 
     [Fact]
@@ -80,7 +82,22 @@ public class AppointmentRepositoryTests : IDisposable
         await using var contextB = _factory.CreateDbContext();
         var repositoryB = new AppointmentRepository(contextB);
 
-        await Assert.ThrowsAsync<DbUpdateException>(() => repositoryB.Create(NewAppointment(customer.Id, barberB.Id)));
+        var exception = await Assert.ThrowsAsync<DbUpdateException>(() => repositoryB.Create(NewAppointment(customer.Id, barberB.Id)));
+        var sqliteException = Assert.IsType<SqliteException>(exception.InnerException);
+        Assert.Equal(19, sqliteException.SqliteErrorCode);
+    }
+
+    [Fact]
+    public async Task Create_with_nonexistent_CustomerId_throws_DbUpdateException()
+    {
+        await using var context = _factory.CreateDbContext();
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var repository = new AppointmentRepository(context);
+
+        var exception = await Assert.ThrowsAsync<DbUpdateException>(
+            () => repository.Create(NewAppointment(customerId: 999999, barber.Id)));
+        var sqliteException = Assert.IsType<SqliteException>(exception.InnerException);
+        Assert.Equal(19, sqliteException.SqliteErrorCode);
     }
 
     [Fact]
@@ -92,7 +109,7 @@ public class AppointmentRepositoryTests : IDisposable
         var repository = new AppointmentRepository(context);
         var active = await repository.Create(NewAppointment(customer.Id, barber.Id, startTime: "09:00"));
         var cancelled = await repository.Create(NewAppointment(customer.Id, barber.Id, startTime: "10:00"));
-        await repository.Cancel(cancelled.Id);
+        await repository.Cancel(cancelled);
 
         var found = await repository.FindByBarberAndDate(barber.Id, "2026-09-01");
 
@@ -114,7 +131,7 @@ public class AppointmentRepositoryTests : IDisposable
         await repository.Create(NewAppointment(customer.Id, barberA.Id, date: "2026-08-31", startTime: "09:00"));
         var upcoming = await repository.Create(NewAppointment(customer.Id, barberB.Id, date: "2026-09-01", startTime: "11:00"));
         var toCancel = await repository.Create(NewAppointment(customer.Id, barberC.Id, date: "2026-09-02", startTime: "09:00"));
-        await repository.Cancel(toCancel.Id);
+        await repository.Cancel(toCancel);
 
         var found = await repository.FindUpcomingByCustomer(customer.Id, nowEst);
 
@@ -131,7 +148,7 @@ public class AppointmentRepositoryTests : IDisposable
         var repository = new AppointmentRepository(context);
         var created = await repository.Create(NewAppointment(customer.Id, barber.Id));
 
-        await repository.Cancel(created.Id);
+        await repository.Cancel(created);
 
         await using var verifyContext = _factory.CreateDbContext();
         var reloaded = await verifyContext.Appointments.FirstOrDefaultAsync(a => a.Id == created.Id, TestContext.Current.CancellationToken);
@@ -140,15 +157,72 @@ public class AppointmentRepositoryTests : IDisposable
     }
 
     [Fact]
-    public async Task Cancel_on_already_cancelled_appointment_throws_AppointmentAlreadyCancelledException()
+    public async Task FindById_returns_null_when_appointment_does_not_exist()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AppointmentRepository(context);
+
+        var found = await repository.FindById(999999);
+
+        Assert.Null(found);
+    }
+
+    [Fact]
+    public async Task ExistsConflict_true_when_barber_already_booked_that_slot()
+    {
+        await using var context = _factory.CreateDbContext();
+        var customerA = await SeedAccount(context, "customerA@example.com", Role.Customer);
+        var customerB = await SeedAccount(context, "customerB@example.com", Role.Customer);
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var repository = new AppointmentRepository(context);
+        await repository.Create(NewAppointment(customerA.Id, barber.Id));
+
+        var conflict = await repository.ExistsConflict(barber.Id, customerB.Id, "2026-09-01", "09:00");
+
+        Assert.True(conflict);
+    }
+
+    [Fact]
+    public async Task ExistsConflict_true_when_customer_already_booked_a_different_barber_at_same_time()
+    {
+        await using var context = _factory.CreateDbContext();
+        var customer = await SeedAccount(context, "customer@example.com", Role.Customer);
+        var barberA = await SeedAccount(context, "barberA@example.com", Role.Barber);
+        var barberB = await SeedAccount(context, "barberB@example.com", Role.Barber);
+        var repository = new AppointmentRepository(context);
+        await repository.Create(NewAppointment(customer.Id, barberA.Id));
+
+        var conflict = await repository.ExistsConflict(barberB.Id, customer.Id, "2026-09-01", "09:00");
+
+        Assert.True(conflict);
+    }
+
+    [Fact]
+    public async Task ExistsConflict_false_when_no_matching_appointment_exists()
     {
         await using var context = _factory.CreateDbContext();
         var customer = await SeedAccount(context, "customer@example.com", Role.Customer);
         var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
         var repository = new AppointmentRepository(context);
-        var created = await repository.Create(NewAppointment(customer.Id, barber.Id));
-        await repository.Cancel(created.Id);
 
-        await Assert.ThrowsAsync<AppointmentAlreadyCancelledException>(() => repository.Cancel(created.Id));
+        var conflict = await repository.ExistsConflict(barber.Id, customer.Id, "2026-09-01", "09:00");
+
+        Assert.False(conflict);
+    }
+
+    [Fact]
+    public async Task ExistsConflict_false_when_matching_slot_is_cancelled()
+    {
+        await using var context = _factory.CreateDbContext();
+        var customerA = await SeedAccount(context, "customerA@example.com", Role.Customer);
+        var customerB = await SeedAccount(context, "customerB@example.com", Role.Customer);
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var repository = new AppointmentRepository(context);
+        var appointment = await repository.Create(NewAppointment(customerA.Id, barber.Id));
+        await repository.Cancel(appointment);
+
+        var conflict = await repository.ExistsConflict(barber.Id, customerB.Id, "2026-09-01", "09:00");
+
+        Assert.False(conflict);
     }
 }

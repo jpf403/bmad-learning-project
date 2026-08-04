@@ -99,6 +99,28 @@ public class BookingServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Cancel_throws_AppointmentNotFoundException_when_appointment_does_not_exist()
+    {
+        await using var context = _factory.CreateDbContext();
+        var service = NewService(context);
+
+        await Assert.ThrowsAsync<AppointmentNotFoundException>(() => service.Cancel(999999));
+    }
+
+    [Fact]
+    public async Task Cancel_on_already_cancelled_appointment_throws_AppointmentAlreadyCancelledException()
+    {
+        await using var context = _factory.CreateDbContext();
+        var customer = await SeedAccount(context, "customer@example.com", Role.Customer);
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var service = NewService(context);
+        var created = await service.Create(customer.Id, barber.Id, "2026-09-01", "09:00");
+        await service.Cancel(created.Id);
+
+        await Assert.ThrowsAsync<AppointmentAlreadyCancelledException>(() => service.Cancel(created.Id));
+    }
+
+    [Fact]
     public async Task FindByBarberAndDate_resolves_customer_and_barber_names()
     {
         await using var context = _factory.CreateDbContext();

@@ -4,7 +4,7 @@ baseline_commit: 47c5a27ae5302fbaf42dab62591e2d25239ec33c
 
 # Story 2.1: Appointment Entity & Repository
 
-Status: in-progress
+Status: done
 
 ## Story
 
@@ -72,9 +72,22 @@ so that booking, cancellation, and all three schedule views (customer, barber, a
   - [x] Backend suite must stay green (`dotnet test`).
 - [x] **Task 7: Fix NavBar overflow bug** (Epic 1 retro action item #3 — see Dev Notes)
   - [x] **Not applicable to this story.** This story makes no frontend changes at all (it's backend entity/repository/service only) — there is no page for the NavBar to overflow on. The retro committed to fixing this "as part of Epic 2's page work," which starts with Story 2.2 (the first Epic 2 story that touches any UI). Re-flag explicitly in this story's own Completion Notes as "checked, not applicable — deferred to 2.2" so the retro's own action item (deferred work must be re-checked at story kickoff, not silently skipped) is honestly satisfied rather than silently dropped again.
-- [ ] **Task 8: Verify CI green and branch/PR**
+- [x] **Task 8: Verify CI green and branch/PR**
   - [x] Branch as `story/2.1-appointment-entity-and-repository` from `main`.
-  - [ ] Push and confirm both CI jobs pass before merging (AD-11). Frontend CI job is unaffected by this story's scope (no frontend changes) but must still be green.
+  - [x] Pushed to `origin/story/2.1-appointment-entity-and-repository` (commit `a627bca`). Jack confirmed both CI jobs green on GitHub before merging (AD-11).
+
+### Review Findings
+
+- [x] [Review][Decision→Patch] `Cancel` conflated "appointment not found" with "already cancelled", throwing the same `AppointmentAlreadyCancelledException` for both [backend/BarbershopApi/Repositories/AppointmentRepository.cs:38-42] — resolved per Jack's call: added a distinct `AppointmentNotFoundException`.
+- [x] [Review][Patch] `AppointmentRepository` imported `BarbershopApi.Services` and threw a Service-layer exception directly, reversing AD-1's one-way `Repositories → Services` dependency flow [backend/BarbershopApi/Repositories/AppointmentRepository.cs:3,41] — fixed by making `Cancel`/`FindById` pure persistence in the repository and moving the not-found/already-cancelled decision into `BookingService.Cancel`. Note: the story's own Task 4 text had specified this exact (incorrect) shape — worth catching earlier in future story-writing.
+- [x] [Review][Patch] No test proved the FK constraint (`DeleteBehavior.Restrict`) actually rejects a dangling `CustomerId`/`BarberId` — the Completion Notes asserted this as fact but nothing verified it [backend/BarbershopApi.Tests/AppointmentRepositoryTests.cs] — added `Create_with_nonexistent_CustomerId_throws_DbUpdateException`.
+- [x] [Review][Patch] The two double-booking conflict tests only asserted `DbUpdateException`'s type, not its `SqliteErrorCode`, so an unrelated `DbUpdateException` would false-positive pass [backend/BarbershopApi.Tests/AppointmentRepositoryTests.cs:65,83] — both tightened to assert `SqliteErrorCode == 19`.
+- [x] [Review][Patch] `ExistsConflict` had no dedicated test; both `BookingServiceTests` conflict cases ran through a single shared `DbContext`, so the DB-level unique-index backstop would catch a broken `ExistsConflict` and mask it as a pass [backend/BarbershopApi/Repositories/AppointmentRepository.cs:48-53] — added four direct `ExistsConflict` tests (barber conflict, customer conflict, no conflict, cancelled-slot exclusion).
+- [x] [Review][Defer] `BookingService.Create`'s DB-level race backstop (and `Cancel`'s read-then-write race) can't be tested deterministically without a real concurrent request, which AD-4 disallows mocking around — deferred, pre-existing. Same accepted limitation already logged for `AuthService` in story-1-4's review.
+- [x] [Review][Defer] A dangling FK insert and a genuine unique-index conflict both raise `SqliteErrorCode 19`, so a bad `CustomerId`/`BarberId` would currently be misreported as `BookingConflictException` [backend/BarbershopApi/Services/BookingService.cs:34] — deferred, unreachable today (no Controller exists yet). Flagged for Story 2.2/2.6.
+- [x] [Review][Defer] No validation that `CustomerId` is `Role.Customer` / `BarberId` is `Role.Barber`, or that they differ (self-booking) [backend/BarbershopApi/Services/BookingService.cs:14-28] — deferred, not covered by any AC; genuinely ambiguous whether `BookingService` or the Controller should own this. Flagged for Story 2.2/2.6.
+- [x] [Review][Defer] No format validation on `date`/`startTime` strings in `BookingService.Create` [backend/BarbershopApi/Services/BookingService.cs:14] — deferred to Story 2.2's Controller/DTO layer, matching AD-14's established client-convenience/server-enforcement split.
+- [x] [Review][Defer] Static `TimeZoneInfo.FindSystemTimeZoneById("America/New_York")` has no failure handling; missing tzdata would poison the type for the process [backend/BarbershopApi/Services/BookingService.cs:12] — deferred, very low real risk given GitHub Actions/Windows dev runners ship full tzdata and NFR7 rules out a minimal-container deploy target.
 
 ## Dev Notes
 
@@ -160,7 +173,7 @@ Claude Sonnet 5 (BMad Amelia dev agent)
 - Task 7 (NavBar overflow fix): **checked, not applicable** — this story makes no frontend changes at all; the Epic 1 retro's action item remains correctly deferred to Story 2.2, the first Epic 2 story that touches any UI.
 - Retro action item #1 (re-check `deferred-work.md`): checked in full — every open item concerns Auth/Account, none apply to this backend-only Appointment story.
 - Backend suite: 92/92 tests passed across 3 consecutive clean runs (`AppointmentRepositoryTests.cs` — 7 new tests; `BookingServiceTests.cs` — 4 new tests). One run showed 2 transient failures that did not reproduce on rerun — consistent with the already-tracked pre-existing flaky `AccountControllerTests` concurrency test noted in `deferred-work.md`/memory, not a regression from this story's changes.
-- Task 8 (branch/PR): branched as `story/2.1-appointment-entity-and-repository` from `main` (already the active branch). Push and CI confirmation intentionally left for Jack to trigger/review before merging.
+- Committed (`a627bca`) and pushed to `origin/story/2.1-appointment-entity-and-repository`. `gh` CLI isn't available in this sandbox to poll GitHub Actions directly — Jack to confirm both CI jobs (Backend .NET, Frontend Vite/React) show green on GitHub before merging.
 
 ### File List
 
