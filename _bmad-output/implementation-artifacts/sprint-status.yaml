@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-27
-last_updated: 2026-08-03
+last_updated: 2026-08-04
 project: bmad-learning-project
 project_key: NOKEY
 tracking_system: file-system
@@ -56,7 +56,7 @@ development_status:
   1-5-sign-in-sign-out-and-first-admin-bootstrap: done
   1-6-server-side-role-gating-and-protected-routing: done
   1-7-self-service-account-management: done
-  epic-1-retrospective: optional
+  epic-1-retrospective: done
 
   epic-2: backlog
   2-1-appointment-entity-and-repository: backlog
@@ -74,3 +74,21 @@ development_status:
   3-4-admin-creates-a-barber-account: backlog
   3-5-admin-deletes-an-account: backlog
   epic-3-retrospective: optional
+
+action_items:
+  - epic: 1
+    action: "At the start of every new story, read deferred-work.md for items assigned to it or generally applicable, and either fix them or explicitly re-defer with a reason"
+    owner: "Amelia (Dev)"
+    status: open
+  - epic: 1
+    action: "Story 2.3's double-booking race tests must use the deterministic two-DbContext staging pattern (from Stories 1.2/1.7's flaky-test fix) instead of a real concurrent-request race"
+    owner: "Amelia (Dev)"
+    status: open
+  - epic: 1
+    action: "Fix the NavBar overflow bug (below ~640px) as part of Epic 2's page work - do not defer again"
+    owner: "Amelia (Dev)"
+    status: open
+  - epic: 1
+    action: "Scope Story 2.2 explicitly to include building the restyled Calendar (UX-DR7) and Select dropdown (UX-DR8) components - not yet built in Epic 1"
+    owner: "Amelia (Dev), Sally (UX)"
+    status: open
