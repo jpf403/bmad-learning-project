@@ -4,7 +4,7 @@ baseline_commit: 47c5a27ae5302fbaf42dab62591e2d25239ec33c
 
 # Story 2.1: Appointment Entity & Repository
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -22,59 +22,72 @@ so that booking, cancellation, and all three schedule views (customer, barber, a
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Define the `Appointment` entity** (AC: #1)
-  - [ ] Create `backend/BarbershopApi/Entities/Appointment.cs`: `Id` (`int`), `CustomerId` (`int`), `BarberId` (`int`), `Date` (`string`), `StartTime` (`string`), `CancelledAt` (`DateTime?`).
-  - [ ] **Do not add a `RowVersion`/concurrency-token column.** AD-16's optimistic-concurrency mechanism is Account-only — Appointment's race protection is entirely the transaction-style check-then-insert + two partial unique indexes (AD-9), a different mechanism for a different race. Copying Story 1.2's `RowVersion`/trigger pattern here is a mistake this story must avoid.
-  - [ ] No `Status`/`Finished` column — see Task 4's Finished-computation notes; a stored status field is explicitly the anti-pattern AD-8 forbids.
-- [ ] **Task 2: Configure EF Core mapping** (AC: #1)
-  - [ ] In `BarbershopDbContext`, add `public DbSet<Appointment> Appointments => Set<Appointment>();` and extend `OnModelCreating`.
-  - [ ] Configure the two partial unique indexes exactly as Story 1.2 configured Account's `Email` index (same proven `HasFilter` → SQLite `WHERE` clause translation, no raw SQL needed):
+- [x] **Task 1: Define the `Appointment` entity** (AC: #1)
+  - [x] Create `backend/BarbershopApi/Entities/Appointment.cs`: `Id` (`int`), `CustomerId` (`int`), `BarberId` (`int`), `Date` (`string`), `StartTime` (`string`), `CancelledAt` (`DateTime?`).
+  - [x] **Do not add a `RowVersion`/concurrency-token column.** AD-16's optimistic-concurrency mechanism is Account-only — Appointment's race protection is entirely the transaction-style check-then-insert + two partial unique indexes (AD-9), a different mechanism for a different race. Copying Story 1.2's `RowVersion`/trigger pattern here is a mistake this story must avoid.
+  - [x] No `Status`/`Finished` column — see Task 4's Finished-computation notes; a stored status field is explicitly the anti-pattern AD-8 forbids.
+- [x] **Task 2: Configure EF Core mapping** (AC: #1)
+  - [x] In `BarbershopDbContext`, add `public DbSet<Appointment> Appointments => Set<Appointment>();` and extend `OnModelCreating`.
+  - [x] Configure the two partial unique indexes exactly as Story 1.2 configured Account's `Email` index (same proven `HasFilter` → SQLite `WHERE` clause translation, no raw SQL needed):
     - `.HasIndex(a => new { a.BarberId, a.Date, a.StartTime }).IsUnique().HasFilter("CancelledAt IS NULL")`
     - `.HasIndex(a => new { a.CustomerId, a.Date, a.StartTime }).IsUnique().HasFilter("CancelledAt IS NULL")`
-  - [ ] Configure `CustomerId`/`BarberId` as FKs to `Account` (`HasOne(...).WithMany().HasForeignKey(...)`). Set `.OnDelete(DeleteBehavior.Restrict)` on both — defensive only: Account never hard-deletes (AD-15), so no cascade path should ever fire, but EF Core's default `Cascade` behavior on a required relationship is the wrong contract to leave in place given the whole schema's soft-delete design.
-- [ ] **Task 3: Migration** (AC: #1)
-  - [ ] Run `dotnet ef migrations add AddAppointmentEntity` from `backend/BarbershopApi/`.
-  - [ ] Unlike Story 1.2's `AddAccountEntity` migration, **no hand-written SQL trigger is needed** — there's no `RowVersion` column to auto-increment. The generated migration should need no manual editing beyond what EF produces for the two `CreateIndex` calls with filters; verify the generated `Up()` actually contains `WHERE "CancelledAt" IS NULL` on both indexes before moving on.
-  - [ ] Verify `dotnet ef database update` runs clean against both a fresh temp DB and the existing local dev DB (`backend/BarbershopApi/App_Data/barbershop.db`, if present).
-- [ ] **Task 4: Build `AppointmentRepository` (thin persistence layer)** (AC: #2)
-  - [ ] Create `backend/BarbershopApi/Repositories/IAppointmentRepository.cs` / `AppointmentRepository.cs`, constructor-injecting `BarbershopDbContext` — the only layer allowed to touch the DbContext directly (AD-1).
-  - [ ] `Task<Appointment> Create(Appointment appointment)` — plain add + `SaveChangesAsync()`, returns the entity with `Id` populated. **No app-level conflict check here** — that check belongs in `BookingService` (see Task 5), mirroring exactly where `AuthService.Register` puts its duplicate-email check (`AccountRepository.Create` is equally thin, with no pre-check of its own) [Source: backend/BarbershopApi/Services/AuthService.cs].
-  - [ ] `Task<List<Appointment>> FindByBarberAndDate(int barberId, string date)` — raw query filtered to `BarberId == barberId && Date == date && CancelledAt == null`. A cancelled appointment must not appear here — its slot is meant to read as open again immediately (mirrors AD-15's "soft-deleted row behaves as not-found" discipline, applied to soft-cancel instead).
-  - [ ] `Task<List<Appointment>> FindUpcomingByCustomer(int customerId, DateTime nowEst)` — filtered to `CustomerId == customerId && CancelledAt == null`, plus a "not yet occurred" comparison against the `nowEst` parameter. Take `nowEst` as a parameter rather than computing "now" inside the repository — EST/DST-awareness (AD-12) is `BookingService`'s job, the repository just compares whatever instant it's handed. Because `Date` (`yyyy-MM-dd`) and `StartTime` (`HH:mm`) are zero-padded, ISO-ordered strings, a direct string comparison against `nowEst`'s own `yyyy-MM-dd`/`HH:mm`-formatted parts is safe and avoids parsing in the query.
-  - [ ] `Task Cancel(int appointmentId)` — loads the appointment by `Id`; if `CancelledAt` is already set, throw `AppointmentAlreadyCancelledException` (idempotency guard, AC #2/#5's "second cancel must error, not no-op"); otherwise set `CancelledAt = DateTime.UtcNow` and `SaveChangesAsync()`. `CancelledAt` is only an audit timestamp (not used in any Date/StartTime business comparison), so UTC is fine here — this is not an AD-12 violation.
-  - [ ] Register `IAppointmentRepository` → `AppointmentRepository` as `Scoped` in `Program.cs`.
-- [ ] **Task 5: Build `BookingService`** (AC: #2, #3, #5)
-  - [ ] **This is a deliberate departure from Story 1.2's precedent** (which built only a Repository, no Service, since Epic 1 didn't need one yet). AD-17 explicitly requires "one shared `BookingService` method" for every appointment read, and this story's own AC #2 names `BookingService` directly — so unlike 1.2, this story builds the Service now. `Controllers/` still stays untouched (`.gitkeep`-only) — Story 2.2 is the first to add an `AppointmentController`/`BookingController` that calls into this `BookingService`, never `AppointmentRepository` directly (AD-1).
-  - [ ] Create `backend/BarbershopApi/Services/IBookingService.cs` / `BookingService.cs`, constructor-injecting `IAppointmentRepository` and `IAccountRepository` (needed to resolve customer/barber display names — see the read-model note below).
-  - [ ] `Task<Appointment> Create(int customerId, int barberId, string date, string startTime)`:
+  - [x] Configure `CustomerId`/`BarberId` as FKs to `Account` (`HasOne(...).WithMany().HasForeignKey(...)`). Set `.OnDelete(DeleteBehavior.Restrict)` on both — defensive only: Account never hard-deletes (AD-15), so no cascade path should ever fire, but EF Core's default `Cascade` behavior on a required relationship is the wrong contract to leave in place given the whole schema's soft-delete design.
+- [x] **Task 3: Migration** (AC: #1)
+  - [x] Run `dotnet ef migrations add AddAppointmentEntity` from `backend/BarbershopApi/`.
+  - [x] Unlike Story 1.2's `AddAccountEntity` migration, **no hand-written SQL trigger is needed** — there's no `RowVersion` column to auto-increment. The generated migration should need no manual editing beyond what EF produces for the two `CreateIndex` calls with filters; verify the generated `Up()` actually contains `WHERE "CancelledAt" IS NULL` on both indexes before moving on.
+  - [x] Verify `dotnet ef database update` runs clean against both a fresh temp DB and the existing local dev DB (`backend/BarbershopApi/App_Data/barbershop.db`, if present).
+- [x] **Task 4: Build `AppointmentRepository` (thin persistence layer)** (AC: #2)
+  - [x] Create `backend/BarbershopApi/Repositories/IAppointmentRepository.cs` / `AppointmentRepository.cs`, constructor-injecting `BarbershopDbContext` — the only layer allowed to touch the DbContext directly (AD-1).
+  - [x] `Task<Appointment> Create(Appointment appointment)` — plain add + `SaveChangesAsync()`, returns the entity with `Id` populated. **No app-level conflict check here** — that check belongs in `BookingService` (see Task 5), mirroring exactly where `AuthService.Register` puts its duplicate-email check (`AccountRepository.Create` is equally thin, with no pre-check of its own) [Source: backend/BarbershopApi/Services/AuthService.cs].
+  - [x] `Task<List<Appointment>> FindByBarberAndDate(int barberId, string date)` — raw query filtered to `BarberId == barberId && Date == date && CancelledAt == null`. A cancelled appointment must not appear here — its slot is meant to read as open again immediately (mirrors AD-15's "soft-deleted row behaves as not-found" discipline, applied to soft-cancel instead).
+  - [x] `Task<List<Appointment>> FindUpcomingByCustomer(int customerId, DateTime nowEst)` — filtered to `CustomerId == customerId && CancelledAt == null`, plus a "not yet occurred" comparison against the `nowEst` parameter. Take `nowEst` as a parameter rather than computing "now" inside the repository — EST/DST-awareness (AD-12) is `BookingService`'s job, the repository just compares whatever instant it's handed. Because `Date` (`yyyy-MM-dd`) and `StartTime` (`HH:mm`) are zero-padded, ISO-ordered strings, a direct string comparison against `nowEst`'s own `yyyy-MM-dd`/`HH:mm`-formatted parts is safe and avoids parsing in the query.
+  - [x] `Task Cancel(int appointmentId)` — loads the appointment by `Id`; if `CancelledAt` is already set, throw `AppointmentAlreadyCancelledException` (idempotency guard, AC #2/#5's "second cancel must error, not no-op"); otherwise set `CancelledAt = DateTime.UtcNow` and `SaveChangesAsync()`. `CancelledAt` is only an audit timestamp (not used in any Date/StartTime business comparison), so UTC is fine here — this is not an AD-12 violation.
+  - [x] Register `IAppointmentRepository` → `AppointmentRepository` as `Scoped` in `Program.cs`.
+- [x] **Task 5: Build `BookingService`** (AC: #2, #3, #5)
+  - [x] **This is a deliberate departure from Story 1.2's precedent** (which built only a Repository, no Service, since Epic 1 didn't need one yet). AD-17 explicitly requires "one shared `BookingService` method" for every appointment read, and this story's own AC #2 names `BookingService` directly — so unlike 1.2, this story builds the Service now. `Controllers/` still stays untouched (`.gitkeep`-only) — Story 2.2 is the first to add an `AppointmentController`/`BookingController` that calls into this `BookingService`, never `AppointmentRepository` directly (AD-1).
+  - [x] Create `backend/BarbershopApi/Services/IBookingService.cs` / `BookingService.cs`, constructor-injecting `IAppointmentRepository` and `IAccountRepository` (needed to resolve customer/barber display names — see the read-model note below).
+  - [x] `Task<Appointment> Create(int customerId, int barberId, string date, string startTime)`:
     1. App-level check: query for any existing non-cancelled appointment matching `BarberId+Date+StartTime` OR `CustomerId+Date+StartTime` (add whatever repository query shape is convenient for this — the AC's four named methods are the public contract Epic 2's later stories need; an internal helper query is an implementation detail, same precedent as `IAccountRepository` growing `AdminExists()` in Story 1.5 when needed). If found, throw `BookingConflictException` immediately.
     2. Otherwise call `appointmentRepository.Create(...)`, wrapped in `try/catch (DbUpdateException ex) when (ex.InnerException is SqliteException { SqliteErrorCode: 19 })` → throw `BookingConflictException`. This is the exact catch shape `AuthService.Register` already uses for its own duplicate-email DB backstop [Source: backend/BarbershopApi/Services/AuthService.cs:43] — reuse it, don't reinvent it.
     3. **On AD-9's "inside a transaction" phrasing:** the established codebase precedent (`AuthService.Register`) does not use an explicit `BeginTransactionAsync` — a single `SaveChangesAsync` insert is already atomic, and the two-step check-then-insert's race window is closed by the partial-unique-index backstop, not by wrapping both steps in one SQL transaction. Follow this same precedent; don't introduce `BeginTransactionAsync` where the codebase's own established pattern doesn't use it.
-  - [ ] `Task<List<AppointmentView>> FindByBarberAndDate(int barberId, string date)` — delegates to the repository, maps each `Appointment` to the shared `AppointmentView` read-model (see below), computing `Finished` per row.
-  - [ ] `Task<List<AppointmentView>> FindUpcomingByCustomer(int customerId)` — computes `nowEst` once via `TimeZoneInfo.FindSystemTimeZoneById("America/New_York")` (DST-aware, AD-12), passes it to the repository, maps results to the same `AppointmentView` shape (`Finished` will always be `false` for this list by construction, but reusing one DTO type across all three views is what AD-17's "never duplicated per role" actually means in practice).
-  - [ ] `Task Cancel(int appointmentId)` — delegates to the repository; lets `AppointmentAlreadyCancelledException` propagate (Controller-level mapping to a `Problem()` response is Story 2.4's job, not this story's).
-  - [ ] Create `backend/BarbershopApi/Dtos/AppointmentView.cs` — the one shared read-model AD-17 requires: `Id`, `CustomerId`, `CustomerName`, `BarberId`, `BarberName`, `Date`, `StartTime`, `Finished` (bool), `CancelledAt`. Resolve `CustomerName`/`BarberName` via `IAccountRepository.FindById` per appointment. This is an N+1 query pattern — an accepted tradeoff, not a gap: project-context.md is explicit that this is a single local SQLite instance with no scale requirement (NFR7), and batching would be premature optimization here.
-  - [ ] Create two new marker exceptions in `Services/`, matching the exact shape of `DuplicateEmailException`/`InvalidCredentialsException` (`public class BookingConflictException : Exception;` and `public class AppointmentAlreadyCancelledException : Exception;`) — ready for Story 2.2/2.4's Controllers to catch and map via `Problem()` (per project-context.md: "`Problem()` helper for custom errors (booking conflicts, stale cancellations)").
-  - [ ] Register `IBookingService` → `BookingService` as `Scoped` in `Program.cs`.
-- [ ] **Task 6: Repository & Service tests** (AC: #4)
-  - [ ] Reuse `backend/BarbershopApi.Tests/SqliteApiFactory.cs` verbatim (built in Story 1.2 for exactly this reuse) — do not re-derive the test-fixture pattern.
-  - [ ] `AppointmentRepositoryTests.cs`:
+  - [x] `Task<List<AppointmentView>> FindByBarberAndDate(int barberId, string date)` — delegates to the repository, maps each `Appointment` to the shared `AppointmentView` read-model (see below), computing `Finished` per row.
+  - [x] `Task<List<AppointmentView>> FindUpcomingByCustomer(int customerId)` — computes `nowEst` once via `TimeZoneInfo.FindSystemTimeZoneById("America/New_York")` (DST-aware, AD-12), passes it to the repository, maps results to the same `AppointmentView` shape (`Finished` will always be `false` for this list by construction, but reusing one DTO type across all three views is what AD-17's "never duplicated per role" actually means in practice).
+  - [x] `Task Cancel(int appointmentId)` — delegates to the repository; lets `AppointmentAlreadyCancelledException` propagate (Controller-level mapping to a `Problem()` response is Story 2.4's job, not this story's).
+  - [x] Create `backend/BarbershopApi/Dtos/AppointmentView.cs` — the one shared read-model AD-17 requires: `Id`, `CustomerId`, `CustomerName`, `BarberId`, `BarberName`, `Date`, `StartTime`, `Finished` (bool), `CancelledAt`. Resolve `CustomerName`/`BarberName` via `IAccountRepository.FindById` per appointment. This is an N+1 query pattern — an accepted tradeoff, not a gap: project-context.md is explicit that this is a single local SQLite instance with no scale requirement (NFR7), and batching would be premature optimization here.
+  - [x] Create two new marker exceptions in `Services/`, matching the exact shape of `DuplicateEmailException`/`InvalidCredentialsException` (`public class BookingConflictException : Exception;` and `public class AppointmentAlreadyCancelledException : Exception;`) — ready for Story 2.2/2.4's Controllers to catch and map via `Problem()` (per project-context.md: "`Problem()` helper for custom errors (booking conflicts, stale cancellations)").
+  - [x] Register `IBookingService` → `BookingService` as `Scoped` in `Program.cs`.
+- [x] **Task 6: Repository & Service tests** (AC: #4)
+  - [x] Reuse `backend/BarbershopApi.Tests/SqliteApiFactory.cs` verbatim (built in Story 1.2 for exactly this reuse) — do not re-derive the test-fixture pattern.
+  - [x] `AppointmentRepositoryTests.cs`:
     - `Create_persists_appointment_with_expected_defaults`.
     - `Create_second_appointment_for_same_barber_slot_throws` and `Create_second_appointment_for_same_customer_slot_across_different_barbers_throws` — call `AppointmentRepository.Create` directly **twice, via two independent `DbContext`/repository instances**, bypassing `BookingService`'s app-level check entirely. This proves the DB-level partial-unique-index backstop itself throws, independent of the app-level guard — deterministically, with no real concurrency/threading involved (same two-`DbContext` staging pattern Story 1.2 used for `RowVersion` conflicts, per the Epic 1 retro's action item to reuse it for Story 2's booking-race tests). This also closes a coverage gap flagged in `deferred-work.md` for `AuthService`'s own untested DB-constraint backstop — worth doing right here since it's Epic 2's central value proposition, not a side concern.
     - `FindByBarberAndDate_excludes_cancelled_appointments`.
     - `FindUpcomingByCustomer_excludes_past_and_cancelled_appointments` — construct with an explicit `nowEst` parameter so the test doesn't depend on wall-clock time.
     - `Cancel_sets_CancelledAt`.
     - `Cancel_on_already_cancelled_appointment_throws_AppointmentAlreadyCancelledException`.
-  - [ ] `BookingServiceTests.cs`:
+  - [x] `BookingServiceTests.cs`:
     - `Create_throws_BookingConflictException_when_barber_slot_already_booked` and `Create_throws_BookingConflictException_when_customer_already_booked_a_different_barber_at_same_time` — exercise the app-level pre-check path (two sequential calls through `BookingService.Create`, no need for multiple `DbContext`s here since the service's own pre-check should catch it before ever reaching the DB).
     - `FindByBarberAndDate_computes_Finished_correctly_at_the_EST_boundary` — cover an appointment just before, at, and just after the computed "now" (this boundary is a genuine open question the architecture docs don't pin down — Finished triggers the instant `Date`+`StartTime` <= current EST "now", since there's no `EndTime`/duration field on the entity; document this interpretation in the story's own Completion Notes since it's a design decision this story is making, not one handed down by the architecture).
     - `FindByBarberAndDate_resolves_customer_and_barber_names`.
-  - [ ] Backend suite must stay green (`dotnet test`).
-- [ ] **Task 7: Fix NavBar overflow bug** (Epic 1 retro action item #3 — see Dev Notes)
-  - [ ] **Not applicable to this story.** This story makes no frontend changes at all (it's backend entity/repository/service only) — there is no page for the NavBar to overflow on. The retro committed to fixing this "as part of Epic 2's page work," which starts with Story 2.2 (the first Epic 2 story that touches any UI). Re-flag explicitly in this story's own Completion Notes as "checked, not applicable — deferred to 2.2" so the retro's own action item (deferred work must be re-checked at story kickoff, not silently skipped) is honestly satisfied rather than silently dropped again.
-- [ ] **Task 8: Verify CI green and branch/PR**
-  - [ ] Branch as `story/2.1-appointment-entity-and-repository` from `main`.
-  - [ ] Push and confirm both CI jobs pass before merging (AD-11). Frontend CI job is unaffected by this story's scope (no frontend changes) but must still be green.
+  - [x] Backend suite must stay green (`dotnet test`).
+- [x] **Task 7: Fix NavBar overflow bug** (Epic 1 retro action item #3 — see Dev Notes)
+  - [x] **Not applicable to this story.** This story makes no frontend changes at all (it's backend entity/repository/service only) — there is no page for the NavBar to overflow on. The retro committed to fixing this "as part of Epic 2's page work," which starts with Story 2.2 (the first Epic 2 story that touches any UI). Re-flag explicitly in this story's own Completion Notes as "checked, not applicable — deferred to 2.2" so the retro's own action item (deferred work must be re-checked at story kickoff, not silently skipped) is honestly satisfied rather than silently dropped again.
+- [x] **Task 8: Verify CI green and branch/PR**
+  - [x] Branch as `story/2.1-appointment-entity-and-repository` from `main`.
+  - [x] Pushed to `origin/story/2.1-appointment-entity-and-repository` (commit `a627bca`). Jack confirmed both CI jobs green on GitHub before merging (AD-11).
+
+### Review Findings
+
+- [x] [Review][Decision→Patch] `Cancel` conflated "appointment not found" with "already cancelled", throwing the same `AppointmentAlreadyCancelledException` for both [backend/BarbershopApi/Repositories/AppointmentRepository.cs:38-42] — resolved per Jack's call: added a distinct `AppointmentNotFoundException`.
+- [x] [Review][Patch] `AppointmentRepository` imported `BarbershopApi.Services` and threw a Service-layer exception directly, reversing AD-1's one-way `Repositories → Services` dependency flow [backend/BarbershopApi/Repositories/AppointmentRepository.cs:3,41] — fixed by making `Cancel`/`FindById` pure persistence in the repository and moving the not-found/already-cancelled decision into `BookingService.Cancel`. Note: the story's own Task 4 text had specified this exact (incorrect) shape — worth catching earlier in future story-writing.
+- [x] [Review][Patch] No test proved the FK constraint (`DeleteBehavior.Restrict`) actually rejects a dangling `CustomerId`/`BarberId` — the Completion Notes asserted this as fact but nothing verified it [backend/BarbershopApi.Tests/AppointmentRepositoryTests.cs] — added `Create_with_nonexistent_CustomerId_throws_DbUpdateException`.
+- [x] [Review][Patch] The two double-booking conflict tests only asserted `DbUpdateException`'s type, not its `SqliteErrorCode`, so an unrelated `DbUpdateException` would false-positive pass [backend/BarbershopApi.Tests/AppointmentRepositoryTests.cs:65,83] — both tightened to assert `SqliteErrorCode == 19`.
+- [x] [Review][Patch] `ExistsConflict` had no dedicated test; both `BookingServiceTests` conflict cases ran through a single shared `DbContext`, so the DB-level unique-index backstop would catch a broken `ExistsConflict` and mask it as a pass [backend/BarbershopApi/Repositories/AppointmentRepository.cs:48-53] — added four direct `ExistsConflict` tests (barber conflict, customer conflict, no conflict, cancelled-slot exclusion).
+- [x] [Review][Defer] `BookingService.Create`'s DB-level race backstop (and `Cancel`'s read-then-write race) can't be tested deterministically without a real concurrent request, which AD-4 disallows mocking around — deferred, pre-existing. Same accepted limitation already logged for `AuthService` in story-1-4's review.
+- [x] [Review][Defer] A dangling FK insert and a genuine unique-index conflict both raise `SqliteErrorCode 19`, so a bad `CustomerId`/`BarberId` would currently be misreported as `BookingConflictException` [backend/BarbershopApi/Services/BookingService.cs:34] — deferred, unreachable today (no Controller exists yet). Flagged for Story 2.2/2.6.
+- [x] [Review][Defer] No validation that `CustomerId` is `Role.Customer` / `BarberId` is `Role.Barber`, or that they differ (self-booking) [backend/BarbershopApi/Services/BookingService.cs:14-28] — deferred, not covered by any AC; genuinely ambiguous whether `BookingService` or the Controller should own this. Flagged for Story 2.2/2.6.
+- [x] [Review][Defer] No format validation on `date`/`startTime` strings in `BookingService.Create` [backend/BarbershopApi/Services/BookingService.cs:14] — deferred to Story 2.2's Controller/DTO layer, matching AD-14's established client-convenience/server-enforcement split.
+- [x] [Review][Defer] Static `TimeZoneInfo.FindSystemTimeZoneById("America/New_York")` has no failure handling; missing tzdata would poison the type for the process [backend/BarbershopApi/Services/BookingService.cs:12] — deferred, very low real risk given GitHub Actions/Windows dev runners ship full tzdata and NFR7 rules out a minimal-container deploy target.
 
 ## Dev Notes
 
@@ -144,8 +157,41 @@ Recent commits (`52e6866` → `9f5d702` → `f0f682b` → `f8bb1ed` → `47c5a27
 
 ### Agent Model Used
 
+Claude Sonnet 5 (BMad Amelia dev agent)
+
 ### Debug Log References
+
+- `python3`/`dotnet ef` both work fine in this sandboxed shell; only `python3`/`py` (for `resolve_customization.py`) are the known-unavailable interpreters (per prior stories) — customization blocks resolved by hand instead.
 
 ### Completion Notes List
 
+- Reused `AccountRepository`/`AuthService`'s established patterns unchanged: `AppointmentRepository` is thin persistence only (AD-1), `BookingService.Create` does an app-level check-then-insert followed by the exact `DbUpdateException`/`SqliteException{SqliteErrorCode:19}` backstop catch shape from `AuthService.Register` (AD-9).
+- **Finished-boundary decision (Dev Notes flagged this as open):** an appointment is Finished the instant `Date`+`StartTime` (interpreted in `America/New_York`) is **at or before** current EST "now" — implemented as `<=` in `BookingService`'s `IsFinished` helper. A 9:00 AM appointment reads as Finished starting at 9:00:00 AM sharp. Revisit if Story 2.5's schedule view reads wrong once visually reviewed.
+- `AppointmentRepository` gained one method beyond the AC's four named ones — `ExistsConflict(barberId, customerId, date, startTime)` — as the internal helper query `BookingService.Create`'s app-level pre-check needed, matching the same "repository interfaces grow incrementally" precedent as `IAccountRepository.AdminExists()`.
+- Migration `AddAppointmentEntity` required no manual editing — EF generated both partial-unique `CreateIndex` calls with `filter: "CancelledAt IS NULL"` correctly on the first try. Verified clean apply against both a fresh factory-created temp DB (via the test suite) and the existing local `App_Data/barbershop.db`.
+- Confirmed SQLite's FK enforcement is on by default under EF Core's Sqlite provider (no explicit pragma needed) — test fixtures seed real `Account` rows via `AccountRepository.Create` before creating any `Appointment`, since a dangling `CustomerId`/`BarberId` would fail the `Restrict` FK constraint before ever reaching the code under test.
+- Task 7 (NavBar overflow fix): **checked, not applicable** — this story makes no frontend changes at all; the Epic 1 retro's action item remains correctly deferred to Story 2.2, the first Epic 2 story that touches any UI.
+- Retro action item #1 (re-check `deferred-work.md`): checked in full — every open item concerns Auth/Account, none apply to this backend-only Appointment story.
+- Backend suite: 92/92 tests passed across 3 consecutive clean runs (`AppointmentRepositoryTests.cs` — 7 new tests; `BookingServiceTests.cs` — 4 new tests). One run showed 2 transient failures that did not reproduce on rerun — consistent with the already-tracked pre-existing flaky `AccountControllerTests` concurrency test noted in `deferred-work.md`/memory, not a regression from this story's changes.
+- Committed (`a627bca`) and pushed to `origin/story/2.1-appointment-entity-and-repository`. `gh` CLI isn't available in this sandbox to poll GitHub Actions directly — Jack to confirm both CI jobs (Backend .NET, Frontend Vite/React) show green on GitHub before merging.
+
 ### File List
+
+**New:**
+- `backend/BarbershopApi/Entities/Appointment.cs`
+- `backend/BarbershopApi/Repositories/IAppointmentRepository.cs`
+- `backend/BarbershopApi/Repositories/AppointmentRepository.cs`
+- `backend/BarbershopApi/Services/IBookingService.cs`
+- `backend/BarbershopApi/Services/BookingService.cs`
+- `backend/BarbershopApi/Services/BookingConflictException.cs`
+- `backend/BarbershopApi/Services/AppointmentAlreadyCancelledException.cs`
+- `backend/BarbershopApi/Dtos/AppointmentView.cs`
+- `backend/BarbershopApi/Migrations/20260804171154_AddAppointmentEntity.cs`
+- `backend/BarbershopApi/Migrations/20260804171154_AddAppointmentEntity.Designer.cs`
+- `backend/BarbershopApi.Tests/AppointmentRepositoryTests.cs`
+- `backend/BarbershopApi.Tests/BookingServiceTests.cs`
+
+**Modified:**
+- `backend/BarbershopApi/Data/BarbershopDbContext.cs` — `Appointments` DbSet, partial unique indexes, FK config
+- `backend/BarbershopApi/Program.cs` — registered `IAppointmentRepository`/`IBookingService` as `Scoped`
+- `backend/BarbershopApi/Migrations/BarbershopDbContextModelSnapshot.cs` — regenerated by `dotnet ef migrations add`
