@@ -74,9 +74,22 @@ public class AdminBootstrapServiceTests : IDisposable
     [Fact]
     public async Task Admin_bootstrap_skips_without_throwing_when_unconfigured()
     {
-        using var client = _factory.CreateClient();
+        using var factory = _factory.WithWebHostBuilder(builder =>
+            builder.ConfigureAppConfiguration((_, config) =>
+                config.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    // Explicitly override, not just omit -- an ambient AdminSeed__Email/
+                    // AdminSeed__Password environment variable on the machine running the
+                    // tests would otherwise leak in via IConfiguration's env var source and
+                    // make this test seed a real admin instead of skipping.
+                    ["AdminSeed:Email"] = null,
+                    ["AdminSeed:Password"] = null,
+                })));
 
-        await using var context = _factory.CreateDbContext();
+        using var client = factory.CreateClient();
+
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<BarbershopDbContext>();
         var admins = await context.Accounts.Where(a => a.Role == Role.Admin).ToListAsync(TestContext.Current.CancellationToken);
 
         Assert.Empty(admins);
