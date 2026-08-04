@@ -18,4 +18,8 @@ public class UpdateAccountRequest
     [StringLength(128)]
     [RegularExpression(@"^\S+$", ErrorMessage = "Password cannot contain whitespace.")]
     public string? NewPassword { get; set; }
+
+    [StringLength(128)]
+    [RegularExpression(@"^\S+$", ErrorMessage = "Current password cannot contain whitespace.")]
+    public string? CurrentPassword { get; set; }
 }

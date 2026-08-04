@@ -111,6 +111,7 @@ frontend/src/
 
 **Security:**
 - Login rate limiting: `Microsoft.AspNetCore.RateLimiting`, sliding window, 5 attempts per email+IP per 15 min on `/api/auth/login` — over-limit returns 429 with the *same* generic invalid-credentials message as a normal failed login, don't leak that the limit was hit (AD-5).
+- Password-change rate limiting: same shape as login's (5 attempts per 15 min, sliding window), scoped to `PUT /api/account/me` requests that actually set `NewPassword` — plain name-only edits go through an unlimited partition and are never throttled. Partitioned by `{ip}:{accountId}` (not email, since the caller is already authenticated); requires `UseRateLimiter()` to run after `SessionLivenessMiddleware` so the partition resolver can read the authenticated account id from `HttpContext.Items["Account"]` (AD-5).
 - Admin bootstrap: exactly one admin seeded via an `IHostedService` after `Database.Migrate()`, credentials from env vars only (`AdminSeed__Email`/`AdminSeed__Password`) — never `dotnet user-secrets`, never a UI/backdoor for creating admins (AD-6).
 - `Role` is a fixed enum (`Customer`/`Barber`/`Admin`, PascalCase) — never an ad-hoc string literal; casing drift between call sites is exactly the bug this prevents (AD-2).
 

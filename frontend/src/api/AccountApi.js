@@ -2,7 +2,7 @@ import { API_BASE_URL } from './ApiConfig'
 
 export async function updateAccount(
   accessToken,
-  { firstName, lastName, newPassword },
+  { firstName, lastName, newPassword, currentPassword },
 ) {
   let response
   try {
@@ -17,6 +17,7 @@ export async function updateAccount(
         firstName,
         lastName,
         newPassword: newPassword || null,
+        currentPassword: currentPassword || null,
       }),
     })
   } catch {
@@ -26,6 +27,9 @@ export async function updateAccount(
   const body = await response.json().catch(() => null)
   if (!response.ok) {
     return { ok: false, status: response.status, problem: body }
+  }
+  if (!body) {
+    return { ok: false, status: null }
   }
   return { ok: true, identity: body }
 }

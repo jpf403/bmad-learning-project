@@ -346,6 +346,40 @@ public class AuthControllerTests : IDisposable
     }
 
     [Fact]
+    public async Task Login_still_succeeds_and_still_rate_limits_when_request_carries_a_bearer_token()
+    {
+        // UseRateLimiter() runs after UseAuthentication()/SessionLivenessMiddleware (needed so
+        // PasswordChangePolicy can key off the authenticated caller) -- this proves that
+        // reordering didn't couple Login's own behavior to whether the request happens to
+        // carry a (here, valid but irrelevant) bearer token, since Login never reads one.
+        using var client = _factory.CreateClient();
+        await client.PostAsJsonAsync("/api/auth/register", NewRequest(), TestContext.Current.CancellationToken);
+        var firstLogin = await client.PostAsJsonAsync(
+            "/api/auth/login", NewLoginRequest(), TestContext.Current.CancellationToken);
+        var session = await firstLogin.Content.ReadFromJsonAsync<LoginResponse>(LoginResponseJsonOptions, TestContext.Current.CancellationToken);
+
+        // The initial successful login above already consumed one of the 5 permits.
+        HttpResponseMessage response = null!;
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login")
+            {
+                Content = JsonContent.Create(NewLoginRequest(password: "wrong-password")),
+            };
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session!.AccessToken);
+
+            response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+            if (attempt < 4)
+            {
+                Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+            }
+        }
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Logout_with_valid_access_token_returns_204_and_increments_session_version()
     {
         using var client = _factory.CreateClient();

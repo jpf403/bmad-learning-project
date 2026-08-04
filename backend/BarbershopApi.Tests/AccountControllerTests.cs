@@ -3,7 +3,15 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using BarbershopApi.Controllers;
 using BarbershopApi.Dtos;
+using BarbershopApi.Entities;
+using BarbershopApi.Repositories;
+using BarbershopApi.Services;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BarbershopApi.Tests;
 
@@ -95,7 +103,9 @@ public class AccountControllerTests : IDisposable
         var accessToken = await RegisterAndLogin(client);
 
         var response = await client.SendAsync(
-            UpdateMeRequest(new { FirstName = "John", LastName = "Smith", NewPassword = "new-correct-horse-battery" }, accessToken),
+            UpdateMeRequest(
+                new { FirstName = "John", LastName = "Smith", NewPassword = "new-correct-horse-battery", CurrentPassword = "correct-horse-battery-staple" },
+                accessToken),
             TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -140,26 +150,221 @@ public class AccountControllerTests : IDisposable
         var accessToken = await RegisterAndLogin(client);
 
         var response = await client.SendAsync(
-            UpdateMeRequest(new { FirstName = "John", LastName = "Smith", NewPassword = "short1" }, accessToken),
+            UpdateMeRequest(
+                new { FirstName = "John", LastName = "Smith", NewPassword = "short1", CurrentPassword = "correct-horse-battery-staple" },
+                accessToken),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
-    public async Task UpdateMe_two_concurrent_edits_to_same_account_one_succeeds_one_returns_409()
+    public async Task UpdateMe_with_new_password_and_missing_current_password_returns_400_and_does_not_change_password()
     {
         using var client = _factory.CreateClient();
         var accessToken = await RegisterAndLogin(client);
 
-        var firstEdit = client.SendAsync(
-            UpdateMeRequest(new { FirstName = "First Edit", LastName = "Smith" }, accessToken), TestContext.Current.CancellationToken);
-        var secondEdit = client.SendAsync(
-            UpdateMeRequest(new { FirstName = "Second Edit", LastName = "Smith" }, accessToken), TestContext.Current.CancellationToken);
+        var response = await client.SendAsync(
+            UpdateMeRequest(new { FirstName = "John", LastName = "Smith", NewPassword = "new-correct-horse-battery" }, accessToken),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
-        var responses = await Task.WhenAll(firstEdit, secondEdit);
+        var oldPasswordLogin = await client.PostAsJsonAsync(
+            "/api/auth/login",
+            new LoginRequest { Email = "john@example.com", Password = "correct-horse-battery-staple" },
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, oldPasswordLogin.StatusCode);
+    }
 
-        Assert.Contains(responses, r => r.StatusCode == HttpStatusCode.OK);
-        Assert.Contains(responses, r => r.StatusCode == HttpStatusCode.Conflict);
+    [Fact]
+    public async Task UpdateMe_with_new_password_and_wrong_current_password_returns_400_and_does_not_change_password()
+    {
+        using var client = _factory.CreateClient();
+        var accessToken = await RegisterAndLogin(client);
+
+        var response = await client.SendAsync(
+            UpdateMeRequest(
+                new { FirstName = "John", LastName = "Smith", NewPassword = "new-correct-horse-battery", CurrentPassword = "wrong-password" },
+                accessToken),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var oldPasswordLogin = await client.PostAsJsonAsync(
+            "/api/auth/login",
+            new LoginRequest { Email = "john@example.com", Password = "correct-horse-battery-staple" },
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, oldPasswordLogin.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateMe_with_new_password_same_as_current_returns_400_and_does_not_change_password()
+    {
+        using var client = _factory.CreateClient();
+        var accessToken = await RegisterAndLogin(client);
+
+        var response = await client.SendAsync(
+            UpdateMeRequest(
+                new { FirstName = "John", LastName = "Smith", NewPassword = "correct-horse-battery-staple", CurrentPassword = "correct-horse-battery-staple" },
+                accessToken),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var oldPasswordLogin = await client.PostAsJsonAsync(
+            "/api/auth/login",
+            new LoginRequest { Email = "john@example.com", Password = "correct-horse-battery-staple" },
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, oldPasswordLogin.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateMe_on_stale_RowVersion_returns_409()
+    {
+        // Reproduces the same optimistic-concurrency race as
+        // AccountServiceTests.UpdateOwnProfile_on_stale_RowVersion_throws_AccountConflictException,
+        // but calls the real AccountController.UpdateMe directly (bypassing routing,
+        // [Authorize], [EnableRateLimiting], and SessionLivenessMiddleware -- those are
+        // covered by other tests) to prove the concurrency mechanism AND the controller's
+        // AccountConflictException -> 409 mapping together. A prior version of this test
+        // fired two real concurrent HTTP requests hoping they'd race on the DB row -- whether
+        // their read/write cycles actually overlap depends entirely on ASP.NET Core/thread-pool
+        // scheduling, not anything the test controls, so it was intermittently flaky. This
+        // version forces the exact same staleness deterministically via two separate
+        // DbContexts, with no mocking -- real repository, service, and controller classes.
+        await using var contextA = _factory.CreateDbContext();
+        var repositoryA = new AccountRepository(contextA);
+        var passwordHasher = new PasswordHasher<Account>();
+        var account = new Account
+        {
+            Email = "john@example.com",
+            FirstName = "John",
+            LastName = "Smith",
+            Role = Role.Customer,
+        };
+        account.PasswordHash = passwordHasher.HashPassword(account, "correct-horse-battery-staple");
+        var created = await repositoryA.Create(account);
+
+        await using var contextB = _factory.CreateDbContext();
+        var repositoryB = new AccountRepository(contextB);
+        var staleCopy = await repositoryB.FindById(created.Id);
+        Assert.NotNull(staleCopy);
+
+        created.FirstName = "First Edit";
+        await repositoryA.Update(created);
+
+        using var scope = _factory.Services.CreateScope();
+        var controller = new AccountController(new AccountService(repositoryB, passwordHasher))
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext { RequestServices = scope.ServiceProvider },
+            },
+        };
+        controller.HttpContext.Items["Account"] = staleCopy;
+
+        var result = await controller.UpdateMe(new UpdateAccountRequest { FirstName = "Second Edit", LastName = "Smith" });
+
+        var objectResult = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status409Conflict, objectResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateMe_sixth_password_change_attempt_within_window_returns_429_with_rate_limit_message()
+    {
+        using var client = _factory.CreateClient();
+        var accessToken = await RegisterAndLogin(client);
+
+        HttpResponseMessage response = null!;
+        for (var attempt = 0; attempt < 6; attempt++)
+        {
+            response = await client.SendAsync(
+                UpdateMeRequest(
+                    new { FirstName = "John", LastName = "Smith", NewPassword = "new-correct-horse-battery", CurrentPassword = "wrong-password" },
+                    accessToken),
+                TestContext.Current.CancellationToken);
+
+            if (attempt < 5)
+            {
+                Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            }
+        }
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Contains("Too many attempts. Try again in a few minutes.", body);
+    }
+
+    [Fact]
+    public async Task UpdateMe_name_only_edits_are_not_rate_limited_by_password_change_policy()
+    {
+        using var client = _factory.CreateClient();
+        var accessToken = await RegisterAndLogin(client);
+
+        for (var attempt = 0; attempt < 6; attempt++)
+        {
+            var response = await client.SendAsync(
+                UpdateMeRequest(new { FirstName = $"Edit {attempt}", LastName = "Smith" }, accessToken),
+                TestContext.Current.CancellationToken);
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+    }
+
+    [Fact]
+    public async Task UpdateMe_rate_limit_is_scoped_per_account_not_shared_across_accounts()
+    {
+        using var client = _factory.CreateClient();
+        var accessTokenA = await RegisterAndLogin(client, email: "accounta@example.com");
+        var accessTokenB = await RegisterAndLogin(client, email: "accountb@example.com");
+
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            var response = await client.SendAsync(
+                UpdateMeRequest(
+                    new { FirstName = "John", LastName = "Smith", NewPassword = "new-correct-horse-battery", CurrentPassword = "wrong-password" },
+                    accessTokenA),
+                TestContext.Current.CancellationToken);
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        }
+
+        var lockedOut = await client.SendAsync(
+            UpdateMeRequest(
+                new { FirstName = "John", LastName = "Smith", NewPassword = "new-correct-horse-battery", CurrentPassword = "wrong-password" },
+                accessTokenA),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.TooManyRequests, lockedOut.StatusCode);
+
+        var stillAllowed = await client.SendAsync(
+            UpdateMeRequest(
+                new { FirstName = "John", LastName = "Smith", NewPassword = "new-correct-horse-battery", CurrentPassword = "wrong-password" },
+                accessTokenB),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.BadRequest, stillAllowed.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateMe_successful_password_changes_also_count_toward_the_rate_limit()
+    {
+        using var client = _factory.CreateClient();
+        var accessToken = await RegisterAndLogin(client);
+
+        var currentPassword = "correct-horse-battery-staple";
+        HttpResponseMessage response = null!;
+        for (var attempt = 0; attempt < 6; attempt++)
+        {
+            var newPassword = $"new-correct-horse-battery-{attempt}";
+            response = await client.SendAsync(
+                UpdateMeRequest(
+                    new { FirstName = "John", LastName = "Smith", NewPassword = newPassword, CurrentPassword = currentPassword },
+                    accessToken),
+                TestContext.Current.CancellationToken);
+
+            if (attempt < 5)
+            {
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+                currentPassword = newPassword;
+            }
+        }
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
     }
 }

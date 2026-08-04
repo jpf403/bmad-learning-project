@@ -1,5 +1,25 @@
 # Deferred Work
 
+## Deferred from: code review of story-1.7-self-service-account-management, round 2 (2026-08-03)
+
+- ~~No rate limiting/lockout on the current-password verification branch...~~ **Resolved** (2026-08-03) — added `PasswordChangePolicy` (same 5-per-15-min sliding window as `LoginPolicy`, counting both failed and successful password-change attempts, keyed by `{ip}:{accountId}`); plain name-only edits are exempted via `RateLimitPartition.GetNoLimiter`. Required reordering `UseRateLimiter()` to after `SessionLivenessMiddleware` so the partition resolver can read the authenticated account id.
+- Backend gives an identical "Current password is incorrect." message whether the field was wrong or simply missing [backend/BarbershopApi/Services/AccountService.cs:18-24] — only matters for non-browser callers since the UI already blocks blank submission client-side.
+- ~~`AccountService.UpdateOwnProfile` mutates `FirstName`/`LastName` before the current-password check can throw...~~ **Resolved** (2026-08-03) — reordered so both password checks (and hash computation) complete before any property on `account` is mutated; strengthened the three failure-path tests to reload from a fresh `DbContext` and assert the name was never persisted.
+- No test covers `currentPassword` supplied without `newPassword` (silently ignored server-side) [backend/BarbershopApi.Tests/AccountServiceTests.cs] — low-value coverage gap.
+- `AccountApi.js`'s malformed-body guard reports `status: null` even when `response.ok` was `true` [frontend/src/api/AccountApi.js:31-33] — harmless today since nothing branches on it, but discards information.
+- ~~The 401 "session has expired" message is shown but nothing redirects/logs the user out...~~ **Resolved** (2026-08-03) — `Account.jsx` now calls `logout()` and navigates to `/login` with the message passed via router state, same pattern as `Register.jsx`.
+- ~~Saving the password section with a filled Current Password but blank New/Confirm Password silently no-ops...~~ **Resolved** (2026-08-03) — `handleSavePasswordClick` now requires a non-empty `newPassword` before opening the confirm popup, showing "New password is required" instead.
+
+## Deferred from: code review of story-1.7-self-service-account-management (2026-08-03)
+
+- Generic `catch (Exception)` with no logging [backend/BarbershopApi/Controllers/AccountController.cs:26] — pre-existing pattern, identical to `AuthController`'s three catch blocks.
+- `[StringLength(100)]` validates FirstName/LastName before `.Trim()` runs in the service [backend/BarbershopApi/Dtos/UpdateAccountRequest.cs:8,13] — pre-existing pattern shared with `RegisterRequest`; deliberate per story 1.7's Dev Notes ("AD consistency, not a new policy").
+- Validation regexes duplicated verbatim between `RegisterRequest`/`UpdateAccountRequest` rather than shared [backend/BarbershopApi/Dtos/UpdateAccountRequest.cs] — same rationale as above.
+- ~~`UpdateMe_two_concurrent_edits_...` test has no explicit synchronization barrier...~~ **Resolved** (2026-08-03) — confirmed flaky in practice when Jack ran `dotnet test` locally; replaced with a deterministic version (`UpdateMe_on_stale_RowVersion_returns_409`) that forces the same conflict via two `DbContext`s instead of hoping two real HTTP requests race.
+- `ConfirmPopup` closes before the async save resolves, no loading affordance during the in-flight window [frontend/src/components/ConfirmPopup.jsx:15-18] — UX polish only; double-submit itself is already blocked via `disabled={isSubmitting}` on all Save/Cancel buttons.
+- `RequireRole roles={['Customer', 'Barber', 'Admin']}` hardcodes the full `Role` enum to mean "any authenticated user" [frontend/src/App.jsx:28] — brittle if a 4th role is ever added, but matches story 1.7's own Task 5 spec.
+- ~~`AccountApi.js`'s `updateAccount` can return `{ok: true, identity: null}` on a malformed 200 body...~~ **Resolved** in round 2 of this same story's review — `AccountApi.js` now explicitly treats a malformed/empty 200 body as a failure (`{ ok: false, status: null }`).
+
 ## Deferred from: code review of story-1-6-server-side-role-gating-and-protected-routing (2026-07-31)
 
 - `SessionLivenessMiddleware` 401s any authenticated request regardless of whether the target endpoint requires authorization at all — no current endpoint is reachable this way since no anonymous-but-optionally-authenticated endpoint exists yet in this app's own flows. Worth a `context.GetEndpoint()` metadata check when that need actually arises. [backend/BarbershopApi/Services/SessionLivenessMiddleware.cs:11]

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router'
 import { useAuth } from '../context/AuthContext'
 import { updateAccount } from '../api/AccountApi'
 import FormSection from '../components/FormSection'
@@ -7,16 +8,23 @@ import Button from '../components/Button'
 import ConfirmPopup from '../components/ConfirmPopup'
 import './Account.css'
 
+const CURRENT_PASSWORD_INCORRECT_TITLE = 'Current password is incorrect.'
+const SAME_AS_CURRENT_PASSWORD_TITLE =
+  'New password must be different from your current password.'
+
 export default function Account() {
-  const { user, login } = useAuth()
+  const navigate = useNavigate()
+  const { user, login, logout } = useAuth()
 
   const [isEditingName, setIsEditingName] = useState(false)
   const [firstName, setFirstName] = useState(user.firstName)
   const [lastName, setLastName] = useState(user.lastName)
 
   const [isChangingPassword, setIsChangingPassword] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [currentPasswordError, setCurrentPasswordError] = useState('')
   const [passwordError, setPasswordError] = useState('')
 
   const [fieldErrors, setFieldErrors] = useState({})
@@ -39,6 +47,12 @@ export default function Account() {
     setIsEditingName(false)
   }
 
+  function handleStartEditingName() {
+    clearMessages()
+    handleCancelPassword()
+    setIsEditingName(true)
+  }
+
   function handleSaveNameClick() {
     clearMessages()
     setPendingAction('name')
@@ -46,14 +60,31 @@ export default function Account() {
   }
 
   function handleCancelPassword() {
+    setCurrentPassword('')
     setNewPassword('')
     setConfirmPassword('')
+    setCurrentPasswordError('')
     setPasswordError('')
     setIsChangingPassword(false)
   }
 
+  function handleStartChangingPassword() {
+    clearMessages()
+    handleCancelName()
+    setIsChangingPassword(true)
+  }
+
   function handleSavePasswordClick() {
     clearMessages()
+    setCurrentPasswordError('')
+    if (!currentPassword) {
+      setCurrentPasswordError('Current password is required')
+      return
+    }
+    if (!newPassword) {
+      setPasswordError('New password is required')
+      return
+    }
     if (newPassword !== confirmPassword) {
       setPasswordError('Passwords do not match')
       setNewPassword('')
@@ -67,10 +98,15 @@ export default function Account() {
 
   async function handleConfirm() {
     setIsSubmitting(true)
+    const isPasswordAction = pendingAction === 'password'
     const result = await updateAccount(user.accessToken, {
-      firstName,
-      lastName,
-      newPassword: pendingAction === 'password' ? newPassword : undefined,
+      // A password save must never carry a name change, even one sitting
+      // unconfirmed in the (mutually-exclusive) name-edit fields -- send the
+      // last-confirmed name, not local component state.
+      firstName: isPasswordAction ? user.firstName : firstName,
+      lastName: isPasswordAction ? user.lastName : lastName,
+      newPassword: isPasswordAction ? newPassword : undefined,
+      currentPassword: isPasswordAction ? currentPassword : undefined,
     })
     setIsSubmitting(false)
 
@@ -83,6 +119,7 @@ export default function Account() {
       if (pendingAction === 'name') {
         setIsEditingName(false)
       } else {
+        setCurrentPassword('')
         setNewPassword('')
         setConfirmPassword('')
         setIsChangingPassword(false)
@@ -91,13 +128,33 @@ export default function Account() {
       return
     }
 
-    if (result.status === 409) {
+    if (result.status === 401) {
+      logout()
+      navigate('/login', {
+        state: { message: 'Your session has expired. Please sign in again.' },
+      })
+    } else if (result.status === 429) {
+      setErrorMessage(
+        result.problem?.title ??
+          'Too many attempts. Try again in a few minutes.',
+      )
+    } else if (result.status === 409) {
       setErrorMessage(
         result.problem?.title ??
           'This account was updated elsewhere. Please refresh and try again.',
       )
     } else if (result.status === 400 && result.problem?.errors) {
       setFieldErrors(result.problem.errors)
+    } else if (
+      result.status === 400 &&
+      result.problem?.title === CURRENT_PASSWORD_INCORRECT_TITLE
+    ) {
+      setFieldErrors({ CurrentPassword: [result.problem.title] })
+    } else if (
+      result.status === 400 &&
+      result.problem?.title === SAME_AS_CURRENT_PASSWORD_TITLE
+    ) {
+      setFieldErrors({ NewPassword: [result.problem.title] })
     } else {
       setErrorMessage('Something went wrong. Please try again.')
     }
@@ -131,10 +188,8 @@ export default function Account() {
                   type="button"
                   className="account-page__edit-icon"
                   aria-label="Edit name"
-                  onClick={() => {
-                    clearMessages()
-                    setIsEditingName(true)
-                  }}
+                  onClick={handleStartEditingName}
+                  disabled={isSubmitting}
                 >
                   ✎
                 </button>
@@ -175,15 +230,22 @@ export default function Account() {
             {!isChangingPassword ? (
               <Button
                 variant="secondary"
-                onClick={() => {
-                  clearMessages()
-                  setIsChangingPassword(true)
-                }}
+                onClick={handleStartChangingPassword}
+                disabled={isSubmitting}
               >
                 Change Password
               </Button>
             ) : (
               <div className="account-page__password-edit">
+                <Input
+                  label="Current Password"
+                  type="password"
+                  value={currentPassword}
+                  onChange={(event) => setCurrentPassword(event.target.value)}
+                  error={
+                    currentPasswordError || fieldErrors.CurrentPassword?.[0]
+                  }
+                />
                 <Input
                   label="New Password"
                   type="password"
