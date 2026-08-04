@@ -58,8 +58,8 @@ development_status:
   1-7-self-service-account-management: done
   epic-1-retrospective: done
 
-  epic-2: backlog
-  2-1-appointment-entity-and-repository: backlog
+  epic-2: in-progress
+  2-1-appointment-entity-and-repository: ready-for-dev
   2-2-customer-books-an-appointment: backlog
   2-3-double-booking-and-self-conflict-guards: backlog
   2-4-my-appointments-view-cancel-and-race-safety: backlog
