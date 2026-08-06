@@ -4,7 +4,7 @@ baseline_commit: f72e9a2389f00256770e80792fa6733aa9f9ce22
 
 # Story 2.2: Customer Books an Appointment
 
-Status: in-progress
+Status: review
 
 ## Story
 
@@ -120,9 +120,9 @@ so that I get a confirmed appointment.
   - [x] `FormatSchedule.test.js`: covers `formatTimeLabel`/`formatDateLabel` for at least one AM and one PM time.
   - [x] `ScheduleAppointment.test.jsx`: unselected initial state (AC #1); "No barbers available" when `getBarbers` resolves empty (AC #2); time options reflect a stubbed `getAvailability` response (AC #4); full submit flow renders `ConfirmationScreen` with correct copy (AC #5); a stubbed `409` response shows the retry-friendly error and keeps barber/date selected. Stub `fetch` via `vi.fn()`/`vi.spyOn(fetch)` per AD-4 — no MSW.
 
-- [ ] **Task 15: Verify CI green and branch/PR**
+- [x] **Task 15: Verify CI green and branch/PR**
   - [x] Branch as `story/2.2-customer-books-an-appointment` from `main`.
-  - [ ] Push and confirm both CI jobs (backend `.NET`, frontend Vite/React) green on GitHub before merging (AD-11).
+  - [x] Push and confirm both CI jobs (backend `.NET`, frontend Vite/React) green on GitHub before merging (AD-11).
 
 ## Dev Notes
 
@@ -233,7 +233,9 @@ None — no blocking failures. `dotnet test` intermittently failed with a sandbo
 - Full suites green: backend 116/116 (`dotnet exec BarbershopApi.Tests.dll`), frontend 116/116 (`vitest run`), frontend `eslint .` and `prettier --check .` both clean.
 - Review fix (2026-08-06): Jack caught that neither the availability endpoint's `DatePattern` regex nor `BookAppointmentRequest.Date`'s `[RegularExpression]` validated the date was a real calendar date (e.g. `"2026-02-31"` passed both, since `^\d{4}-\d{2}-\d{2}$` only checks digit shape) — and since `Appointment.Date`/the DB column are plain strings with no calendar semantics, the bad date would have been silently persisted. Added `ValidCalendarDateAttribute` (`DateOnly.TryParseExact` against `"yyyy-MM-dd"`, mirroring the existing `PlausibleEmailAttribute` custom-validation-attribute pattern), applied it to `BookAppointmentRequest.Date` alongside the existing regex (defense-in-depth, same rationale as AD-9's double-booking guard), and added the same check to `BookingController.GetAvailability`'s manual date check. Added `GetAvailability_with_nonexistent_calendar_date_returns_400` and `CreateBooking_with_nonexistent_calendar_date_returns_400` to `BookingControllerTests.cs`. 118/118 backend tests passing (116 + 2 new).
 - Review fix (2026-08-06): same gap, `StartTime` field — `[RegularExpression(@"^\d{2}:\d{2}$")]` accepted `"25:99"` since it only checks digit shape, not a real 00:00-23:59 time. Added `ValidTimeAttribute` (`TimeOnly.TryParseExact` against `"HH:mm"`, same shape as `ValidCalendarDateAttribute`), applied to `BookAppointmentRequest.StartTime` alongside the existing regex. No controller-level manual check was needed here (unlike `Date`) since no GET endpoint takes a `startTime` query param. Added `CreateBooking_with_nonexistent_time_returns_400` to `BookingControllerTests.cs`. 119/119 backend tests passing (118 + 1 new). Deliberately did not add "is this one of the actual 30-minute bookable slots" validation — that's a business-rule check, not a format check, and Story 2.3 explicitly owns "is this date/time legal to book."
-- Task 15 (branch/PR) not yet done: currently on `story/2.2-customer-books-an-appointment` already branched from `main`, but nothing has been committed or pushed yet — paused here for review before commit/push, per standing instruction to let Jack review the diff first.
+- Task 15: committed and pushed to `story/2.2-customer-books-an-appointment` (commit `93ff82b`) once Jack reviewed and approved the diff. Both CI jobs (backend `.NET`, frontend Vite/React) confirmed green by Jack on GitHub. Jack is opening the PR himself (and running code review from a fresh chat) rather than having the agent do it.
+- Post-review addition (2026-08-06): added `BarberSeedService`, a no-op-unless-configured `IHostedService` mirroring `AdminBootstrapService`'s exact pattern (reads `BarberSeed:Email`/`BarberSeed:Password` from config, hardcodes FirstName/LastName as "Barber"/"One", skips silently if unconfigured or on an email collision). Not part of this story's ACs — added because there's no barber-creation API yet (Epic 3) and Jack's dev machine can't run one-off scripts/executables to seed a test barber directly against the SQLite file. Confirmed inert for tests/CI (119/119 backend tests still pass; the service only acts if the two env vars are explicitly set).
+- Review fix (2026-08-06): Jack found the time `SelectDropdown` on the booking form opened upward from the trigger (Radix's default collision-avoidance flips side when there's more room above) with no height cap on the option list, so it rendered taller than the viewport and the earliest slots were unreachable/cut off above the visible window. Fixed in `SelectDropdown.jsx`/`.css`: `side="bottom"` + `avoidCollisions={false}` so it always opens downward from the field, and `max-height: var(--radix-select-content-available-height)` + `overflow-y: auto` on the viewport so a list taller than the remaining space scrolls instead of overflowing the screen. 116/116 frontend tests still passing, lint/format clean.
 
 ### File List
 
@@ -244,6 +246,7 @@ None — no blocking failures. `dotnet test` intermittently failed with a sandbo
 - backend/BarbershopApi/Dtos/BookingConfirmation.cs
 - backend/BarbershopApi/Dtos/ValidCalendarDateAttribute.cs
 - backend/BarbershopApi/Dtos/ValidTimeAttribute.cs
+- backend/BarbershopApi/Services/BarberSeedService.cs
 - backend/BarbershopApi.Tests/BookingControllerTests.cs
 
 **Backend — modified:**
@@ -251,6 +254,7 @@ None — no blocking failures. `dotnet test` intermittently failed with a sandbo
 - backend/BarbershopApi/Repositories/AccountRepository.cs
 - backend/BarbershopApi/Services/IBookingService.cs
 - backend/BarbershopApi/Services/BookingService.cs
+- backend/BarbershopApi/Program.cs
 - backend/BarbershopApi.Tests/AccountRepositoryTests.cs
 - backend/BarbershopApi.Tests/BookingServiceTests.cs
 
@@ -288,3 +292,5 @@ None — no blocking failures. `dotnet test` intermittently failed with a sandbo
 - 2026-08-05: Implemented Tasks 1-14 (all backend and frontend work for booking, plus the NavBar responsive-collapse fix); backend 116/116 tests passing, frontend 116/116 tests passing, lint and format clean. Task 15 (branch/PR/CI) not yet done — paused for review before commit/push; status remains in-progress pending that.
 - 2026-08-06: Review fix — added real calendar-date validation (`ValidCalendarDateAttribute`) to close a gap where a shape-only regex let non-existent dates like `"2026-02-31"` reach the DB unvalidated. 118/118 backend tests passing.
 - 2026-08-06: Review fix — added the same real-time validation (`ValidTimeAttribute`) for `StartTime`, closing the analogous gap where `"25:99"` passed the shape-only regex. 119/119 backend tests passing.
+- 2026-08-06: Committed and pushed to `story/2.2-customer-books-an-appointment` (commit `93ff82b`); both CI jobs confirmed green on GitHub. Status set to review; Jack is opening the PR himself.
+- 2026-08-06: Added `BarberSeedService` (opt-in, env-var-gated dev-only barber seeding, mirrors `AdminBootstrapService`) and fixed the `SelectDropdown` time-picker opening upward and overflowing the viewport with no scroll affordance. 119/119 backend, 116/116 frontend tests passing; lint/format clean.

@@ -35,6 +35,11 @@
   z-index: 10;
 }
 
+.select-dropdown__viewport {
+  max-height: var(--radix-select-content-available-height, 300px);
+  overflow-y: auto;
+}
+
 .select-dropdown__item {
   font-family: var(--font-family-base);
   font-size: var(--typography-body-size);

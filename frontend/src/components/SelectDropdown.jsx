@@ -37,9 +37,11 @@ export default function SelectDropdown({
           <Select.Content
             className="select-dropdown__content"
             position="popper"
+            side="bottom"
+            avoidCollisions={false}
             sideOffset={4}
           >
-            <Select.Viewport>
+            <Select.Viewport className="select-dropdown__viewport">
               {options.map((option) => (
                 <Select.Item
                   key={option.value}
