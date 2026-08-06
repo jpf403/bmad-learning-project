@@ -180,18 +180,32 @@ public class BookingServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task GetAvailableSlots_excludes_slots_within_30_minutes_of_now_on_todays_date()
+    public async Task GetAvailableSlots_excludes_slots_within_30_minutes_of_an_explicit_now()
     {
         await using var context = _factory.CreateDbContext();
         var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
         var service = NewService(context);
 
-        var nowEst = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("America/New_York"));
-        var today = nowEst.ToString("yyyy-MM-dd");
-        var cutoff = nowEst.AddMinutes(30).ToString("HH:mm");
+        var now = new DateTime(2026, 9, 1, 13, 45, 0);
 
-        var slots = await service.GetAvailableSlots(barber.Id, today);
+        var slots = await service.GetAvailableSlots(barber.Id, "2026-09-01", now);
 
-        Assert.All(slots, slot => Assert.True(string.CompareOrdinal(slot, cutoff) >= 0));
+        Assert.DoesNotContain("13:30", slots);
+        Assert.DoesNotContain("14:00", slots);
+        Assert.Contains("14:30", slots);
+    }
+
+    [Fact]
+    public async Task GetAvailableSlots_excludes_all_slots_when_the_30_minute_cutoff_rolls_into_the_next_day()
+    {
+        await using var context = _factory.CreateDbContext();
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var service = NewService(context);
+
+        var now = new DateTime(2026, 9, 1, 23, 45, 0);
+
+        var slots = await service.GetAvailableSlots(barber.Id, "2026-09-01", now);
+
+        Assert.Empty(slots);
     }
 }

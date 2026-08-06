@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using BarbershopApi.Dtos;
 using BarbershopApi.Entities;
 using BarbershopApi.Repositories;
@@ -13,8 +12,6 @@ namespace BarbershopApi.Controllers;
 [Authorize]
 public class BookingController(IAccountRepository accountRepository, IBookingService bookingService) : ControllerBase
 {
-    private static readonly Regex DatePattern = new(@"^\d{4}-\d{2}-\d{2}$");
-
     [HttpGet("barbers")]
     public async Task<IActionResult> GetBarbers()
     {
@@ -25,7 +22,7 @@ public class BookingController(IAccountRepository accountRepository, IBookingSer
     [HttpGet("availability")]
     public async Task<IActionResult> GetAvailability([FromQuery] int barberId, [FromQuery] string date)
     {
-        if (!DatePattern.IsMatch(date) || !ValidCalendarDateAttribute.IsValidDate(date))
+        if (string.IsNullOrEmpty(date) || !ValidCalendarDateAttribute.IsValidDate(date))
         {
             return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Date must be in yyyy-MM-dd format.");
         }

@@ -46,6 +46,7 @@ public class AccountRepository(BarbershopDbContext context) : IAccountRepository
             .Where(a => a.Role == role && a.DeletedAt == null)
             .OrderBy(a => a.FirstName)
             .ThenBy(a => a.LastName)
+            .ThenBy(a => a.Id)
             .ToListAsync();
     }
 }

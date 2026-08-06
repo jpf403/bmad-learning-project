@@ -33,7 +33,7 @@ function isDisabledDay(date) {
   return day < today || day > maxDate || dayOfWeek === 0 || dayOfWeek === 6
 }
 
-export default function Calendar({ label, value, onChange }) {
+export default function Calendar({ label, value, onChange, disabled = false }) {
   const generatedId = useId()
   const [open, setOpen] = useState(false)
   const selected = fromDateString(value)
@@ -53,9 +53,17 @@ export default function Calendar({ label, value, onChange }) {
           {label}
         </label>
       )}
-      <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Root
+        open={open}
+        onOpenChange={(next) => !disabled && setOpen(next)}
+      >
         <Popover.Trigger asChild>
-          <button type="button" id={generatedId} className="calendar-trigger">
+          <button
+            type="button"
+            id={generatedId}
+            className="calendar-trigger"
+            disabled={disabled}
+          >
             {selected
               ? selected.toLocaleDateString('en-US', {
                   month: 'long',

@@ -27,27 +27,31 @@ public class BarberSeedService(
             return;
         }
 
-        using var scope = scopeFactory.CreateScope();
-        var accountRepository = scope.ServiceProvider.GetRequiredService<IAccountRepository>();
-        var passwordHasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher<Account>>();
-
-        var barber = new Account
-        {
-            Email = email,
-            FirstName = "Barber",
-            LastName = "One",
-            Role = Role.Barber,
-        };
-        barber.PasswordHash = passwordHasher.HashPassword(barber, password);
-
         try
         {
+            using var scope = scopeFactory.CreateScope();
+            var accountRepository = scope.ServiceProvider.GetRequiredService<IAccountRepository>();
+            var passwordHasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher<Account>>();
+
+            var barber = new Account
+            {
+                Email = email,
+                FirstName = "Barber",
+                LastName = "One",
+                Role = Role.Barber,
+            };
+            barber.PasswordHash = passwordHasher.HashPassword(barber, password);
+
             await accountRepository.Create(barber);
         }
         catch (DbUpdateException ex) when (ex.InnerException is SqliteException { SqliteErrorCode: SqliteConstraintViolation })
         {
             logger.LogWarning(
-                "BarberSeed:Email {Email} collides with an existing account — skipping barber seed.", barber.Email);
+                "BarberSeed:Email {Email} collides with an existing account — skipping barber seed.", email);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Barber seed failed — skipping.");
         }
     }
 

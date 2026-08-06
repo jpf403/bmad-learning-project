@@ -9,6 +9,7 @@ export default function SelectDropdown({
   options,
   placeholder = 'Select…',
   emptyMessage,
+  disabled = false,
 }) {
   const generatedId = useId()
 
@@ -28,7 +29,11 @@ export default function SelectDropdown({
           {label}
         </label>
       )}
-      <Select.Root value={value ?? undefined} onValueChange={onChange}>
+      <Select.Root
+        value={value ?? undefined}
+        onValueChange={onChange}
+        disabled={disabled}
+      >
         <Select.Trigger id={generatedId} className="select-dropdown__trigger">
           <Select.Value placeholder={placeholder} />
           <Select.Icon className="select-dropdown__icon">▾</Select.Icon>

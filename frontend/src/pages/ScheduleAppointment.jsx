@@ -14,10 +14,12 @@ export default function ScheduleAppointment() {
 
   const [barbers, setBarbers] = useState([])
   const [barbersLoading, setBarbersLoading] = useState(true)
+  const [barbersError, setBarbersError] = useState('')
   const [barberId, setBarberId] = useState('')
   const [date, setDate] = useState('')
   const [availableSlots, setAvailableSlots] = useState([])
   const [availabilityLoading, setAvailabilityLoading] = useState(false)
+  const [availabilityError, setAvailabilityError] = useState('')
   const [startTime, setStartTime] = useState('')
   const [formError, setFormError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -33,6 +35,8 @@ export default function ScheduleAppointment() {
     setSelectionKey(currentSelectionKey)
     setStartTime('')
     setAvailableSlots([])
+    setFormError('')
+    setAvailabilityError('')
   }
 
   useEffect(() => {
@@ -45,6 +49,9 @@ export default function ScheduleAppointment() {
       }
       if (result.ok) {
         setBarbers(result.barbers)
+        setBarbersError('')
+      } else {
+        setBarbersError('Could not load barbers. Please try again.')
       }
       setBarbersLoading(false)
     }
@@ -64,12 +71,20 @@ export default function ScheduleAppointment() {
 
     async function loadAvailability() {
       setAvailabilityLoading(true)
+      setAvailabilityError('')
       const result = await getAvailability(user.accessToken, barberId, date)
       if (cancelled) {
         return
       }
       setAvailabilityLoading(false)
-      setAvailableSlots(result.ok ? result.slots : [])
+      if (result.ok) {
+        setAvailableSlots(result.slots)
+      } else {
+        setAvailableSlots([])
+        setAvailabilityError(
+          'Could not load available times. Please try again.',
+        )
+      }
     }
 
     loadAvailability()
@@ -131,6 +146,8 @@ export default function ScheduleAppointment() {
       <FormSection>
         {barbersLoading ? (
           <p className="schedule-appointment__loading">Loading…</p>
+        ) : barbersError ? (
+          <p className="schedule-appointment__form-error">{barbersError}</p>
         ) : (
           <form className="schedule-appointment__form" onSubmit={handleSubmit}>
             <SelectDropdown
@@ -139,13 +156,19 @@ export default function ScheduleAppointment() {
               onChange={setBarberId}
               placeholder="Select a barber"
               emptyMessage="No barbers available"
+              disabled={isSubmitting}
               options={barbers.map((barber) => ({
                 value: String(barber.id),
                 label: `${barber.firstName} ${barber.lastName}`,
               }))}
             />
 
-            <Calendar label="Date" value={date} onChange={setDate} />
+            <Calendar
+              label="Date"
+              value={date}
+              onChange={setDate}
+              disabled={isSubmitting}
+            />
 
             {availabilityLoading ? (
               <div className="schedule-appointment__field">
@@ -158,11 +181,23 @@ export default function ScheduleAppointment() {
                 value={startTime}
                 onChange={setStartTime}
                 placeholder="Select a time"
+                emptyMessage={
+                  !barberId || !date
+                    ? 'Select a barber and date first'
+                    : 'No times available'
+                }
+                disabled={isSubmitting}
                 options={availableSlots.map((slot) => ({
                   value: slot,
                   label: formatTimeLabel(slot),
                 }))}
               />
+            )}
+
+            {availabilityError && (
+              <p className="schedule-appointment__form-error">
+                {availabilityError}
+              </p>
             )}
 
             {formError && (

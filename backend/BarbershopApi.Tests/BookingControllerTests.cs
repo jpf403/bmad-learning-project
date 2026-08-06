@@ -142,6 +142,34 @@ public class BookingControllerTests : IDisposable
     }
 
     [Fact]
+    public async Task GetAvailability_with_oversized_year_in_date_returns_400()
+    {
+        var barber = await SeedAccount("barber@example.com", Role.Barber);
+        using var client = _factory.CreateClient();
+        var accessToken = await RegisterAndLogin(client);
+
+        var response = await client.SendAsync(
+            AuthedRequest(HttpMethod.Get, $"/api/booking/availability?barberId={barber.Id}&date=12026-01-01", accessToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetAvailability_with_missing_date_returns_400()
+    {
+        var barber = await SeedAccount("barber@example.com", Role.Barber);
+        using var client = _factory.CreateClient();
+        var accessToken = await RegisterAndLogin(client);
+
+        var response = await client.SendAsync(
+            AuthedRequest(HttpMethod.Get, $"/api/booking/availability?barberId={barber.Id}", accessToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task GetAvailability_with_nonexistent_calendar_date_returns_400()
     {
         var barber = await SeedAccount("barber@example.com", Role.Barber);

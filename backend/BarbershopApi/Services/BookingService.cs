@@ -64,17 +64,26 @@ public class BookingService(IAppointmentRepository appointmentRepository, IAccou
         return views;
     }
 
-    public async Task<List<string>> GetAvailableSlots(int barberId, string date)
+    public async Task<List<string>> GetAvailableSlots(int barberId, string date, DateTime? now = null)
     {
         var booked = await appointmentRepository.FindByBarberAndDate(barberId, date);
         var bookedTimes = booked.Select(a => a.StartTime).ToHashSet();
 
         var available = FixedSlots.Where(slot => !bookedTimes.Contains(slot)).ToList();
 
-        var nowEst = GetNowEst();
+        var nowEst = now ?? GetNowEst();
         if (date == nowEst.ToString("yyyy-MM-dd"))
         {
-            var cutoff = nowEst.AddMinutes(30).ToString("HH:mm");
+            var cutoffEst = nowEst.AddMinutes(30);
+            if (cutoffEst.ToString("yyyy-MM-dd") != date)
+            {
+                // The 30-minute cutoff rolled past midnight -- every fixed slot on `date`
+                // (09:00-16:30) is necessarily already in the past relative to a cutoff
+                // that's now on the following calendar day.
+                return [];
+            }
+
+            var cutoff = cutoffEst.ToString("HH:mm");
             available = available.Where(slot => string.CompareOrdinal(slot, cutoff) >= 0).ToList();
         }
 

@@ -1,5 +1,9 @@
 # Deferred Work
 
+## Deferred from: code review of story-2-2-customer-books-an-appointment (2026-08-06)
+
+- `BookingController.CreateBooking`'s `catch (Exception)` has no logging before returning 500 — pre-existing pattern, identical to `AccountController`'s and `AuthController`'s no-`ILogger`-anywhere catch-alls. [backend/BarbershopApi/Controllers/BookingController.cs:62-65]
+
 ## Deferred from: code review of story-2-1-appointment-entity-and-repository (2026-08-04)
 
 - `BookingService.Create`'s DB-level race backstop (and `Cancel`'s read-then-write race) can't be tested deterministically without a real concurrent request, which AD-4 disallows mocking around — same accepted limitation already logged below for `AuthService` in story-1-4's review, just recurring at the Appointment layer. [backend/BarbershopApi/Services/BookingService.cs:34, backend/BarbershopApi/Repositories/AppointmentRepository.cs]
