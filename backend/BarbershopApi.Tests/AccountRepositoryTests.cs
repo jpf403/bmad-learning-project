@@ -10,12 +10,12 @@ public class AccountRepositoryTests : IDisposable
 
     public void Dispose() => _factory.Dispose();
 
-    private static Account NewAccount(string email = "john@example.com", Role role = Role.Customer) => new()
+    private static Account NewAccount(string email = "john@example.com", Role role = Role.Customer, string firstName = "John", string lastName = "Smith") => new()
     {
         Email = email,
         PasswordHash = "hashed-password",
-        FirstName = "John",
-        LastName = "Smith",
+        FirstName = firstName,
+        LastName = lastName,
         Role = role,
     };
 
@@ -259,5 +259,46 @@ public class AccountRepositoryTests : IDisposable
 
         staleCopy.FirstName = "Second update";
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => repositoryB.Update(staleCopy));
+    }
+
+    [Fact]
+    public async Task FindAllByRole_returns_only_matching_role_ordered_by_name()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        await repository.Create(NewAccount(email: "zack@example.com", role: Role.Barber, firstName: "Zack"));
+        await repository.Create(NewAccount(email: "amy@example.com", role: Role.Barber, firstName: "Amy"));
+        await repository.Create(NewAccount(email: "customer@example.com", role: Role.Customer));
+
+        var barbers = await repository.FindAllByRole(Role.Barber);
+
+        Assert.Equal(2, barbers.Count);
+        Assert.Equal("Amy", barbers[0].FirstName);
+        Assert.Equal("Zack", barbers[1].FirstName);
+    }
+
+    [Fact]
+    public async Task FindAllByRole_excludes_soft_deleted_accounts()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        var barber = await repository.Create(NewAccount(email: "barber@example.com", role: Role.Barber));
+        barber.DeletedAt = DateTime.UtcNow;
+        await repository.Update(barber);
+
+        var barbers = await repository.FindAllByRole(Role.Barber);
+
+        Assert.Empty(barbers);
+    }
+
+    [Fact]
+    public async Task FindAllByRole_returns_empty_list_when_none_exist()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+
+        var barbers = await repository.FindAllByRole(Role.Barber);
+
+        Assert.Empty(barbers);
     }
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { useEffect } from 'react'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router'
 import { AuthProvider, useAuth } from '../context/AuthContext'
@@ -226,6 +226,36 @@ describe('NavBar', () => {
 
       expect(
         await screen.findByRole('button', { name: 'Sign In' }),
+      ).toBeInTheDocument()
+    })
+  })
+
+  describe('collapsed navigation menu', () => {
+    it('renders a menu button that toggles a dropdown of the nav links', async () => {
+      const user = userEvent.setup()
+      renderNavBar()
+
+      await user.click(screen.getByRole('button', { name: 'Menu' }))
+
+      const menu = await screen.findByRole('menu')
+      expect(
+        within(menu).getByRole('menuitem', { name: 'Home' }),
+      ).toBeInTheDocument()
+      expect(
+        within(menu).getByRole('menuitem', { name: 'About' }),
+      ).toBeInTheDocument()
+    })
+
+    it('includes role-gated links in the collapsed menu for a signed-in Customer', async () => {
+      const user = userEvent.setup()
+      renderNavBar({ signedIn: true, role: 'Customer' })
+      await screen.findByRole('link', { name: 'Schedule Appointment' })
+
+      await user.click(screen.getByRole('button', { name: 'Menu' }))
+
+      const menu = await screen.findByRole('menu')
+      expect(
+        within(menu).getByRole('menuitem', { name: 'Schedule Appointment' }),
       ).toBeInTheDocument()
     })
   })

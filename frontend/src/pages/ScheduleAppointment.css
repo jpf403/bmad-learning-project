@@ -1,0 +1,49 @@
+.schedule-appointment {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-6);
+  max-width: 480px;
+  margin: 0 auto;
+  padding: var(--spacing-12) var(--spacing-gutter-mobile);
+}
+
+.schedule-appointment__title {
+  font-family: var(--font-family-base);
+  font-size: var(--typography-h1-size);
+  font-weight: var(--typography-h1-weight);
+  line-height: var(--typography-h1-line-height);
+  color: var(--color-text);
+  margin: 0;
+}
+
+.schedule-appointment__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+}
+
+.schedule-appointment__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+}
+
+.schedule-appointment__loading {
+  font-family: var(--font-family-base);
+  font-size: var(--typography-body-size);
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.schedule-appointment__form-error {
+  color: var(--color-error);
+  font-family: var(--font-family-base);
+  font-size: var(--typography-caption-size);
+  margin: 0;
+}
+
+@media (min-width: 640px) {
+  .schedule-appointment {
+    padding: var(--spacing-16) var(--spacing-gutter-desktop);
+  }
+}

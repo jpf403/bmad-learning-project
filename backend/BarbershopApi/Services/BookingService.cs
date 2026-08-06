@@ -10,6 +10,7 @@ public class BookingService(IAppointmentRepository appointmentRepository, IAccou
 {
     private const int SqliteConstraintViolation = 19;
     private static readonly TimeZoneInfo EasternTimeZone = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
+    private static readonly List<string> FixedSlots = BuildFixedSlots();
 
     public async Task<Appointment> Create(int customerId, int barberId, string date, string startTime)
     {
@@ -63,6 +64,23 @@ public class BookingService(IAppointmentRepository appointmentRepository, IAccou
         return views;
     }
 
+    public async Task<List<string>> GetAvailableSlots(int barberId, string date)
+    {
+        var booked = await appointmentRepository.FindByBarberAndDate(barberId, date);
+        var bookedTimes = booked.Select(a => a.StartTime).ToHashSet();
+
+        var available = FixedSlots.Where(slot => !bookedTimes.Contains(slot)).ToList();
+
+        var nowEst = GetNowEst();
+        if (date == nowEst.ToString("yyyy-MM-dd"))
+        {
+            var cutoff = nowEst.AddMinutes(30).ToString("HH:mm");
+            available = available.Where(slot => string.CompareOrdinal(slot, cutoff) >= 0).ToList();
+        }
+
+        return available;
+    }
+
     public async Task Cancel(int appointmentId)
     {
         var appointment = await appointmentRepository.FindById(appointmentId);
@@ -79,6 +97,19 @@ public class BookingService(IAppointmentRepository appointmentRepository, IAccou
     }
 
     private static DateTime GetNowEst() => TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, EasternTimeZone);
+
+    private static List<string> BuildFixedSlots()
+    {
+        var slots = new List<string>();
+        var time = new TimeOnly(9, 0);
+        var end = new TimeOnly(16, 30);
+        while (time <= end)
+        {
+            slots.Add(time.ToString("HH:mm"));
+            time = time.AddMinutes(30);
+        }
+        return slots;
+    }
 
     private async Task<AppointmentView> ToView(Appointment appointment, DateTime nowEst)
     {

@@ -36,27 +36,16 @@ export default function NavBar() {
     navigate('/')
   }
 
+  const visibleLinks = [
+    ...ROUTED_LINKS,
+    ...ROLE_LINKS.filter((link) => user && link.roles.includes(user.role)),
+  ]
+
   return (
     <nav className="nav-bar">
       <span className="nav-bar__logo">Fake Barbershop</span>
       <ul className="nav-bar__links">
-        {ROUTED_LINKS.map(({ label, to }) => (
-          <li key={label}>
-            <Link
-              className={
-                currentPath === normalizePath(to)
-                  ? 'nav-bar__link nav-bar__link--active'
-                  : 'nav-bar__link'
-              }
-              to={to}
-            >
-              {label}
-            </Link>
-          </li>
-        ))}
-        {ROLE_LINKS.filter(
-          (link) => user && link.roles.includes(user.role),
-        ).map(({ label, to }) => (
+        {visibleLinks.map(({ label, to }) => (
           <li key={label}>
             <Link
               className={
@@ -71,6 +60,37 @@ export default function NavBar() {
           </li>
         ))}
       </ul>
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger asChild>
+          <button className="nav-bar__menu-button" aria-label="Menu">
+            <svg
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              aria-hidden="true"
+              className="nav-bar__menu-icon"
+            >
+              <path d="M3 6h18v2H3V6Zm0 5h18v2H3v-2Zm0 5h18v2H3v-2Z" />
+            </svg>
+          </button>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content
+            className="nav-bar__menu-dropdown"
+            align="end"
+            sideOffset={8}
+          >
+            {visibleLinks.map(({ label, to }) => (
+              <DropdownMenu.Item
+                key={label}
+                className="nav-bar__dropdown-item"
+                asChild
+              >
+                <Link to={to}>{label}</Link>
+              </DropdownMenu.Item>
+            ))}
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
       <div className="nav-bar__actions">
         {user ? (
           <DropdownMenu.Root>
