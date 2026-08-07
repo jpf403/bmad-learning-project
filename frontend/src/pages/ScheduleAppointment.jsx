@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import {
   getBarbers,
@@ -37,6 +37,14 @@ export default function ScheduleAppointment() {
   const [appointmentsError, setAppointmentsError] = useState('')
   const [cancelTarget, setCancelTarget] = useState(null)
   const [cancelError, setCancelError] = useState('')
+  const [cancellingId, setCancellingId] = useState(null)
+  const isMountedRef = useRef(true)
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
 
   // Reset the time selection whenever barber or date changes, computed
   // during render (React's documented alternative to an effect for
@@ -75,31 +83,43 @@ export default function ScheduleAppointment() {
     }
   }, [user.accessToken])
 
-  async function loadAppointments() {
-    setAppointmentsLoading(true)
+  async function fetchAppointments() {
     const result = await getMyAppointments(user.accessToken)
     if (result.ok) {
-      setAppointments(result.appointments)
-      setAppointmentsError('')
-    } else {
-      setAppointmentsError('Could not load appointments. Please try again.')
+      return { appointments: result.appointments, errorMessage: '' }
     }
-    setAppointmentsLoading(false)
+    return {
+      appointments: null,
+      errorMessage: 'Could not load appointments. Please try again.',
+    }
+  }
+
+  async function refreshAppointments() {
+    const { appointments, errorMessage } = await fetchAppointments()
+    if (!isMountedRef.current) {
+      return
+    }
+    if (errorMessage) {
+      setAppointmentsError(errorMessage)
+    } else {
+      setAppointments(appointments)
+      setAppointmentsError('')
+    }
   }
 
   useEffect(() => {
     let cancelled = false
 
     async function load() {
-      const result = await getMyAppointments(user.accessToken)
+      const { appointments, errorMessage } = await fetchAppointments()
       if (cancelled) {
         return
       }
-      if (result.ok) {
-        setAppointments(result.appointments)
-        setAppointmentsError('')
+      if (errorMessage) {
+        setAppointmentsError(errorMessage)
       } else {
-        setAppointmentsError('Could not load appointments. Please try again.')
+        setAppointments(appointments)
+        setAppointmentsError('')
       }
       setAppointmentsLoading(false)
     }
@@ -108,25 +128,33 @@ export default function ScheduleAppointment() {
     return () => {
       cancelled = true
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.accessToken])
 
   async function handleCancelConfirmed() {
     const target = cancelTarget
+    if (cancellingId !== null) {
+      return
+    }
+    setCancellingId(target.id)
     setCancelError('')
     const result = await cancelAppointment(user.accessToken, target.id)
 
     if (result.ok) {
-      await loadAppointments()
+      await refreshAppointments()
+      setCancellingId(null)
       return
     }
 
     if (result.status === 409) {
       setCancelError('This appointment has already been cancelled.')
-      await loadAppointments()
+      await refreshAppointments()
+      setCancellingId(null)
       return
     }
 
     setCancelError('Something went wrong. Please try again.')
+    setCancellingId(null)
   }
 
   useEffect(() => {
@@ -303,7 +331,11 @@ export default function ScheduleAppointment() {
               </div>
               <Button
                 variant="destructive"
-                onClick={() => setCancelTarget(appt)}
+                disabled={cancellingId !== null}
+                onClick={() => {
+                  setCancelError('')
+                  setCancelTarget(appt)
+                }}
               >
                 Cancel
               </Button>

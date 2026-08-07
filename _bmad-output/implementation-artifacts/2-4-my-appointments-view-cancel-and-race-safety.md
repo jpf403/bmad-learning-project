@@ -4,7 +4,7 @@ baseline_commit: 200958fdb7aaec1f0bd403dbc3f4a7d79e8b661c
 
 # Story 2.4: My Appointments — View, Cancel, and Race Safety
 
-Status: review
+Status: done
 
 ## Story
 
@@ -322,3 +322,13 @@ None — no failures requiring investigation. Full backend and frontend suites b
 ### Change Log
 
 - 2026-08-07: Implemented Story 2.4 — race-safe `TryCancel` conditional-update primitive, caller-scoped authorization in `BookingService.Cancel` (customer/barber/admin, shared by Stories 2.5/2.6), `GET /api/booking/mine` + `POST /api/booking/{id}/cancel` endpoints, and the My Appointments list/cancel UI on the Schedule Appointment page.
+
+### Review Findings
+
+- [x] [Review][Patch] ~~Duplicated appointment-fetch logic between the mount effect and the post-cancel refetch — the standalone `loadAppointments()` (used by `handleCancelConfirmed`) omits the `cancelled`-flag unmount guard that the mount `useEffect`'s inline `load()` uses for the identical fetch, and the two implementations can drift since they aren't shared.~~ **Resolved (2026-08-07)** — extracted a shared, setState-free `fetchAppointments()` (fetch + ok/error shaping only) used by both the mount effect's local `load()` (own `cancelled` guard, matching the sibling `loadBarbers`/`loadAvailability` effects' pattern) and a new `refreshAppointments()` for the post-cancel path, guarded by a component-lifetime `isMountedRef`. Keeping the setState calls local to each call site (rather than in the shared helper) was required to satisfy `react-hooks/set-state-in-effect` — that lint rule flags any externally-declared function containing a setState call when invoked directly from an effect body, regardless of internal `await` ordering. [frontend/src/pages/ScheduleAppointment.jsx:41-47,86-132]
+- [x] [Review][Patch] ~~`ConfirmPopup` closes and clears `cancelTarget` synchronously before `cancelAppointment` resolves, and no Cancel button is disabled during an in-flight request — a fast double-cancel (same or a different appointment) can fire overlapping requests and surface a false "already cancelled" error on the user's own click. Story 1.7's review accepted this same `ConfirmPopup` early-close behavior only because its Save/Cancel buttons were separately guarded by `disabled={isSubmitting}`; no equivalent guard exists here.~~ **Resolved (2026-08-07)** — added `cancellingId` state; `handleCancelConfirmed` no-ops on a re-entrant call while one is in flight, and each row's Cancel button is disabled whenever `cancellingId !== null`, matching the `disabled={isSubmitting}` guard pattern story 1.7 relied on for the same `ConfirmPopup` behavior. [frontend/src/pages/ScheduleAppointment.jsx:40,134-158,332-341]
+- [x] [Review][Patch] ~~`cancelError` is only cleared at the start of the next `handleCancelConfirmed` call, not when a new `cancelTarget` is selected — a stale error from a prior failed cancel stays visible under the list while confirming a different appointment, and it can render simultaneously with `appointmentsError` if a post-409 refetch itself fails.~~ **Resolved (2026-08-07)** — the row's Cancel `onClick` now clears `cancelError` at selection time, before opening the popup. [frontend/src/pages/ScheduleAppointment.jsx:335-338]
+- [x] [Review][Patch] ~~`GET /api/booking/mine` has no test for the missing-access-token → 401 path, unlike `POST /api/booking/{id}/cancel` added in the same task — asymmetric coverage between two endpoints introduced together.~~ **Resolved (2026-08-07)** — added `GetMyAppointments_without_access_token_returns_401`, mirroring `CancelBooking_without_access_token_returns_401`. [backend/BarbershopApi.Tests/BookingControllerTests.cs]
+- [x] [Review][Defer] `CancelBooking`'s per-exception-type catch-block mapping duplicates `CreateBooking`'s existing catch-block shape verbatim — deferred, pre-existing pattern (`CreateBooking` already established this convention; a shared exception-to-`ProblemDetails` helper would need to touch both actions, out of this story's scope). [backend/BarbershopApi/Controllers/BookingController.cs:76-97, :50-67]
+
+Full backend suite: 150/150 passing (`dotnet test`). Full frontend suite: 122/122 passing (`vitest run`). `eslint .` and `prettier --check .` both clean after the above patches.

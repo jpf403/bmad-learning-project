@@ -423,6 +423,18 @@ public class BookingControllerTests : IDisposable
     }
 
     [Fact]
+    public async Task GetMyAppointments_without_access_token_returns_401()
+    {
+        using var client = _factory.CreateClient();
+
+        var response = await client.SendAsync(
+            AuthedRequest(HttpMethod.Get, "/api/booking/mine", null),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
     public async Task CancelBooking_returns_204_and_frees_the_slot_for_rebooking()
     {
         var barber = await SeedAccount("barber@example.com", Role.Barber);
