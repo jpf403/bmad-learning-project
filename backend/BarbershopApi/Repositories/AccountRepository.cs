@@ -39,4 +39,14 @@ public class AccountRepository(BarbershopDbContext context) : IAccountRepository
     {
         return await context.Accounts.AnyAsync(a => a.Role == Role.Admin && a.DeletedAt == null);
     }
+
+    public async Task<List<Account>> FindAllByRole(Role role)
+    {
+        return await context.Accounts
+            .Where(a => a.Role == role && a.DeletedAt == null)
+            .OrderBy(a => a.FirstName)
+            .ThenBy(a => a.LastName)
+            .ThenBy(a => a.Id)
+            .ToListAsync();
+    }
 }

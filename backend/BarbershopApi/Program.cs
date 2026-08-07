@@ -44,6 +44,7 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<IBookingService, BookingService>();
 builder.Services.AddHostedService<AdminBootstrapService>();
+builder.Services.AddHostedService<BarberSeedService>();
 
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
 
@@ -173,6 +174,7 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
+// JWT Key from env var
 var jwtKey = app.Configuration["Jwt:Key"];
 if (string.IsNullOrWhiteSpace(jwtKey))
 {

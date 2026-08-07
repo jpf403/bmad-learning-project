@@ -142,4 +142,70 @@ public class BookingServiceTests : IDisposable
         Assert.Equal("Jane Doe", view.CustomerName);
         Assert.Equal("Bob Barbington", view.BarberName);
     }
+
+    [Fact]
+    public async Task GetAvailableSlots_returns_full_fixed_range_for_a_future_date_with_no_bookings()
+    {
+        await using var context = _factory.CreateDbContext();
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var service = NewService(context);
+
+        var slots = await service.GetAvailableSlots(barber.Id, "2026-09-01");
+
+        Assert.Equal(16, slots.Count);
+        Assert.Equal("09:00", slots.First());
+        Assert.Equal("16:30", slots.Last());
+    }
+
+    [Fact]
+    public async Task GetAvailableSlots_excludes_already_booked_slots()
+    {
+        await using var context = _factory.CreateDbContext();
+        var customer = await SeedAccount(context, "customer@example.com", Role.Customer);
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var appointmentRepository = new AppointmentRepository(context);
+        var service = new BookingService(appointmentRepository, new AccountRepository(context));
+        await appointmentRepository.Create(new Appointment
+        {
+            CustomerId = customer.Id,
+            BarberId = barber.Id,
+            Date = "2026-09-01",
+            StartTime = "09:30",
+        });
+
+        var slots = await service.GetAvailableSlots(barber.Id, "2026-09-01");
+
+        Assert.DoesNotContain("09:30", slots);
+        Assert.Equal(15, slots.Count);
+    }
+
+    [Fact]
+    public async Task GetAvailableSlots_excludes_slots_within_30_minutes_of_an_explicit_now()
+    {
+        await using var context = _factory.CreateDbContext();
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var service = NewService(context);
+
+        var now = new DateTime(2026, 9, 1, 13, 45, 0);
+
+        var slots = await service.GetAvailableSlots(barber.Id, "2026-09-01", now);
+
+        Assert.DoesNotContain("13:30", slots);
+        Assert.DoesNotContain("14:00", slots);
+        Assert.Contains("14:30", slots);
+    }
+
+    [Fact]
+    public async Task GetAvailableSlots_excludes_all_slots_when_the_30_minute_cutoff_rolls_into_the_next_day()
+    {
+        await using var context = _factory.CreateDbContext();
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var service = NewService(context);
+
+        var now = new DateTime(2026, 9, 1, 23, 45, 0);
+
+        var slots = await service.GetAvailableSlots(barber.Id, "2026-09-01", now);
+
+        Assert.Empty(slots);
+    }
 }

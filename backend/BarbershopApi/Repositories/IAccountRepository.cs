@@ -9,4 +9,5 @@ public interface IAccountRepository
     Task<Account?> FindById(int id);
     Task Update(Account account);
     Task<bool> AdminExists();
+    Task<List<Account>> FindAllByRole(Role role);
 }

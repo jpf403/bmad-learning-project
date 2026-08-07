@@ -1,0 +1,105 @@
+.calendar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+}
+
+.calendar-trigger {
+  font-family: var(--font-family-base);
+  font-size: var(--typography-body-size);
+  color: var(--color-text);
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--rounded-default);
+  box-shadow: none;
+  padding: var(--spacing-2) var(--spacing-3);
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+.calendar-panel {
+  background: var(--color-background);
+  border-radius: var(--rounded-default);
+  box-shadow:
+    0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  padding: var(--spacing-3);
+  z-index: 10;
+}
+
+.calendar-panel .rdp-root {
+  font-family: var(--font-family-base);
+  color: var(--color-text);
+}
+
+.calendar-panel .rdp-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.calendar-panel .rdp-button_previous,
+.calendar-panel .rdp-button_next {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: var(--spacing-1);
+}
+
+.calendar-panel .rdp-chevron {
+  fill: var(--color-text);
+  width: 16px;
+  height: 16px;
+}
+
+.calendar-panel .rdp-month_caption {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--typography-label-size);
+  font-weight: var(--typography-label-weight);
+  margin-bottom: var(--spacing-2);
+}
+
+.calendar-panel .rdp-month_grid {
+  border-collapse: collapse;
+}
+
+.calendar-panel .rdp-weekday {
+  font-size: var(--typography-caption-size);
+  font-weight: var(--typography-caption-weight);
+  color: var(--color-text-muted);
+  padding: var(--spacing-1);
+}
+
+.calendar-panel .rdp-day {
+  text-align: center;
+  padding: 2px;
+}
+
+.calendar-panel .rdp-day_button {
+  font-family: var(--font-family-base);
+  font-size: var(--typography-body-sm-size);
+  color: var(--color-text);
+  background: transparent;
+  border: none;
+  border-radius: var(--rounded-full);
+  width: 36px;
+  height: 36px;
+  cursor: pointer;
+}
+
+.calendar-panel .rdp-today .rdp-day_button {
+  color: var(--color-primary);
+}
+
+.calendar-panel .rdp-disabled .rdp-day_button {
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+.calendar-panel .rdp-selected .rdp-day_button {
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+}

@@ -8,6 +8,7 @@ import About from './pages/About'
 import Register from './pages/Register'
 import Login from './pages/Login'
 import Account from './pages/Account'
+import ScheduleAppointment from './pages/ScheduleAppointment'
 import './App.css'
 
 function App() {
@@ -27,6 +28,14 @@ function App() {
               element={
                 <RequireRole roles={['Customer', 'Barber', 'Admin']}>
                   <Account />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/schedule-appointment"
+              element={
+                <RequireRole roles={['Customer', 'Barber', 'Admin']}>
+                  <ScheduleAppointment />
                 </RequireRole>
               }
             />
