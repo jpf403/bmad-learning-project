@@ -1,5 +1,9 @@
 # Deferred Work
 
+## Deferred from: code review of story-2.4-my-appointments-view-cancel-and-race-safety (2026-08-07)
+
+- `CancelBooking`'s per-exception-type catch-block mapping duplicates `CreateBooking`'s existing catch-block shape verbatim — pre-existing pattern (`CreateBooking` already established this convention); a shared exception-to-`ProblemDetails` helper would need to touch both actions, out of this story's scope. [backend/BarbershopApi/Controllers/BookingController.cs:76-97, :50-67]
+
 ## Deferred from: code review of story-2.3-double-booking-and-self-conflict-guards (2026-08-07)
 
 - ~~`DateTime? now = null` optional-parameter test seam on `IBookingService.Create` lets any future caller bypass window validation (or pass a wrong-`DateTimeKind` value and silently corrupt the check)~~ **Resolved** (2026-08-07) — added a shared `ResolveNowEst` guard in `BookingService` that throws `ArgumentException` when a caller-supplied `now` isn't `DateTimeKind.Unspecified`, closing the silent-corruption risk. The optional parameter itself was kept (matches `GetAvailableSlots`'s pre-existing convention) rather than a full `TimeProvider` DI refactor. [backend/BarbershopApi/Services/BookingService.cs:124-133]

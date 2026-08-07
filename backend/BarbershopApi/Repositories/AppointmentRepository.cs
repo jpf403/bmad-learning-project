@@ -34,13 +34,16 @@ public class AppointmentRepository(BarbershopDbContext context) : IAppointmentRe
             .Where(a => a.CustomerId == customerId && a.CancelledAt == null &&
                 (a.Date.CompareTo(nowDate) > 0 ||
                  (a.Date == nowDate && a.StartTime.CompareTo(nowStartTime) > 0)))
+            .OrderBy(a => a.Date).ThenBy(a => a.StartTime)
             .ToListAsync();
     }
 
-    public async Task Cancel(Appointment appointment)
+    public async Task<bool> TryCancel(int appointmentId, DateTime cancelledAtUtc)
     {
-        appointment.CancelledAt = DateTime.UtcNow;
-        await context.SaveChangesAsync();
+        var rowsAffected = await context.Appointments
+            .Where(a => a.Id == appointmentId && a.CancelledAt == null)
+            .ExecuteUpdateAsync(s => s.SetProperty(a => a.CancelledAt, cancelledAtUtc));
+        return rowsAffected == 1;
     }
 
     public async Task<bool> ExistsConflict(int barberId, int customerId, string date, string startTime)

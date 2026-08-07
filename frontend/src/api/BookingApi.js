@@ -75,3 +75,47 @@ export async function createBooking(
   }
   return { ok: true, confirmation: body }
 }
+
+export async function getMyAppointments(accessToken) {
+  let response
+  try {
+    response = await fetch(`${API_BASE_URL}/api/booking/mine`, {
+      credentials: 'include',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+  } catch {
+    return { ok: false, status: null }
+  }
+
+  const body = await response.json().catch(() => null)
+  if (!response.ok || body === null) {
+    return {
+      ok: false,
+      status: response.ok ? null : response.status,
+      problem: body,
+    }
+  }
+  return { ok: true, appointments: body }
+}
+
+export async function cancelAppointment(accessToken, appointmentId) {
+  let response
+  try {
+    response = await fetch(
+      `${API_BASE_URL}/api/booking/${appointmentId}/cancel`,
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    )
+  } catch {
+    return { ok: false, status: null }
+  }
+
+  if (response.ok) {
+    return { ok: true }
+  }
+  const problem = await response.json().catch(() => null)
+  return { ok: false, status: response.status, problem }
+}
