@@ -4,7 +4,7 @@ baseline_commit: 3828d255f9d723e91fdaa75b49a0ee9679c0d37a
 
 # Story 2.3: Double-Booking & Self-Conflict Guards
 
-Status: review
+Status: done
 
 ## Story
 
@@ -143,3 +143,12 @@ None — no failures requiring investigation. `dotnet test` sandbox `Access is d
 ### Change Log
 
 - 2026-08-07: Implemented Story 2.3 — AD-14 server-side booking-window re-validation added to `BookingService.Create`; closed the AC#2 controller-level test gap; hardened the two DB-level backstop tests with explicit TOCTOU staging; fixed wall-clock-dependent test literals across the booking test suite.
+
+### Review Findings
+
+- [x] [Review][Patch] Add a controller-level HTTP test for the `InvalidBookingWindowException` → 400 path — no test in `BookingControllerTests.cs` exercises the new `catch` block end-to-end (e.g., a Saturday date or a date beyond the 30-day cap posted to `/api/booking`); a regression in catch-clause ordering or status code would go undetected by CI. [backend/BarbershopApi.Tests/BookingControllerTests.cs, backend/BarbershopApi/Controllers/BookingController.cs:55-58]
+- [x] [Review][Patch] Extract the inline `30`-minute cutoff and `30`-day cap literals in `BookingService.Create` to named constants for readability and single-point-of-change. [backend/BarbershopApi/Services/BookingService.cs:23,25]
+- [x] [Review][Patch] Add a test pinning the exact 30-minute boundary (`<` vs `<=`) for the booking cutoff — existing tests cover 15-minutes-out (throws) and the midnight-rollover case, but nothing asserts behavior at exactly `now + 30min`. [backend/BarbershopApi.Tests/BookingServiceTests.cs]
+- [x] [Review][Patch] ~~`DateTime? now = null` optional-parameter test seam on `IBookingService.Create` lets any future caller bypass window validation (or pass a wrong-`DateTimeKind` value and silently corrupt the check)~~ **Resolved (2026-08-07)** — reclassified from defer to patch at Jack's request; added a `ResolveNowEst` guard shared by `Create`/`GetAvailableSlots` that throws `ArgumentException` if a caller-supplied `now` has a `DateTimeKind` other than `Unspecified`, so a Utc/Local mismatch fails loudly instead of silently corrupting the window math. The parameter itself stays (matches `GetAvailableSlots`'s existing convention; full `TimeProvider` DI refactor was considered and declined as out of scope for an already-`done` story). [backend/BarbershopApi/Services/BookingService.cs:124-133]
+- [x] [Review][Defer] The `now = null` default is declared independently on both `IBookingService.Create` and `BookingService.Create` — C# resolves interface default parameters at the caller's static type, so if the two defaults are ever edited out of sync, behavior would silently diverge by reference type — deferred, pre-existing pattern (already true of `GetAvailableSlots`), no live bug today since both defaults agree. [backend/BarbershopApi/Services/IBookingService.cs:8, BookingService.cs:18]
+- [x] [Review][Patch] ~~No validation that `startTime` is actually one of the fixed appointment slots~~ **Resolved (2026-08-07)** — reclassified from defer to patch at Jack's request; `Create` now rejects any `startTime` not present in `FixedSlots` with `InvalidBookingWindowException` (same 400 path as the other window checks). [backend/BarbershopApi/Services/BookingService.cs:29-31]

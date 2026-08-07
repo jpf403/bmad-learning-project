@@ -137,6 +137,45 @@ public class BookingServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Create_succeeds_exactly_30_minutes_before_start()
+    {
+        await using var context = _factory.CreateDbContext();
+        var customer = await SeedAccount(context, "customer@example.com", Role.Customer);
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var service = NewService(context);
+        var now = new DateTime(2026, 9, 1, 8, 30, 0);
+
+        var created = await service.Create(customer.Id, barber.Id, "2026-09-01", "09:00", now);
+
+        Assert.True(created.Id > 0);
+    }
+
+    [Fact]
+    public async Task Create_throws_InvalidBookingWindowException_for_a_startTime_not_on_the_fixed_slot_grid()
+    {
+        await using var context = _factory.CreateDbContext();
+        var customer = await SeedAccount(context, "customer@example.com", Role.Customer);
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var service = NewService(context);
+
+        await Assert.ThrowsAsync<InvalidBookingWindowException>(
+            () => service.Create(customer.Id, barber.Id, "2026-09-01", "09:07", FixedNow));
+    }
+
+    [Fact]
+    public async Task Create_throws_ArgumentException_when_now_has_a_non_Unspecified_DateTimeKind()
+    {
+        await using var context = _factory.CreateDbContext();
+        var customer = await SeedAccount(context, "customer@example.com", Role.Customer);
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var service = NewService(context);
+        var utcNow = DateTime.SpecifyKind(FixedNow, DateTimeKind.Utc);
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => service.Create(customer.Id, barber.Id, "2026-09-01", "09:00", utcNow));
+    }
+
+    [Fact]
     public async Task FindByBarberAndDate_computes_Finished_correctly_at_the_EST_boundary()
     {
         await using var context = _factory.CreateDbContext();
@@ -286,5 +325,17 @@ public class BookingServiceTests : IDisposable
         var slots = await service.GetAvailableSlots(barber.Id, "2026-09-01", now);
 
         Assert.Empty(slots);
+    }
+
+    [Fact]
+    public async Task GetAvailableSlots_throws_ArgumentException_when_now_has_a_non_Unspecified_DateTimeKind()
+    {
+        await using var context = _factory.CreateDbContext();
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var service = NewService(context);
+        var utcNow = DateTime.SpecifyKind(new DateTime(2026, 9, 1, 13, 45, 0), DateTimeKind.Utc);
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => service.GetAvailableSlots(barber.Id, "2026-09-01", utcNow));
     }
 }

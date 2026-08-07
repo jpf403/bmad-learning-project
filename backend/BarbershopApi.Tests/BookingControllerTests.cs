@@ -68,6 +68,16 @@ public class BookingControllerTests : IDisposable
         return date.ToString("yyyy-MM-dd");
     }
 
+    private static string NextWeekendDate()
+    {
+        var date = DateTime.Today.AddDays(1);
+        while (date.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday))
+        {
+            date = date.AddDays(1);
+        }
+        return date.ToString("yyyy-MM-dd");
+    }
+
     [Fact]
     public async Task GetBarbers_returns_empty_list_when_none_exist()
     {
@@ -286,6 +296,21 @@ public class BookingControllerTests : IDisposable
             TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Conflict, secondResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateBooking_with_a_weekend_date_returns_400()
+    {
+        var barber = await SeedAccount("barber@example.com", Role.Barber);
+        using var client = _factory.CreateClient();
+        var accessToken = await RegisterAndLogin(client);
+
+        var response = await client.SendAsync(
+            AuthedRequest(HttpMethod.Post, "/api/booking", accessToken)
+                .WithJsonBody(new { BarberId = barber.Id, Date = NextWeekendDate(), StartTime = "09:00" }),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]

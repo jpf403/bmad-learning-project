@@ -1,5 +1,11 @@
 # Deferred Work
 
+## Deferred from: code review of story-2.3-double-booking-and-self-conflict-guards (2026-08-07)
+
+- ~~`DateTime? now = null` optional-parameter test seam on `IBookingService.Create` lets any future caller bypass window validation (or pass a wrong-`DateTimeKind` value and silently corrupt the check)~~ **Resolved** (2026-08-07) — added a shared `ResolveNowEst` guard in `BookingService` that throws `ArgumentException` when a caller-supplied `now` isn't `DateTimeKind.Unspecified`, closing the silent-corruption risk. The optional parameter itself was kept (matches `GetAvailableSlots`'s pre-existing convention) rather than a full `TimeProvider` DI refactor. [backend/BarbershopApi/Services/BookingService.cs:124-133]
+- The `now = null` default is declared independently on both `IBookingService.Create` and `BookingService.Create` — C# resolves interface default parameters at the caller's static type, so if the two defaults are ever edited out of sync, behavior would silently diverge by reference type — pre-existing pattern (already true of `GetAvailableSlots`), no live bug today since both defaults agree. [backend/BarbershopApi/Services/IBookingService.cs:8, BookingService.cs:18]
+- ~~No validation that `startTime` is actually one of the fixed appointment slots~~ **Resolved** (2026-08-07) — `BookingService.Create` now rejects any `startTime` absent from `FixedSlots` via `InvalidBookingWindowException`, the same 400 path as the other AD-14 window checks. [backend/BarbershopApi/Services/BookingService.cs:29-31]
+
 ## Deferred from: code review of story-2-2-customer-books-an-appointment (2026-08-06)
 
 - `BookingController.CreateBooking`'s `catch (Exception)` has no logging before returning 500 — pre-existing pattern, identical to `AccountController`'s and `AuthController`'s no-`ILogger`-anywhere catch-alls. [backend/BarbershopApi/Controllers/BookingController.cs:62-65]
