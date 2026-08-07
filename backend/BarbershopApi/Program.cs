@@ -174,6 +174,7 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
+// JWT Key from env var
 var jwtKey = app.Configuration["Jwt:Key"];
 if (string.IsNullOrWhiteSpace(jwtKey))
 {
