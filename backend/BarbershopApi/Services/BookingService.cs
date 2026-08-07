@@ -1,3 +1,4 @@
+using System.Globalization;
 using BarbershopApi.Dtos;
 using BarbershopApi.Entities;
 using BarbershopApi.Repositories;
@@ -9,11 +10,27 @@ namespace BarbershopApi.Services;
 public class BookingService(IAppointmentRepository appointmentRepository, IAccountRepository accountRepository) : IBookingService
 {
     private const int SqliteConstraintViolation = 19;
+    private const int MinimumLeadTimeMinutes = 30;
+    private const int MaxBookingHorizonDays = 30;
     private static readonly TimeZoneInfo EasternTimeZone = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
     private static readonly List<string> FixedSlots = BuildFixedSlots();
 
-    public async Task<Appointment> Create(int customerId, int barberId, string date, string startTime)
+    public async Task<Appointment> Create(int customerId, int barberId, string date, string startTime, DateTime? now = null)
     {
+        var nowEst = ResolveNowEst(now);
+        var appointmentDate = DateOnly.ParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture);
+        var appointmentTime = TimeOnly.ParseExact(startTime, "HH:mm", CultureInfo.InvariantCulture);
+        var appointmentDateTime = appointmentDate.ToDateTime(appointmentTime);
+
+        var isPastOrTooSoon = appointmentDateTime < nowEst.AddMinutes(MinimumLeadTimeMinutes);
+        var isWeekend = appointmentDate.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
+        var isBeyondCap = appointmentDate > DateOnly.FromDateTime(nowEst).AddDays(MaxBookingHorizonDays);
+        var isNotAFixedSlot = !FixedSlots.Contains(startTime);
+        if (isPastOrTooSoon || isWeekend || isBeyondCap || isNotAFixedSlot)
+        {
+            throw new InvalidBookingWindowException();
+        }
+
         var conflict = await appointmentRepository.ExistsConflict(barberId, customerId, date, startTime);
         if (conflict)
         {
@@ -71,7 +88,7 @@ public class BookingService(IAppointmentRepository appointmentRepository, IAccou
 
         var available = FixedSlots.Where(slot => !bookedTimes.Contains(slot)).ToList();
 
-        var nowEst = now ?? GetNowEst();
+        var nowEst = ResolveNowEst(now);
         if (date == nowEst.ToString("yyyy-MM-dd"))
         {
             var cutoffEst = nowEst.AddMinutes(30);
@@ -106,6 +123,18 @@ public class BookingService(IAppointmentRepository appointmentRepository, IAccou
     }
 
     private static DateTime GetNowEst() => TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, EasternTimeZone);
+
+    // `now` is always Eastern wall-clock time with no offset info (matching GetNowEst()'s
+    // Kind=Unspecified DateTime) -- a caller passing a Utc/Local-kind value would silently
+    // corrupt every window comparison below, so reject that shape outright instead.
+    private static DateTime ResolveNowEst(DateTime? now)
+    {
+        if (now is { Kind: not DateTimeKind.Unspecified })
+        {
+            throw new ArgumentException("now must have DateTimeKind.Unspecified (Eastern wall-clock time), not Utc or Local.", nameof(now));
+        }
+        return now ?? GetNowEst();
+    }
 
     private static List<string> BuildFixedSlots()
     {

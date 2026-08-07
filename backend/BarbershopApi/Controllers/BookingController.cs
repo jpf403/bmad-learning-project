@@ -52,6 +52,10 @@ public class BookingController(IAccountRepository accountRepository, IBookingSer
             var appointment = await bookingService.Create(account.Id, request.BarberId, request.Date, request.StartTime);
             return StatusCode(201, new BookingConfirmation(appointment.Id, $"{barber.FirstName} {barber.LastName}", appointment.Date, appointment.StartTime));
         }
+        catch (InvalidBookingWindowException)
+        {
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "That date or time is no longer available for booking.");
+        }
         catch (BookingConflictException)
         {
             return Problem(statusCode: StatusCodes.Status409Conflict, title: "That time is no longer available. Choose another.");

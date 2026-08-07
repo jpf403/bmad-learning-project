@@ -50,7 +50,12 @@ public class SqliteApiFactory : WebApplicationFactory<Program>
     {
         base.Dispose(disposing);
 
-        SqliteConnection.ClearAllPools();
+        // Scoped to this factory's own connection string -- ClearAllPools() clears every
+        // SQLite connection pool process-wide, which corrupts other tests' still-in-flight
+        // connections when test classes run in parallel (surfaces as a random
+        // ObjectDisposedException on SQLitePCL.sqlite3 in an unrelated test).
+        using var connection = new SqliteConnection(ConnectionString);
+        SqliteConnection.ClearPool(connection);
 
         TryDelete(_dbPath);
         foreach (var suffix in new[] { "-wal", "-shm", "-journal" })

@@ -48,19 +48,20 @@ public class AppointmentRepositoryTests : IDisposable
     }
 
     [Fact]
-    public async Task Create_second_appointment_for_same_barber_slot_throws()
+    public async Task Create_throws_when_a_second_context_inserts_the_same_barber_slot_after_the_first_commits()
     {
         await using var seedContext = _factory.CreateDbContext();
         var customerA = await SeedAccount(seedContext, "customerA@example.com", Role.Customer);
         var customerB = await SeedAccount(seedContext, "customerB@example.com", Role.Customer);
         var barber = await SeedAccount(seedContext, "barber@example.com", Role.Barber);
 
+        await using var contextB = _factory.CreateDbContext();
+        var repositoryB = new AppointmentRepository(contextB);
+        Assert.False(await repositoryB.ExistsConflict(barber.Id, customerB.Id, "2026-09-01", "09:00"));
+
         await using var contextA = _factory.CreateDbContext();
         var repositoryA = new AppointmentRepository(contextA);
         await repositoryA.Create(NewAppointment(customerA.Id, barber.Id));
-
-        await using var contextB = _factory.CreateDbContext();
-        var repositoryB = new AppointmentRepository(contextB);
 
         var exception = await Assert.ThrowsAsync<DbUpdateException>(() => repositoryB.Create(NewAppointment(customerB.Id, barber.Id)));
         var sqliteException = Assert.IsType<SqliteException>(exception.InnerException);
@@ -68,19 +69,20 @@ public class AppointmentRepositoryTests : IDisposable
     }
 
     [Fact]
-    public async Task Create_second_appointment_for_same_customer_slot_across_different_barbers_throws()
+    public async Task Create_throws_when_a_second_context_inserts_the_same_customer_slot_after_the_first_commits()
     {
         await using var seedContext = _factory.CreateDbContext();
         var customer = await SeedAccount(seedContext, "customer@example.com", Role.Customer);
         var barberA = await SeedAccount(seedContext, "barberA@example.com", Role.Barber);
         var barberB = await SeedAccount(seedContext, "barberB@example.com", Role.Barber);
 
+        await using var contextB = _factory.CreateDbContext();
+        var repositoryB = new AppointmentRepository(contextB);
+        Assert.False(await repositoryB.ExistsConflict(barberB.Id, customer.Id, "2026-09-01", "09:00"));
+
         await using var contextA = _factory.CreateDbContext();
         var repositoryA = new AppointmentRepository(contextA);
         await repositoryA.Create(NewAppointment(customer.Id, barberA.Id));
-
-        await using var contextB = _factory.CreateDbContext();
-        var repositoryB = new AppointmentRepository(contextB);
 
         var exception = await Assert.ThrowsAsync<DbUpdateException>(() => repositoryB.Create(NewAppointment(customer.Id, barberB.Id)));
         var sqliteException = Assert.IsType<SqliteException>(exception.InnerException);
