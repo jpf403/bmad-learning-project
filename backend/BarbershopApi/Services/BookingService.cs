@@ -107,19 +107,33 @@ public class BookingService(IAppointmentRepository appointmentRepository, IAccou
         return available;
     }
 
-    public async Task Cancel(int appointmentId)
+    public async Task Cancel(int appointmentId, int callerAccountId, Role callerRole)
     {
         var appointment = await appointmentRepository.FindById(appointmentId);
         if (appointment is null)
         {
             throw new AppointmentNotFoundException();
         }
-        if (appointment.CancelledAt is not null)
+
+        var authorized = callerRole switch
+        {
+            Role.Customer => appointment.CustomerId == callerAccountId,
+            Role.Barber => appointment.BarberId == callerAccountId,
+            Role.Admin => true,
+            _ => false,
+        };
+        if (!authorized)
+        {
+            // Not-found, not forbidden -- never confirm that a specific
+            // appointment id belongs to someone else.
+            throw new AppointmentNotFoundException();
+        }
+
+        var cancelled = await appointmentRepository.TryCancel(appointmentId, DateTime.UtcNow);
+        if (!cancelled)
         {
             throw new AppointmentAlreadyCancelledException();
         }
-
-        await appointmentRepository.Cancel(appointment);
     }
 
     private static DateTime GetNowEst() => TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, EasternTimeZone);

@@ -1,11 +1,18 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { getBarbers, getAvailability, createBooking } from '../api/BookingApi'
-import { formatTimeLabel } from '../utils/FormatSchedule'
+import {
+  getBarbers,
+  getAvailability,
+  createBooking,
+  getMyAppointments,
+  cancelAppointment,
+} from '../api/BookingApi'
+import { formatTimeLabel, formatDateLabel } from '../utils/FormatSchedule'
 import FormSection from '../components/FormSection'
 import Calendar from '../components/Calendar'
 import SelectDropdown from '../components/SelectDropdown'
 import ConfirmationScreen from '../components/ConfirmationScreen'
+import ConfirmPopup from '../components/ConfirmPopup'
 import Button from '../components/Button'
 import './ScheduleAppointment.css'
 
@@ -24,6 +31,12 @@ export default function ScheduleAppointment() {
   const [formError, setFormError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [confirmation, setConfirmation] = useState(null)
+
+  const [appointments, setAppointments] = useState([])
+  const [appointmentsLoading, setAppointmentsLoading] = useState(true)
+  const [appointmentsError, setAppointmentsError] = useState('')
+  const [cancelTarget, setCancelTarget] = useState(null)
+  const [cancelError, setCancelError] = useState('')
 
   // Reset the time selection whenever barber or date changes, computed
   // during render (React's documented alternative to an effect for
@@ -61,6 +74,60 @@ export default function ScheduleAppointment() {
       cancelled = true
     }
   }, [user.accessToken])
+
+  async function loadAppointments() {
+    setAppointmentsLoading(true)
+    const result = await getMyAppointments(user.accessToken)
+    if (result.ok) {
+      setAppointments(result.appointments)
+      setAppointmentsError('')
+    } else {
+      setAppointmentsError('Could not load appointments. Please try again.')
+    }
+    setAppointmentsLoading(false)
+  }
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function load() {
+      const result = await getMyAppointments(user.accessToken)
+      if (cancelled) {
+        return
+      }
+      if (result.ok) {
+        setAppointments(result.appointments)
+        setAppointmentsError('')
+      } else {
+        setAppointmentsError('Could not load appointments. Please try again.')
+      }
+      setAppointmentsLoading(false)
+    }
+
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [user.accessToken])
+
+  async function handleCancelConfirmed() {
+    const target = cancelTarget
+    setCancelError('')
+    const result = await cancelAppointment(user.accessToken, target.id)
+
+    if (result.ok) {
+      await loadAppointments()
+      return
+    }
+
+    if (result.status === 409) {
+      setCancelError('This appointment has already been cancelled.')
+      await loadAppointments()
+      return
+    }
+
+    setCancelError('Something went wrong. Please try again.')
+  }
 
   useEffect(() => {
     if (!barberId || !date) {
@@ -214,6 +281,52 @@ export default function ScheduleAppointment() {
           </form>
         )}
       </FormSection>
+
+      <section className="schedule-appointment__appointments">
+        <h2 className="section-title">My Appointments</h2>
+        {appointmentsLoading ? (
+          <p className="schedule-appointment__loading">Loading…</p>
+        ) : appointmentsError ? (
+          <p className="schedule-appointment__form-error">
+            {appointmentsError}
+          </p>
+        ) : appointments.length === 0 ? (
+          <p>No upcoming appointments.</p>
+        ) : (
+          appointments.map((appt) => (
+            <div className="appt-row" key={appt.id}>
+              <div className="appt-info">
+                <span className="appt-primary">{appt.barberName}</span>
+                <span className="appt-meta">
+                  {`${formatTimeLabel(appt.startTime)}, ${formatDateLabel(appt.date)}`}
+                </span>
+              </div>
+              <Button
+                variant="destructive"
+                onClick={() => setCancelTarget(appt)}
+              >
+                Cancel
+              </Button>
+            </div>
+          ))
+        )}
+        {cancelError && (
+          <p className="schedule-appointment__form-error">{cancelError}</p>
+        )}
+      </section>
+
+      <ConfirmPopup
+        open={cancelTarget !== null}
+        onOpenChange={(open) => !open && setCancelTarget(null)}
+        title="Cancel this appointment?"
+        message={
+          cancelTarget &&
+          `${cancelTarget.barberName} — ${formatTimeLabel(cancelTarget.startTime)}, ${formatDateLabel(cancelTarget.date)}. This cannot be undone.`
+        }
+        destructive
+        confirmLabel="Confirm"
+        onConfirm={handleCancelConfirmed}
+      />
     </div>
   )
 }

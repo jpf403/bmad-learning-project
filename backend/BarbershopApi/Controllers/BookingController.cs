@@ -65,4 +65,34 @@ public class BookingController(IAccountRepository accountRepository, IBookingSer
             return Problem(statusCode: StatusCodes.Status500InternalServerError, title: "Something went wrong. Please try again.");
         }
     }
+
+    [HttpGet("mine")]
+    public async Task<IActionResult> GetMyAppointments()
+    {
+        var account = (Account)HttpContext.Items["Account"]!;
+        return Ok(await bookingService.FindUpcomingByCustomer(account.Id));
+    }
+
+    [HttpPost("{id}/cancel")]
+    public async Task<IActionResult> CancelBooking(int id)
+    {
+        var account = (Account)HttpContext.Items["Account"]!;
+        try
+        {
+            await bookingService.Cancel(id, account.Id, account.Role);
+            return NoContent();
+        }
+        catch (AppointmentNotFoundException)
+        {
+            return Problem(statusCode: StatusCodes.Status404NotFound, title: "Appointment not found.");
+        }
+        catch (AppointmentAlreadyCancelledException)
+        {
+            return Problem(statusCode: StatusCodes.Status409Conflict, title: "This appointment has already been cancelled.");
+        }
+        catch (Exception)
+        {
+            return Problem(statusCode: StatusCodes.Status500InternalServerError, title: "Something went wrong. Please try again.");
+        }
+    }
 }

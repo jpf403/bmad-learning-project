@@ -8,6 +8,6 @@ public interface IBookingService
     Task<Appointment> Create(int customerId, int barberId, string date, string startTime, DateTime? now = null);
     Task<List<AppointmentView>> FindByBarberAndDate(int barberId, string date);
     Task<List<AppointmentView>> FindUpcomingByCustomer(int customerId);
-    Task Cancel(int appointmentId);
+    Task Cancel(int appointmentId, int callerAccountId, Role callerRole);
     Task<List<string>> GetAvailableSlots(int barberId, string date, DateTime? now = null);
 }

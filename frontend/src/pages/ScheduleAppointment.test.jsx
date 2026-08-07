@@ -51,7 +51,13 @@ function renderPage() {
   )
 }
 
-function mockFetch({ barbers = [], availability = [], booking } = {}) {
+function mockFetch({
+  barbers = [],
+  availability = [],
+  booking,
+  appointments = [],
+  cancel,
+} = {}) {
   return vi.spyOn(globalThis, 'fetch').mockImplementation((url, options) => {
     const href = url.toString()
 
@@ -60,6 +66,18 @@ function mockFetch({ barbers = [], availability = [], booking } = {}) {
     }
     if (href.includes('/api/booking/availability')) {
       return Promise.resolve({ ok: true, json: async () => availability })
+    }
+    if (href.endsWith('/api/booking/mine')) {
+      return Promise.resolve({ ok: true, json: async () => appointments })
+    }
+    if (
+      href.match(/\/api\/booking\/\d+\/cancel$/) &&
+      options?.method === 'POST'
+    ) {
+      return (
+        cancel ??
+        Promise.resolve({ ok: true, status: 204, json: async () => null })
+      )
     }
     if (href.endsWith('/api/booking') && options?.method === 'POST') {
       return (
@@ -182,5 +200,145 @@ describe('ScheduleAppointment', () => {
     ).toBeInTheDocument()
     expect(screen.getByLabelText('Barber')).toHaveTextContent('Amy Barber')
     expect(screen.getByLabelText('Date')).not.toHaveTextContent('Select a date')
+  })
+
+  it('renders "No upcoming appointments." on an empty list', async () => {
+    mockFetch({ appointments: [] })
+    renderPage()
+
+    expect(
+      await screen.findByText('No upcoming appointments.'),
+    ).toBeInTheDocument()
+  })
+
+  it('renders a row with barber name, formatted time/date, and a Cancel button for a non-empty list', async () => {
+    mockFetch({
+      appointments: [
+        {
+          id: 1,
+          barberName: 'Amy Barber',
+          date: '2026-08-27',
+          startTime: '09:00',
+        },
+      ],
+    })
+    renderPage()
+
+    expect(await screen.findByText('Amy Barber')).toBeInTheDocument()
+    expect(screen.getByText('9:00 AM, August 27')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
+  })
+
+  it('opens the confirm popup with the exact title/message shape when Cancel is clicked', async () => {
+    mockFetch({
+      appointments: [
+        {
+          id: 1,
+          barberName: 'Amy Barber',
+          date: '2026-08-27',
+          startTime: '09:00',
+        },
+      ],
+    })
+    const user = userEvent.setup()
+    renderPage()
+
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }))
+
+    expect(screen.getByText('Cancel this appointment?')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Amy Barber — 9:00 AM, August 27. This cannot be undone.',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('confirming cancel calls the cancel endpoint then re-fetches and re-renders the list without the cancelled row', async () => {
+    const fetchMock = mockFetch({
+      appointments: [
+        {
+          id: 1,
+          barberName: 'Amy Barber',
+          date: '2026-08-27',
+          startTime: '09:00',
+        },
+      ],
+    })
+    const user = userEvent.setup()
+    renderPage()
+
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }))
+    fetchMock.mockImplementation((url) => {
+      const href = url.toString()
+      if (href.endsWith('/api/booking/mine')) {
+        return Promise.resolve({ ok: true, json: async () => [] })
+      }
+      if (href.match(/\/api\/booking\/\d+\/cancel$/)) {
+        return Promise.resolve({
+          ok: true,
+          status: 204,
+          json: async () => null,
+        })
+      }
+      return Promise.resolve({ ok: false, status: 401 })
+    })
+    await user.click(screen.getByRole('button', { name: 'Confirm' }))
+
+    expect(
+      await screen.findByText('No upcoming appointments.'),
+    ).toBeInTheDocument()
+  })
+
+  it('shows the already-cancelled error on a 409 response and still refetches', async () => {
+    mockFetch({
+      appointments: [
+        {
+          id: 1,
+          barberName: 'Amy Barber',
+          date: '2026-08-27',
+          startTime: '09:00',
+        },
+      ],
+      cancel: Promise.resolve({
+        ok: false,
+        status: 409,
+        json: async () => ({
+          title: 'This appointment has already been cancelled.',
+        }),
+      }),
+    })
+    const user = userEvent.setup()
+    renderPage()
+
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm' }))
+
+    expect(
+      await screen.findByText('This appointment has already been cancelled.'),
+    ).toBeInTheDocument()
+  })
+
+  it('dismissing the popup via Go Back makes no network call', async () => {
+    const fetchMock = mockFetch({
+      appointments: [
+        {
+          id: 1,
+          barberName: 'Amy Barber',
+          date: '2026-08-27',
+          startTime: '09:00',
+        },
+      ],
+    })
+    const user = userEvent.setup()
+    renderPage()
+
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }))
+    fetchMock.mockClear()
+    await user.click(screen.getByRole('button', { name: 'Go Back' }))
+
+    expect(
+      screen.queryByText('Cancel this appointment?'),
+    ).not.toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })

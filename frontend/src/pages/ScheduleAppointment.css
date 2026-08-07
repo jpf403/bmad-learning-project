@@ -42,6 +42,43 @@
   margin: 0;
 }
 
+.section-title {
+  font-family: var(--font-family-base);
+  font-size: var(--typography-h2-size);
+  font-weight: var(--typography-h2-weight);
+  line-height: var(--typography-h2-line-height);
+  color: var(--color-text);
+  margin: 0 0 var(--spacing-4) 0;
+}
+
+.appt-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--color-neutral);
+  border-radius: var(--rounded-default);
+  padding: var(--spacing-4) var(--spacing-5);
+  margin-bottom: var(--spacing-3);
+}
+
+.appt-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+}
+
+.appt-primary {
+  font-family: var(--font-family-base);
+  font-size: var(--typography-body-size);
+  color: var(--color-text);
+}
+
+.appt-meta {
+  font-family: var(--font-family-base);
+  font-size: var(--typography-body-sm-size);
+  color: var(--color-text-muted);
+}
+
 @media (min-width: 640px) {
   .schedule-appointment {
     padding: var(--spacing-16) var(--spacing-gutter-desktop);

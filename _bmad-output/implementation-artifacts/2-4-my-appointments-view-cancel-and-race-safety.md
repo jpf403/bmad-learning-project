@@ -4,7 +4,7 @@ baseline_commit: 200958fdb7aaec1f0bd403dbc3f4a7d79e8b661c
 
 # Story 2.4: My Appointments — View, Cancel, and Race Safety
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -23,9 +23,9 @@ so that I can manage my bookings without contacting the shop or worrying about a
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Replace `Cancel` with a race-safe conditional-update repository primitive** (AC #4, #5) — the architecture docs name "stale cancellation" as an error category (SOLUTION-DESIGN.md §7) but never specify the enforcement mechanism, and `Appointment` has no `RowVersion`/concurrency token (unlike `Account`, AD-16) and adding one would be a schema change Story 2.1's closing AC explicitly forbids for 2.2–2.6 ("no further schema changes for anything Epic 2 needs"). The chosen mechanism: a single atomic conditional `UPDATE` via EF Core's `ExecuteUpdateAsync`, using the existing `CancelledAt IS NULL` predicate itself as the race guard — no new column, no read-then-write gap.
-  - [ ] In `IAppointmentRepository.cs`, replace `Task Cancel(Appointment appointment);` with `Task<bool> TryCancel(int appointmentId, DateTime cancelledAtUtc);`.
-  - [ ] In `AppointmentRepository.cs`, implement:
+- [x] **Task 1: Replace `Cancel` with a race-safe conditional-update repository primitive** (AC #4, #5) — the architecture docs name "stale cancellation" as an error category (SOLUTION-DESIGN.md §7) but never specify the enforcement mechanism, and `Appointment` has no `RowVersion`/concurrency token (unlike `Account`, AD-16) and adding one would be a schema change Story 2.1's closing AC explicitly forbids for 2.2–2.6 ("no further schema changes for anything Epic 2 needs"). The chosen mechanism: a single atomic conditional `UPDATE` via EF Core's `ExecuteUpdateAsync`, using the existing `CancelledAt IS NULL` predicate itself as the race guard — no new column, no read-then-write gap.
+  - [x] In `IAppointmentRepository.cs`, replace `Task Cancel(Appointment appointment);` with `Task<bool> TryCancel(int appointmentId, DateTime cancelledAtUtc);`.
+  - [x] In `AppointmentRepository.cs`, implement:
     ```csharp
     public async Task<bool> TryCancel(int appointmentId, DateTime cancelledAtUtc)
     {
@@ -36,13 +36,13 @@ so that I can manage my bookings without contacting the shop or worrying about a
     }
     ```
     `ExecuteUpdateAsync` issues one `UPDATE ... WHERE Id=@id AND CancelledAt IS NULL` directly against the database, bypassing the change tracker entirely — no `SaveChangesAsync` call, no entity load required. This is the mechanism that closes the race: two concurrent calls both filter on `CancelledAt == null`, only one `UPDATE` can win, the loser affects 0 rows.
-  - [ ] Update every existing call site that used the old `Cancel(Appointment appointment)` signature in `AppointmentRepositoryTests.cs` to call `TryCancel(id, DateTime.UtcNow)` instead: `FindByBarberAndDate_excludes_cancelled_appointments` (cancels `cancelled`), `FindUpcomingByCustomer_excludes_past_and_cancelled_appointments` (cancels `toCancel`), `Cancel_sets_CancelledAt` (rename to `TryCancel_sets_CancelledAt_and_returns_true`), `ExistsConflict_false_when_matching_slot_is_cancelled` (cancels `appointment`).
-  - [ ] Add `AppointmentRepositoryTests.cs`: `TryCancel_returns_false_and_leaves_CancelledAt_unchanged_when_already_cancelled` — cancel once (assert `true`), cancel again (assert `false`), then reload and assert `CancelledAt` still equals the first value (proves the second call didn't overwrite the timestamp).
-  - [ ] Add `AppointmentRepositoryTests.cs`: `TryCancel_returns_false_when_appointment_does_not_exist` (id `999999`).
+  - [x] Update every existing call site that used the old `Cancel(Appointment appointment)` signature in `AppointmentRepositoryTests.cs` to call `TryCancel(id, DateTime.UtcNow)` instead: `FindByBarberAndDate_excludes_cancelled_appointments` (cancels `cancelled`), `FindUpcomingByCustomer_excludes_past_and_cancelled_appointments` (cancels `toCancel`), `Cancel_sets_CancelledAt` (rename to `TryCancel_sets_CancelledAt_and_returns_true`), `ExistsConflict_false_when_matching_slot_is_cancelled` (cancels `appointment`).
+  - [x] Add `AppointmentRepositoryTests.cs`: `TryCancel_returns_false_and_leaves_CancelledAt_unchanged_when_already_cancelled` — cancel once (assert `true`), cancel again (assert `false`), then reload and assert `CancelledAt` still equals the first value (proves the second call didn't overwrite the timestamp).
+  - [x] Add `AppointmentRepositoryTests.cs`: `TryCancel_returns_false_when_appointment_does_not_exist` (id `999999`).
 
-- [ ] **Task 2: Add caller-scoped authorization to `BookingService.Cancel`, wired to the new atomic primitive** (AC #4, #5, #6) — the architecture never specifies who may cancel an appointment; AC #6 requires the *same* method to serve customer (this story), barber (2.5), and admin (2.6) cancellation without modification later, so the authorization branch is built now, parameterized by caller identity/role, even though only the `Role.Customer` branch is exercised by this story's UI.
-  - [ ] Change `IBookingService.Cancel(int appointmentId)` to `Task Cancel(int appointmentId, int callerAccountId, Role callerRole);`.
-  - [ ] Implement in `BookingService.cs`:
+- [x] **Task 2: Add caller-scoped authorization to `BookingService.Cancel`, wired to the new atomic primitive** (AC #4, #5, #6) — the architecture never specifies who may cancel an appointment; AC #6 requires the *same* method to serve customer (this story), barber (2.5), and admin (2.6) cancellation without modification later, so the authorization branch is built now, parameterized by caller identity/role, even though only the `Role.Customer` branch is exercised by this story's UI.
+  - [x] Change `IBookingService.Cancel(int appointmentId)` to `Task Cancel(int appointmentId, int callerAccountId, Role callerRole);`.
+  - [x] Implement in `BookingService.cs`:
     ```csharp
     public async Task Cancel(int appointmentId, int callerAccountId, Role callerRole)
     {
@@ -73,12 +73,12 @@ so that I can manage my bookings without contacting the shop or worrying about a
         }
     }
     ```
-  - [ ] Update `BookingServiceTests.cs` existing calls: `Cancel_throws_AppointmentNotFoundException_when_appointment_does_not_exist` → `service.Cancel(999999, 1, Role.Customer)` (any id/role is fine — not-found short-circuits before the authorization branch runs). `Cancel_on_already_cancelled_appointment_throws_AppointmentAlreadyCancelledException` → seed the appointment via `service.Create(customer.Id, ...)` as today, then `service.Cancel(created.Id, customer.Id, Role.Customer)` twice.
-  - [ ] Add `BookingServiceTests.cs`: `Cancel_throws_AppointmentNotFoundException_when_caller_is_not_the_owning_customer` (a different customer id, `Role.Customer`), `Cancel_succeeds_when_caller_is_the_appointments_barber` (`Role.Barber`, matching `BarberId`), `Cancel_throws_AppointmentNotFoundException_when_caller_is_a_different_barber` (`Role.Barber`, non-matching `BarberId`), `Cancel_succeeds_when_caller_is_admin_regardless_of_owner` (`Role.Admin`, any unrelated account id).
+  - [x] Update `BookingServiceTests.cs` existing calls: `Cancel_throws_AppointmentNotFoundException_when_appointment_does_not_exist` → `service.Cancel(999999, 1, Role.Customer)` (any id/role is fine — not-found short-circuits before the authorization branch runs). `Cancel_on_already_cancelled_appointment_throws_AppointmentAlreadyCancelledException` → seed the appointment via `service.Create(customer.Id, ...)` as today, then `service.Cancel(created.Id, customer.Id, Role.Customer)` twice.
+  - [x] Add `BookingServiceTests.cs`: `Cancel_throws_AppointmentNotFoundException_when_caller_is_not_the_owning_customer` (a different customer id, `Role.Customer`), `Cancel_succeeds_when_caller_is_the_appointments_barber` (`Role.Barber`, matching `BarberId`), `Cancel_throws_AppointmentNotFoundException_when_caller_is_a_different_barber` (`Role.Barber`, non-matching `BarberId`), `Cancel_succeeds_when_caller_is_admin_regardless_of_owner` (`Role.Admin`, any unrelated account id).
 
-- [ ] **Task 3: Add `GET /api/booking/mine` and `POST /api/booking/{id}/cancel` to `BookingController`** (AC #1, #2, #4, #5)
-  - [ ] Add ordering to `AppointmentRepository.FindUpcomingByCustomer` — it currently has no `OrderBy` at all (verified: `AppointmentRepository.cs:28-38`), so today's list order is DB-insertion-order, not soonest-first. Add `.OrderBy(a => a.Date).ThenBy(a => a.StartTime)` before `.ToListAsync()` so the customer's list is always soonest-appointment-first — no FR/AD/UX doc states this explicitly, but an unordered list is a real UX defect, not an acceptable default.
-  - [ ] Add to `BookingController.cs`:
+- [x] **Task 3: Add `GET /api/booking/mine` and `POST /api/booking/{id}/cancel` to `BookingController`** (AC #1, #2, #4, #5)
+  - [x] Add ordering to `AppointmentRepository.FindUpcomingByCustomer` — it currently has no `OrderBy` at all (verified: `AppointmentRepository.cs:28-38`), so today's list order is DB-insertion-order, not soonest-first. Add `.OrderBy(a => a.Date).ThenBy(a => a.StartTime)` before `.ToListAsync()` so the customer's list is always soonest-appointment-first — no FR/AD/UX doc states this explicitly, but an unordered list is a real UX defect, not an acceptable default.
+  - [x] Add to `BookingController.cs`:
     ```csharp
     [HttpGet("mine")]
     public async Task<IActionResult> GetMyAppointments()
@@ -111,10 +111,10 @@ so that I can manage my bookings without contacting the shop or worrying about a
     }
     ```
     Route order/placement: add both actions after the existing `CreateBooking` action, same file, same `[Authorize]` class-level gate — no new controller (AD-1: one Controller per domain concept, Booking already exists).
-  - [ ] Add `BookingControllerTests.cs`: `GetMyAppointments_returns_only_the_callers_upcoming_appointments_ordered_soonest_first`, `GetMyAppointments_returns_empty_list_when_none_exist`, `CancelBooking_returns_204_and_frees_the_slot_for_rebooking` (cancel, then successfully re-book the identical barber/date/time), `CancelBooking_on_someone_elses_appointment_returns_404`, `CancelBooking_on_nonexistent_id_returns_404`, `CancelBooking_on_already_cancelled_appointment_returns_409` (two sequential HTTP calls — this is the integration-level check; Task 4 covers the deterministic DB-level race separately), `CancelBooking_without_access_token_returns_401`.
+  - [x] Add `BookingControllerTests.cs`: `GetMyAppointments_returns_only_the_callers_upcoming_appointments_ordered_soonest_first`, `GetMyAppointments_returns_empty_list_when_none_exist`, `CancelBooking_returns_204_and_frees_the_slot_for_rebooking` (cancel, then successfully re-book the identical barber/date/time), `CancelBooking_on_someone_elses_appointment_returns_404`, `CancelBooking_on_nonexistent_id_returns_404`, `CancelBooking_on_already_cancelled_appointment_returns_409` (two sequential HTTP calls — this is the integration-level check; Task 4 covers the deterministic DB-level race separately), `CancelBooking_without_access_token_returns_401`.
 
-- [ ] **Task 4: Deterministic cancel-race test at the repository layer** (AC #5) — closes the exact gap `deferred-work.md` names under "code review of story-2-1": *"`Cancel`'s read-then-write race... can't be tested deterministically without a real concurrent request"*. Story 2.3 closed the analogous booking-insert race using the two-`DbContext` staging pattern (`AppointmentRepositoryTests.cs:51-69`); mirror it here, adapted for an atomic conditional update rather than a unique-index collision.
-  - [ ] Add `AppointmentRepositoryTests.cs`: `TryCancel_returns_false_when_a_second_context_cancels_after_the_first_commits_first`:
+- [x] **Task 4: Deterministic cancel-race test at the repository layer** (AC #5) — closes the exact gap `deferred-work.md` names under "code review of story-2-1": *"`Cancel`'s read-then-write race... can't be tested deterministically without a real concurrent request"*. Story 2.3 closed the analogous booking-insert race using the two-`DbContext` staging pattern (`AppointmentRepositoryTests.cs:51-69`); mirror it here, adapted for an atomic conditional update rather than a unique-index collision.
+  - [x] Add `AppointmentRepositoryTests.cs`: `TryCancel_returns_false_when_a_second_context_cancels_after_the_first_commits_first`:
     ```csharp
     [Fact]
     public async Task TryCancel_returns_false_when_a_second_context_cancels_after_the_first_commits_first()
@@ -136,8 +136,8 @@ so that I can manage my bookings without contacting the shop or worrying about a
     ```
     Unlike the booking-insert race (which needed a staged pre-check read to simulate the TOCTOU instant), `ExecuteUpdateAsync`'s conditional `WHERE` clause makes this deterministic with two straightforward sequential calls from separate contexts — no stale-entity staging needed, because the guard is evaluated fresh against the database on every call, not against in-memory entity state. **Do not** attempt to force this with `Task.WhenAll`/real threads — same scope boundary Story 2.3 documented for the booking race.
 
-- [ ] **Task 5: My Appointments list and cancel flow on the Schedule Appointment page** (AC #1, #2, #3, #4, #5) — no new page/route: per EXPERIENCE.md's IA table and epics.md's AC #1 ("the Schedule Appointment page... list at the bottom"), this list lives on the existing `/schedule-appointment` route below the booking form. `/my-schedule` (`NavBar.jsx` `ROLE_LINKS`, `landingRoutes.js`) is a **different**, Barber/Admin-only page that does not exist yet — do not confuse the two or build against that route.
-  - [ ] Add to `frontend/src/api/BookingApi.js`:
+- [x] **Task 5: My Appointments list and cancel flow on the Schedule Appointment page** (AC #1, #2, #3, #4, #5) — no new page/route: per EXPERIENCE.md's IA table and epics.md's AC #1 ("the Schedule Appointment page... list at the bottom"), this list lives on the existing `/schedule-appointment` route below the booking form. `/my-schedule` (`NavBar.jsx` `ROLE_LINKS`, `landingRoutes.js`) is a **different**, Barber/Admin-only page that does not exist yet — do not confuse the two or build against that route.
+  - [x] Add to `frontend/src/api/BookingApi.js`:
     ```js
     export async function getMyAppointments(accessToken) {
       let response
@@ -177,8 +177,8 @@ so that I can manage my bookings without contacting the shop or worrying about a
     }
     ```
     **Do not copy `createBooking`'s always-parse-JSON pattern for `cancelAppointment`** — the cancel endpoint returns `204 No Content` on success, which has no body; calling `response.json()` unconditionally and treating a `null` result as failure (as `getBarbers`/`createBooking` do) would misreport every successful cancel as a failure. Check `response.ok` first, and only parse a body on the error path.
-  - [ ] In `ScheduleAppointment.jsx`, add appointments state (`appointments`, `appointmentsLoading`, `appointmentsError`, `cancelTarget` for the popup, `cancelError`) and a `loadAppointments` function fetched once on mount alongside `loadBarbers` (same `useEffect`-with-cleanup pattern already used for barbers, `ScheduleAppointment.jsx:42-63`). Note: because `ConfirmationScreen` is a full takeover with no "back to form" affordance (verified: `ConfirmationScreen.jsx` has no navigation, and `ScheduleAppointment.jsx:132-140` early-returns to it after a successful booking), a newly-created appointment will **not** appear in this same render — it appears the next time the page mounts. No AC in this story requires an immediate post-booking refresh; do not add one.
-  - [ ] Render, below the existing `<FormSection>` block (only in the non-`confirmation` branch):
+  - [x] In `ScheduleAppointment.jsx`, add appointments state (`appointments`, `appointmentsLoading`, `appointmentsError`, `cancelTarget` for the popup, `cancelError`) and a `loadAppointments` function fetched once on mount alongside `loadBarbers` (same `useEffect`-with-cleanup pattern already used for barbers, `ScheduleAppointment.jsx:42-63`). Note: because `ConfirmationScreen` is a full takeover with no "back to form" affordance (verified: `ConfirmationScreen.jsx` has no navigation, and `ScheduleAppointment.jsx:132-140` early-returns to it after a successful booking), a newly-created appointment will **not** appear in this same render — it appears the next time the page mounts. No AC in this story requires an immediate post-booking refresh; do not add one.
+  - [x] Render, below the existing `<FormSection>` block (only in the non-`confirmation` branch):
     ```jsx
     <section className="schedule-appointment__appointments">
       <h2 className="section-title">My Appointments</h2>
@@ -205,7 +205,7 @@ so that I can manage my bookings without contacting the shop or worrying about a
     </section>
     ```
     Matches `mockups/schedule-appointment.html`'s exact markup shape (`.appt-row` / `.appt-info` / `.appt-primary` / `.appt-meta`) and reuses `formatTimeLabel`/`formatDateLabel` (`utils/FormatSchedule.js`, already imported for the time dropdown) — do not introduce a new date/time formatter.
-  - [ ] Render `ConfirmPopup` (existing component, `components/ConfirmPopup.jsx` — do not build a new dialog) once, outside the list, driven by `cancelTarget`:
+  - [x] Render `ConfirmPopup` (existing component, `components/ConfirmPopup.jsx` — do not build a new dialog) once, outside the list, driven by `cancelTarget`:
     ```jsx
     <ConfirmPopup
       open={cancelTarget !== null}
@@ -220,12 +220,12 @@ so that I can manage my bookings without contacting the shop or worrying about a
       onConfirm={handleCancelConfirmed}
     />
     ```
-  - [ ] `handleCancelConfirmed`: call `cancelAppointment(user.accessToken, cancelTarget.id)`. On success, refetch `getMyAppointments` (do not just splice the row out client-side — a refetch is the "view refreshes to the current, accurate state" AC #5 calls for, and it's the same one round-trip either way). On `409`, set `cancelError` to exactly `"This appointment has already been cancelled."` (EXPERIENCE.md's Voice/Tone table, verbatim copy) and **also** refetch the list (the row must disappear even though this browser's click "failed" — someone else already cancelled it). On any other failure, set `cancelError` to `"Something went wrong. Please try again."` (existing app-wide fallback copy, `ScheduleAppointment.jsx:129`).
-  - [ ] Add to `ScheduleAppointment.css`: `.appt-row` (flex, space-between, `background: var(--color-neutral)`, `border-radius: var(--rounded-default)`, `padding: var(--spacing-4) var(--spacing-5)`, `margin-bottom: var(--spacing-3)`), `.appt-info` (flex column, `gap: var(--spacing-1)`), `.appt-primary` (`font-size: var(--typography-body-size)`, `color: var(--color-text)`), `.appt-meta` (`font-size: var(--typography-body-sm-size)`, `color: var(--color-text-muted)`), `.section-title` (reuse `--typography-h2-*` tokens — check whether a shared `.section-title` class already exists project-wide before adding a duplicate). Map the mockup's literal hex/px values (`mockups/schedule-appointment.html`) to these token names — do not hardcode raw colors/pixels.
-  - [ ] Add to `ScheduleAppointment.test.jsx`, extending `mockFetch` to also stub `GET /api/booking/mine` and `POST /api/booking/{id}/cancel`: renders "No upcoming appointments." on an empty list; renders a row with barber name + formatted time/date and a Cancel button for a non-empty list; clicking Cancel opens the confirm popup with the exact title/message shape; confirming calls the cancel endpoint then re-fetches and re-renders the list without the cancelled row; a `409` response shows "This appointment has already been cancelled." and still refetches; dismissing the popup (Go Back) makes no network call (reuse the dismissal assertions already proven in `components/ConfirmPopup.test.jsx`, don't re-derive them from scratch).
+  - [x] `handleCancelConfirmed`: call `cancelAppointment(user.accessToken, cancelTarget.id)`. On success, refetch `getMyAppointments` (do not just splice the row out client-side — a refetch is the "view refreshes to the current, accurate state" AC #5 calls for, and it's the same one round-trip either way). On `409`, set `cancelError` to exactly `"This appointment has already been cancelled."` (EXPERIENCE.md's Voice/Tone table, verbatim copy) and **also** refetch the list (the row must disappear even though this browser's click "failed" — someone else already cancelled it). On any other failure, set `cancelError` to `"Something went wrong. Please try again."` (existing app-wide fallback copy, `ScheduleAppointment.jsx:129`).
+  - [x] Add to `ScheduleAppointment.css`: `.appt-row` (flex, space-between, `background: var(--color-neutral)`, `border-radius: var(--rounded-default)`, `padding: var(--spacing-4) var(--spacing-5)`, `margin-bottom: var(--spacing-3)`), `.appt-info` (flex column, `gap: var(--spacing-1)`), `.appt-primary` (`font-size: var(--typography-body-size)`, `color: var(--color-text)`), `.appt-meta` (`font-size: var(--typography-body-sm-size)`, `color: var(--color-text-muted)`), `.section-title` (reuse `--typography-h2-*` tokens — check whether a shared `.section-title` class already exists project-wide before adding a duplicate). Map the mockup's literal hex/px values (`mockups/schedule-appointment.html`) to these token names — do not hardcode raw colors/pixels.
+  - [x] Add to `ScheduleAppointment.test.jsx`, extending `mockFetch` to also stub `GET /api/booking/mine` and `POST /api/booking/{id}/cancel`: renders "No upcoming appointments." on an empty list; renders a row with barber name + formatted time/date and a Cancel button for a non-empty list; clicking Cancel opens the confirm popup with the exact title/message shape; confirming calls the cancel endpoint then re-fetches and re-renders the list without the cancelled row; a `409` response shows "This appointment has already been cancelled." and still refetches; dismissing the popup (Go Back) makes no network call (reuse the dismissal assertions already proven in `components/ConfirmPopup.test.jsx`, don't re-derive them from scratch).
 
 - [ ] **Task 6: Verify CI green and branch/PR**
-  - [ ] Branch as `story/2.4-my-appointments-view-cancel-and-race-safety` from `main`.
+  - [x] Branch as `story/2.4-my-appointments-view-cancel-and-race-safety` from `main`.
   - [ ] Push and confirm both CI jobs (backend .NET, frontend Vite/React) green on GitHub before merging (AD-11).
 
 ## Dev Notes
@@ -286,8 +286,39 @@ so that I can manage my bookings without contacting the shop or worrying about a
 
 ### Agent Model Used
 
+Claude Sonnet 5 (Amelia persona)
+
 ### Debug Log References
+
+None — no failures requiring investigation. Full backend and frontend suites both green on first run after each task's implementation.
 
 ### Completion Notes List
 
+- Task 1: Replaced `IAppointmentRepository.Cancel(Appointment)` with `TryCancel(int appointmentId, DateTime cancelledAtUtc)` using `ExecuteUpdateAsync` against the `CancelledAt IS NULL` predicate — no new column, no read-then-write gap. Updated all 3 existing repository test call sites and added 2 new tests (already-cancelled no-op, nonexistent id).
+- Task 2: `BookingService.Cancel` now takes `(int appointmentId, int callerAccountId, Role callerRole)` and authorizes Customer (owns as customer)/Barber (owns as barber)/Admin (always) before calling `TryCancel`; unauthorized callers get the same `AppointmentNotFoundException` as a truly missing id (never leaks existence). Updated 2 existing service tests, added 4 new authorization tests.
+- Task 3: Added `GET /api/booking/mine` and `POST /api/booking/{id}/cancel` to `BookingController`, reusing the existing `BookingService.FindUpcomingByCustomer` read path (AD-17) and mapping `AppointmentNotFoundException`/`AppointmentAlreadyCancelledException` to 404/409. Added `.OrderBy(a => a.Date).ThenBy(a => a.StartTime)` to `FindUpcomingByCustomer` (soonest-first) as part of this same task, since it touches the same method Task 1 already had open. Added 7 new controller tests.
+- Task 4: Added the two-`DbContext` deterministic cancel-race test (`TryCancel_returns_false_when_a_second_context_cancels_after_the_first_commits_first`) alongside Task 1's other repository test changes — no staged pre-read needed since `ExecuteUpdateAsync`'s `WHERE` clause is evaluated fresh against the DB on every call.
+- Task 5: Added `getMyAppointments`/`cancelAppointment` to `BookingApi.js` (the latter checks `response.ok` before ever parsing a body, since a 204 has none). Added My Appointments list + `ConfirmPopup`-driven cancel flow to `ScheduleAppointment.jsx` below the existing booking form, reusing `formatTimeLabel`/`formatDateLabel`/`ConfirmPopup`/`Button` as specified — no new components. A 409 on cancel shows the exact "This appointment has already been cancelled." copy and still refetches (the row disappears even though this click "failed"). Extended `mockFetch` in `ScheduleAppointment.test.jsx` with `/api/booking/mine` and `/api/booking/{id}/cancel` stubs; added 6 new tests covering empty state, populated row, popup open, confirm-then-refetch, 409 handling, and Go-Back-makes-no-network-call (reusing `ConfirmPopup.test.jsx`'s own dismissal coverage rather than re-deriving it).
+- Task 6: branch `story/2.4-my-appointments-view-cancel-and-race-safety` already checked out off `main` (pre-created). Push + CI confirmation intentionally left unchecked and undone — per standing preference, Jack handles commit/push/PR/CI-confirmation himself; that checkbox should be updated once he's done so.
+- Full backend suite: 149/149 passing (`dotnet test`). Full frontend suite: 122/122 passing (`vitest run`). `eslint .` and `prettier --check .` both clean.
+- Checked `deferred-work.md` and the sprint-status action items at story start: the one item scoped to this story (the `Cancel` read-then-write race, "code review of story-2-1") is fully closed by Tasks 1/4. The open NavBar-overflow and Story-2.3-race-test-pattern action items don't apply to this story's task list (NavBar isn't touched by any AC here; the race-test pattern requirement is already followed in Task 4).
+
 ### File List
+
+- `backend/BarbershopApi/Repositories/IAppointmentRepository.cs` (modified — `Cancel` → `TryCancel`)
+- `backend/BarbershopApi/Repositories/AppointmentRepository.cs` (modified — `TryCancel` via `ExecuteUpdateAsync`; `FindUpcomingByCustomer` ordered soonest-first)
+- `backend/BarbershopApi/Services/IBookingService.cs` (modified — `Cancel` signature adds `callerAccountId`/`callerRole`)
+- `backend/BarbershopApi/Services/BookingService.cs` (modified — caller-scoped authorization in `Cancel`)
+- `backend/BarbershopApi/Controllers/BookingController.cs` (modified — new `GetMyAppointments`/`CancelBooking` actions)
+- `backend/BarbershopApi.Tests/AppointmentRepositoryTests.cs` (modified — `Cancel` call sites updated; 4 new `TryCancel` tests including the deterministic race test)
+- `backend/BarbershopApi.Tests/BookingServiceTests.cs` (modified — `Cancel` call sites updated; 4 new authorization tests)
+- `backend/BarbershopApi.Tests/BookingControllerTests.cs` (modified — 7 new `GetMyAppointments`/`CancelBooking` tests)
+- `frontend/src/api/BookingApi.js` (modified — `getMyAppointments`/`cancelAppointment` added)
+- `frontend/src/pages/ScheduleAppointment.jsx` (modified — My Appointments list + cancel flow)
+- `frontend/src/pages/ScheduleAppointment.css` (modified — `.section-title`/`.appt-row`/`.appt-info`/`.appt-primary`/`.appt-meta` added)
+- `frontend/src/pages/ScheduleAppointment.test.jsx` (modified — 6 new tests, `mockFetch` extended)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (modified — story status tracking)
+
+### Change Log
+
+- 2026-08-07: Implemented Story 2.4 — race-safe `TryCancel` conditional-update primitive, caller-scoped authorization in `BookingService.Cancel` (customer/barber/admin, shared by Stories 2.5/2.6), `GET /api/booking/mine` + `POST /api/booking/{id}/cancel` endpoints, and the My Appointments list/cancel UI on the Schedule Appointment page.

@@ -111,7 +111,7 @@ public class AppointmentRepositoryTests : IDisposable
         var repository = new AppointmentRepository(context);
         var active = await repository.Create(NewAppointment(customer.Id, barber.Id, startTime: "09:00"));
         var cancelled = await repository.Create(NewAppointment(customer.Id, barber.Id, startTime: "10:00"));
-        await repository.Cancel(cancelled);
+        await repository.TryCancel(cancelled.Id, DateTime.UtcNow);
 
         var found = await repository.FindByBarberAndDate(barber.Id, "2026-09-01");
 
@@ -133,7 +133,7 @@ public class AppointmentRepositoryTests : IDisposable
         await repository.Create(NewAppointment(customer.Id, barberA.Id, date: "2026-08-31", startTime: "09:00"));
         var upcoming = await repository.Create(NewAppointment(customer.Id, barberB.Id, date: "2026-09-01", startTime: "11:00"));
         var toCancel = await repository.Create(NewAppointment(customer.Id, barberC.Id, date: "2026-09-02", startTime: "09:00"));
-        await repository.Cancel(toCancel);
+        await repository.TryCancel(toCancel.Id, DateTime.UtcNow);
 
         var found = await repository.FindUpcomingByCustomer(customer.Id, nowEst);
 
@@ -142,7 +142,7 @@ public class AppointmentRepositoryTests : IDisposable
     }
 
     [Fact]
-    public async Task Cancel_sets_CancelledAt()
+    public async Task TryCancel_sets_CancelledAt_and_returns_true()
     {
         await using var context = _factory.CreateDbContext();
         var customer = await SeedAccount(context, "customer@example.com", Role.Customer);
@@ -150,12 +150,60 @@ public class AppointmentRepositoryTests : IDisposable
         var repository = new AppointmentRepository(context);
         var created = await repository.Create(NewAppointment(customer.Id, barber.Id));
 
-        await repository.Cancel(created);
+        var result = await repository.TryCancel(created.Id, DateTime.UtcNow);
 
+        Assert.True(result);
         await using var verifyContext = _factory.CreateDbContext();
         var reloaded = await verifyContext.Appointments.FirstOrDefaultAsync(a => a.Id == created.Id, TestContext.Current.CancellationToken);
         Assert.NotNull(reloaded);
         Assert.NotNull(reloaded!.CancelledAt);
+    }
+
+    [Fact]
+    public async Task TryCancel_returns_false_and_leaves_CancelledAt_unchanged_when_already_cancelled()
+    {
+        await using var context = _factory.CreateDbContext();
+        var customer = await SeedAccount(context, "customer@example.com", Role.Customer);
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var repository = new AppointmentRepository(context);
+        var created = await repository.Create(NewAppointment(customer.Id, barber.Id));
+
+        Assert.True(await repository.TryCancel(created.Id, new DateTime(2026, 9, 1, 8, 0, 0, DateTimeKind.Utc)));
+        Assert.False(await repository.TryCancel(created.Id, new DateTime(2026, 9, 1, 9, 0, 0, DateTimeKind.Utc)));
+
+        await using var verifyContext = _factory.CreateDbContext();
+        var reloaded = await verifyContext.Appointments.FirstOrDefaultAsync(a => a.Id == created.Id, TestContext.Current.CancellationToken);
+        Assert.NotNull(reloaded);
+        Assert.Equal(new DateTime(2026, 9, 1, 8, 0, 0, DateTimeKind.Utc), reloaded!.CancelledAt);
+    }
+
+    [Fact]
+    public async Task TryCancel_returns_false_when_appointment_does_not_exist()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AppointmentRepository(context);
+
+        var result = await repository.TryCancel(999999, DateTime.UtcNow);
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public async Task TryCancel_returns_false_when_a_second_context_cancels_after_the_first_commits_first()
+    {
+        await using var seedContext = _factory.CreateDbContext();
+        var customer = await SeedAccount(seedContext, "customer@example.com", Role.Customer);
+        var barber = await SeedAccount(seedContext, "barber@example.com", Role.Barber);
+        var repository = new AppointmentRepository(seedContext);
+        var appointment = await repository.Create(NewAppointment(customer.Id, barber.Id));
+
+        await using var contextA = _factory.CreateDbContext();
+        var repositoryA = new AppointmentRepository(contextA);
+        Assert.True(await repositoryA.TryCancel(appointment.Id, DateTime.UtcNow));
+
+        await using var contextB = _factory.CreateDbContext();
+        var repositoryB = new AppointmentRepository(contextB);
+        Assert.False(await repositoryB.TryCancel(appointment.Id, DateTime.UtcNow));
     }
 
     [Fact]
@@ -221,7 +269,7 @@ public class AppointmentRepositoryTests : IDisposable
         var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
         var repository = new AppointmentRepository(context);
         var appointment = await repository.Create(NewAppointment(customerA.Id, barber.Id));
-        await repository.Cancel(appointment);
+        await repository.TryCancel(appointment.Id, DateTime.UtcNow);
 
         var conflict = await repository.ExistsConflict(barber.Id, customerB.Id, "2026-09-01", "09:00");
 

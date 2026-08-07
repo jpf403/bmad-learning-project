@@ -372,6 +372,153 @@ public class BookingControllerTests : IDisposable
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
+
+    [Fact]
+    public async Task GetMyAppointments_returns_only_the_callers_upcoming_appointments_ordered_soonest_first()
+    {
+        var barber = await SeedAccount("barber@example.com", Role.Barber, firstName: "Amy", lastName: "Barber");
+        using var client = _factory.CreateClient();
+        var accessTokenA = await RegisterAndLogin(client, email: "customerA@example.com");
+        var accessTokenB = await RegisterAndLogin(client, email: "customerB@example.com");
+        var laterDate = NextBookableWeekday(10);
+        var soonerDate = NextBookableWeekday(1);
+
+        await client.SendAsync(
+            AuthedRequest(HttpMethod.Post, "/api/booking", accessTokenA)
+                .WithJsonBody(new { BarberId = barber.Id, Date = laterDate, StartTime = "09:00" }),
+            TestContext.Current.CancellationToken);
+        await client.SendAsync(
+            AuthedRequest(HttpMethod.Post, "/api/booking", accessTokenA)
+                .WithJsonBody(new { BarberId = barber.Id, Date = soonerDate, StartTime = "09:00" }),
+            TestContext.Current.CancellationToken);
+        await client.SendAsync(
+            AuthedRequest(HttpMethod.Post, "/api/booking", accessTokenB)
+                .WithJsonBody(new { BarberId = barber.Id, Date = soonerDate, StartTime = "09:30" }),
+            TestContext.Current.CancellationToken);
+
+        var response = await client.SendAsync(
+            AuthedRequest(HttpMethod.Get, "/api/booking/mine", accessTokenA), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<List<AppointmentView>>(ResponseJsonOptions, TestContext.Current.CancellationToken);
+        Assert.NotNull(body);
+        Assert.Equal(2, body.Count);
+        Assert.Equal(soonerDate, body[0].Date);
+        Assert.Equal(laterDate, body[1].Date);
+    }
+
+    [Fact]
+    public async Task GetMyAppointments_returns_empty_list_when_none_exist()
+    {
+        using var client = _factory.CreateClient();
+        var accessToken = await RegisterAndLogin(client);
+
+        var response = await client.SendAsync(
+            AuthedRequest(HttpMethod.Get, "/api/booking/mine", accessToken), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<List<AppointmentView>>(ResponseJsonOptions, TestContext.Current.CancellationToken);
+        Assert.NotNull(body);
+        Assert.Empty(body);
+    }
+
+    [Fact]
+    public async Task CancelBooking_returns_204_and_frees_the_slot_for_rebooking()
+    {
+        var barber = await SeedAccount("barber@example.com", Role.Barber);
+        using var client = _factory.CreateClient();
+        var accessTokenA = await RegisterAndLogin(client, email: "customerA@example.com");
+        var accessTokenB = await RegisterAndLogin(client, email: "customerB@example.com");
+        var date = NextBookableWeekday();
+        var bookResponse = await client.SendAsync(
+            AuthedRequest(HttpMethod.Post, "/api/booking", accessTokenA)
+                .WithJsonBody(new { BarberId = barber.Id, Date = date, StartTime = "09:00" }),
+            TestContext.Current.CancellationToken);
+        var created = await bookResponse.Content.ReadFromJsonAsync<BookingConfirmation>(ResponseJsonOptions, TestContext.Current.CancellationToken);
+
+        var cancelResponse = await client.SendAsync(
+            AuthedRequest(HttpMethod.Post, $"/api/booking/{created!.Id}/cancel", accessTokenA),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NoContent, cancelResponse.StatusCode);
+
+        var rebookResponse = await client.SendAsync(
+            AuthedRequest(HttpMethod.Post, "/api/booking", accessTokenB)
+                .WithJsonBody(new { BarberId = barber.Id, Date = date, StartTime = "09:00" }),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Created, rebookResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task CancelBooking_on_someone_elses_appointment_returns_404()
+    {
+        var barber = await SeedAccount("barber@example.com", Role.Barber);
+        using var client = _factory.CreateClient();
+        var accessTokenA = await RegisterAndLogin(client, email: "customerA@example.com");
+        var accessTokenB = await RegisterAndLogin(client, email: "customerB@example.com");
+        var date = NextBookableWeekday();
+        var bookResponse = await client.SendAsync(
+            AuthedRequest(HttpMethod.Post, "/api/booking", accessTokenA)
+                .WithJsonBody(new { BarberId = barber.Id, Date = date, StartTime = "09:00" }),
+            TestContext.Current.CancellationToken);
+        var created = await bookResponse.Content.ReadFromJsonAsync<BookingConfirmation>(ResponseJsonOptions, TestContext.Current.CancellationToken);
+
+        var cancelResponse = await client.SendAsync(
+            AuthedRequest(HttpMethod.Post, $"/api/booking/{created!.Id}/cancel", accessTokenB),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NotFound, cancelResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task CancelBooking_on_nonexistent_id_returns_404()
+    {
+        using var client = _factory.CreateClient();
+        var accessToken = await RegisterAndLogin(client);
+
+        var response = await client.SendAsync(
+            AuthedRequest(HttpMethod.Post, "/api/booking/999999/cancel", accessToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CancelBooking_on_already_cancelled_appointment_returns_409()
+    {
+        var barber = await SeedAccount("barber@example.com", Role.Barber);
+        using var client = _factory.CreateClient();
+        var accessToken = await RegisterAndLogin(client);
+        var date = NextBookableWeekday();
+        var bookResponse = await client.SendAsync(
+            AuthedRequest(HttpMethod.Post, "/api/booking", accessToken)
+                .WithJsonBody(new { BarberId = barber.Id, Date = date, StartTime = "09:00" }),
+            TestContext.Current.CancellationToken);
+        var created = await bookResponse.Content.ReadFromJsonAsync<BookingConfirmation>(ResponseJsonOptions, TestContext.Current.CancellationToken);
+
+        var firstCancel = await client.SendAsync(
+            AuthedRequest(HttpMethod.Post, $"/api/booking/{created!.Id}/cancel", accessToken),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NoContent, firstCancel.StatusCode);
+
+        var secondCancel = await client.SendAsync(
+            AuthedRequest(HttpMethod.Post, $"/api/booking/{created.Id}/cancel", accessToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Conflict, secondCancel.StatusCode);
+    }
+
+    [Fact]
+    public async Task CancelBooking_without_access_token_returns_401()
+    {
+        using var client = _factory.CreateClient();
+
+        var response = await client.SendAsync(
+            AuthedRequest(HttpMethod.Post, "/api/booking/1/cancel", null),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
 }
 
 internal static class HttpRequestMessageExtensions

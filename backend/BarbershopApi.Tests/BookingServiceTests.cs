@@ -222,7 +222,7 @@ public class BookingServiceTests : IDisposable
         await using var context = _factory.CreateDbContext();
         var service = NewService(context);
 
-        await Assert.ThrowsAsync<AppointmentNotFoundException>(() => service.Cancel(999999));
+        await Assert.ThrowsAsync<AppointmentNotFoundException>(() => service.Cancel(999999, 1, Role.Customer));
     }
 
     [Fact]
@@ -233,9 +233,62 @@ public class BookingServiceTests : IDisposable
         var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
         var service = NewService(context);
         var created = await service.Create(customer.Id, barber.Id, "2026-09-01", "09:00", FixedNow);
-        await service.Cancel(created.Id);
+        await service.Cancel(created.Id, customer.Id, Role.Customer);
 
-        await Assert.ThrowsAsync<AppointmentAlreadyCancelledException>(() => service.Cancel(created.Id));
+        await Assert.ThrowsAsync<AppointmentAlreadyCancelledException>(() => service.Cancel(created.Id, customer.Id, Role.Customer));
+    }
+
+    [Fact]
+    public async Task Cancel_throws_AppointmentNotFoundException_when_caller_is_not_the_owning_customer()
+    {
+        await using var context = _factory.CreateDbContext();
+        var customer = await SeedAccount(context, "customer@example.com", Role.Customer);
+        var otherCustomer = await SeedAccount(context, "other-customer@example.com", Role.Customer);
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var service = NewService(context);
+        var created = await service.Create(customer.Id, barber.Id, "2026-09-01", "09:00", FixedNow);
+
+        await Assert.ThrowsAsync<AppointmentNotFoundException>(
+            () => service.Cancel(created.Id, otherCustomer.Id, Role.Customer));
+    }
+
+    [Fact]
+    public async Task Cancel_succeeds_when_caller_is_the_appointments_barber()
+    {
+        await using var context = _factory.CreateDbContext();
+        var customer = await SeedAccount(context, "customer@example.com", Role.Customer);
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var service = NewService(context);
+        var created = await service.Create(customer.Id, barber.Id, "2026-09-01", "09:00", FixedNow);
+
+        await service.Cancel(created.Id, barber.Id, Role.Barber);
+    }
+
+    [Fact]
+    public async Task Cancel_throws_AppointmentNotFoundException_when_caller_is_a_different_barber()
+    {
+        await using var context = _factory.CreateDbContext();
+        var customer = await SeedAccount(context, "customer@example.com", Role.Customer);
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var otherBarber = await SeedAccount(context, "other-barber@example.com", Role.Barber);
+        var service = NewService(context);
+        var created = await service.Create(customer.Id, barber.Id, "2026-09-01", "09:00", FixedNow);
+
+        await Assert.ThrowsAsync<AppointmentNotFoundException>(
+            () => service.Cancel(created.Id, otherBarber.Id, Role.Barber));
+    }
+
+    [Fact]
+    public async Task Cancel_succeeds_when_caller_is_admin_regardless_of_owner()
+    {
+        await using var context = _factory.CreateDbContext();
+        var customer = await SeedAccount(context, "customer@example.com", Role.Customer);
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var admin = await SeedAccount(context, "admin@example.com", Role.Admin);
+        var service = NewService(context);
+        var created = await service.Create(customer.Id, barber.Id, "2026-09-01", "09:00", FixedNow);
+
+        await service.Cancel(created.Id, admin.Id, Role.Admin);
     }
 
     [Fact]
