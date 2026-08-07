@@ -27,6 +27,8 @@ public class BookingServiceTests : IDisposable
     private static BookingService NewService(BarbershopDbContext context) =>
         new(new AppointmentRepository(context), new AccountRepository(context));
 
+    private static readonly DateTime FixedNow = new(2026, 9, 1, 8, 0, 0);
+
     [Fact]
     public async Task Create_throws_BookingConflictException_when_barber_slot_already_booked()
     {
@@ -36,10 +38,10 @@ public class BookingServiceTests : IDisposable
         var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
         var service = NewService(context);
 
-        await service.Create(customerA.Id, barber.Id, "2026-09-01", "09:00");
+        await service.Create(customerA.Id, barber.Id, "2026-09-01", "09:00", FixedNow);
 
         await Assert.ThrowsAsync<BookingConflictException>(
-            () => service.Create(customerB.Id, barber.Id, "2026-09-01", "09:00"));
+            () => service.Create(customerB.Id, barber.Id, "2026-09-01", "09:00", FixedNow));
     }
 
     [Fact]
@@ -51,10 +53,87 @@ public class BookingServiceTests : IDisposable
         var barberB = await SeedAccount(context, "barberB@example.com", Role.Barber);
         var service = NewService(context);
 
-        await service.Create(customer.Id, barberA.Id, "2026-09-01", "09:00");
+        await service.Create(customer.Id, barberA.Id, "2026-09-01", "09:00", FixedNow);
 
         await Assert.ThrowsAsync<BookingConflictException>(
-            () => service.Create(customer.Id, barberB.Id, "2026-09-01", "09:00"));
+            () => service.Create(customer.Id, barberB.Id, "2026-09-01", "09:00", FixedNow));
+    }
+
+    [Fact]
+    public async Task Create_throws_InvalidBookingWindowException_for_a_past_date()
+    {
+        await using var context = _factory.CreateDbContext();
+        var customer = await SeedAccount(context, "customer@example.com", Role.Customer);
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var service = NewService(context);
+
+        await Assert.ThrowsAsync<InvalidBookingWindowException>(
+            () => service.Create(customer.Id, barber.Id, "2026-08-31", "09:00", FixedNow));
+    }
+
+    [Fact]
+    public async Task Create_throws_InvalidBookingWindowException_within_30_minutes_of_now_same_day()
+    {
+        await using var context = _factory.CreateDbContext();
+        var customer = await SeedAccount(context, "customer@example.com", Role.Customer);
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var service = NewService(context);
+        var now = new DateTime(2026, 9, 1, 8, 45, 0);
+
+        await Assert.ThrowsAsync<InvalidBookingWindowException>(
+            () => service.Create(customer.Id, barber.Id, "2026-09-01", "09:00", now));
+    }
+
+    [Fact]
+    public async Task Create_throws_InvalidBookingWindowException_when_the_30_minute_cutoff_rolls_into_the_next_day()
+    {
+        await using var context = _factory.CreateDbContext();
+        var customer = await SeedAccount(context, "customer@example.com", Role.Customer);
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var service = NewService(context);
+        var now = new DateTime(2026, 9, 1, 23, 45, 0);
+
+        await Assert.ThrowsAsync<InvalidBookingWindowException>(
+            () => service.Create(customer.Id, barber.Id, "2026-09-01", "23:59", now));
+    }
+
+    [Theory]
+    [InlineData("2026-09-05")] // Saturday
+    [InlineData("2026-09-06")] // Sunday
+    public async Task Create_throws_InvalidBookingWindowException_for_a_weekend_date(string date)
+    {
+        await using var context = _factory.CreateDbContext();
+        var customer = await SeedAccount(context, "customer@example.com", Role.Customer);
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var service = NewService(context);
+
+        await Assert.ThrowsAsync<InvalidBookingWindowException>(
+            () => service.Create(customer.Id, barber.Id, date, "09:00", FixedNow));
+    }
+
+    [Fact]
+    public async Task Create_throws_InvalidBookingWindowException_beyond_the_30_day_cap()
+    {
+        await using var context = _factory.CreateDbContext();
+        var customer = await SeedAccount(context, "customer@example.com", Role.Customer);
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var service = NewService(context);
+
+        await Assert.ThrowsAsync<InvalidBookingWindowException>(
+            () => service.Create(customer.Id, barber.Id, "2026-10-02", "09:00", FixedNow));
+    }
+
+    [Fact]
+    public async Task Create_succeeds_exactly_30_days_out()
+    {
+        await using var context = _factory.CreateDbContext();
+        var customer = await SeedAccount(context, "customer@example.com", Role.Customer);
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var service = NewService(context);
+
+        var created = await service.Create(customer.Id, barber.Id, "2026-10-01", "09:00", FixedNow);
+
+        Assert.True(created.Id > 0);
     }
 
     [Fact]
@@ -114,7 +193,7 @@ public class BookingServiceTests : IDisposable
         var customer = await SeedAccount(context, "customer@example.com", Role.Customer);
         var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
         var service = NewService(context);
-        var created = await service.Create(customer.Id, barber.Id, "2026-09-01", "09:00");
+        var created = await service.Create(customer.Id, barber.Id, "2026-09-01", "09:00", FixedNow);
         await service.Cancel(created.Id);
 
         await Assert.ThrowsAsync<AppointmentAlreadyCancelledException>(() => service.Cancel(created.Id));

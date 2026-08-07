@@ -1,3 +1,4 @@
+using System.Globalization;
 using BarbershopApi.Dtos;
 using BarbershopApi.Entities;
 using BarbershopApi.Repositories;
@@ -12,8 +13,21 @@ public class BookingService(IAppointmentRepository appointmentRepository, IAccou
     private static readonly TimeZoneInfo EasternTimeZone = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
     private static readonly List<string> FixedSlots = BuildFixedSlots();
 
-    public async Task<Appointment> Create(int customerId, int barberId, string date, string startTime)
+    public async Task<Appointment> Create(int customerId, int barberId, string date, string startTime, DateTime? now = null)
     {
+        var nowEst = now ?? GetNowEst();
+        var appointmentDate = DateOnly.ParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture);
+        var appointmentTime = TimeOnly.ParseExact(startTime, "HH:mm", CultureInfo.InvariantCulture);
+        var appointmentDateTime = appointmentDate.ToDateTime(appointmentTime);
+
+        var isPastOrTooSoon = appointmentDateTime < nowEst.AddMinutes(30);
+        var isWeekend = appointmentDate.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
+        var isBeyondCap = appointmentDate > DateOnly.FromDateTime(nowEst).AddDays(30);
+        if (isPastOrTooSoon || isWeekend || isBeyondCap)
+        {
+            throw new InvalidBookingWindowException();
+        }
+
         var conflict = await appointmentRepository.ExistsConflict(barberId, customerId, date, startTime);
         if (conflict)
         {
