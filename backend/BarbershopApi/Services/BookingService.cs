@@ -107,7 +107,26 @@ public class BookingService(IAppointmentRepository appointmentRepository, IAccou
         return available;
     }
 
-    public async Task Cancel(int appointmentId, int callerAccountId, Role callerRole)
+    public async Task<DayScheduleView> GetDaySchedule(int barberId, string? date = null, DateTime? now = null)
+    {
+        var nowEst = ResolveNowEst(now);
+        var resolvedDate = date ?? nowEst.ToString("yyyy-MM-dd");
+
+        var booked = await FindByBarberAndDate(barberId, resolvedDate);
+        var byStartTime = booked.ToDictionary(a => a.StartTime);
+
+        var slots = FixedSlots
+            .Select(time => new ScheduleSlotView
+            {
+                StartTime = time,
+                Appointment = byStartTime.GetValueOrDefault(time),
+            })
+            .ToList();
+
+        return new DayScheduleView { Date = resolvedDate, Slots = slots };
+    }
+
+    public async Task Cancel(int appointmentId, int callerAccountId, Role callerRole, DateTime? now = null)
     {
         var appointment = await appointmentRepository.FindById(appointmentId);
         if (appointment is null)
@@ -127,6 +146,12 @@ public class BookingService(IAppointmentRepository appointmentRepository, IAccou
             // Not-found, not forbidden -- never confirm that a specific
             // appointment id belongs to someone else.
             throw new AppointmentNotFoundException();
+        }
+
+        var nowEst = ResolveNowEst(now);
+        if (IsFinished(appointment, nowEst))
+        {
+            throw new AppointmentAlreadyFinishedException();
         }
 
         var cancelled = await appointmentRepository.TryCancel(appointmentId, DateTime.UtcNow);

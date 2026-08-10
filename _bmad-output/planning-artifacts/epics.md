@@ -548,21 +548,25 @@ So that I know who's coming in without digging through anyone else's calendar.
 **When** rendered
 **Then** it lists every fixed 30-min slot from 9:00 AM–4:30 PM; booked slots show the customer's name, open slots show "Available" (FR13, UX-DR11)
 
-**Given** a weekend date reached via the day-nav arrows
-**When** viewed
+**Given** "today" itself falls on a weekend (the day-nav arrows never land on one — see AC4)
+**When** the view loads
 **Then** it shows no bookable slot grid, consistent with the shop-closed rule (FR13, FR7)
 
 **Given** the day-nav arrows
 **When** clicked
-**Then** the view steps one day at a time in either direction (FR12, UX-DR14)
+**Then** the view steps to the next or previous weekday, skipping over Saturday/Sunday entirely (FR12, UX-DR14)
 
 **Given** a barber's schedule query
 **When** executed
 **Then** it returns only that barber's own appointments — enforced server-side, not just by the UI (FR14)
 
-**Given** a booked slot on the barber's own schedule
+**Given** a booked slot on the barber's own schedule that has not yet finished
 **When** they click Cancel
 **Then** it reuses Story 2.4's confirm-popup-then-soft-cancel flow, freeing the slot (FR26, FR30)
+
+**Given** a booked slot whose date/time has already passed (the computed "Finished" status, FR24)
+**When** viewed
+**Then** it shows a "Finished" state instead of an active Cancel button; the server independently rejects any cancel attempt on it regardless of caller role — the disabled/hidden button is a UX nicety, never the enforcement point (FR24, consistent with AD-14's server-side-revalidation convention)
 
 ### Story 2.6: Admin Schedule Oversight
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { useEffect } from 'react'
+import { StrictMode, useEffect } from 'react'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router'
@@ -36,18 +36,23 @@ function SignInThenRenderPage() {
   return <ScheduleAppointment />
 }
 
+// Wrapped in StrictMode to match main.jsx's real production tree -- dev-only
+// double-invoked effects previously masked a stale isMountedRef bug that only
+// StrictMode's mount/cleanup/mount cycle exposes (see MySchedule.test.jsx).
 function renderPage() {
   return render(
-    <AuthProvider>
-      <MemoryRouter initialEntries={['/schedule-appointment']}>
-        <Routes>
-          <Route
-            path="/schedule-appointment"
-            element={<SignInThenRenderPage />}
-          />
-        </Routes>
-      </MemoryRouter>
-    </AuthProvider>,
+    <StrictMode>
+      <AuthProvider>
+        <MemoryRouter initialEntries={['/schedule-appointment']}>
+          <Routes>
+            <Route
+              path="/schedule-appointment"
+              element={<SignInThenRenderPage />}
+            />
+          </Routes>
+        </MemoryRouter>
+      </AuthProvider>
+    </StrictMode>,
   )
 }
 

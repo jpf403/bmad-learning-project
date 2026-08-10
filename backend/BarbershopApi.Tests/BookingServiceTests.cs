@@ -239,6 +239,61 @@ public class BookingServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Cancel_throws_AppointmentAlreadyFinishedException_when_the_appointment_has_already_happened()
+    {
+        await using var context = _factory.CreateDbContext();
+        var customer = await SeedAccount(context, "customer@example.com", Role.Customer);
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var service = NewService(context);
+        var created = await service.Create(customer.Id, barber.Id, "2026-09-01", "09:00", FixedNow);
+        var afterAppointment = new DateTime(2026, 9, 1, 9, 0, 0);
+
+        await Assert.ThrowsAsync<AppointmentAlreadyFinishedException>(
+            () => service.Cancel(created.Id, customer.Id, Role.Customer, afterAppointment));
+    }
+
+    [Fact]
+    public async Task Cancel_throws_AppointmentAlreadyFinishedException_even_when_caller_is_admin()
+    {
+        await using var context = _factory.CreateDbContext();
+        var customer = await SeedAccount(context, "customer@example.com", Role.Customer);
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var admin = await SeedAccount(context, "admin@example.com", Role.Admin);
+        var service = NewService(context);
+        var created = await service.Create(customer.Id, barber.Id, "2026-09-01", "09:00", FixedNow);
+        var afterAppointment = new DateTime(2026, 9, 1, 9, 0, 0);
+
+        await Assert.ThrowsAsync<AppointmentAlreadyFinishedException>(
+            () => service.Cancel(created.Id, admin.Id, Role.Admin, afterAppointment));
+    }
+
+    [Fact]
+    public async Task Cancel_succeeds_for_a_not_yet_finished_appointment_when_now_is_explicitly_passed()
+    {
+        await using var context = _factory.CreateDbContext();
+        var customer = await SeedAccount(context, "customer@example.com", Role.Customer);
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var service = NewService(context);
+        var created = await service.Create(customer.Id, barber.Id, "2026-09-01", "09:00", FixedNow);
+
+        await service.Cancel(created.Id, customer.Id, Role.Customer, FixedNow);
+    }
+
+    [Fact]
+    public async Task Cancel_throws_ArgumentException_when_now_has_a_non_Unspecified_DateTimeKind()
+    {
+        await using var context = _factory.CreateDbContext();
+        var customer = await SeedAccount(context, "customer@example.com", Role.Customer);
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var service = NewService(context);
+        var created = await service.Create(customer.Id, barber.Id, "2026-09-01", "09:00", FixedNow);
+        var utcNow = DateTime.SpecifyKind(FixedNow, DateTimeKind.Utc);
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => service.Cancel(created.Id, customer.Id, Role.Customer, utcNow));
+    }
+
+    [Fact]
     public async Task Cancel_throws_AppointmentNotFoundException_when_caller_is_not_the_owning_customer()
     {
         await using var context = _factory.CreateDbContext();
@@ -390,5 +445,93 @@ public class BookingServiceTests : IDisposable
 
         await Assert.ThrowsAsync<ArgumentException>(
             () => service.GetAvailableSlots(barber.Id, "2026-09-01", utcNow));
+    }
+
+    [Fact]
+    public async Task GetDaySchedule_returns_all_sixteen_fixed_slots_as_available_when_nothing_booked()
+    {
+        await using var context = _factory.CreateDbContext();
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var service = NewService(context);
+
+        var schedule = await service.GetDaySchedule(barber.Id, "2026-09-01", FixedNow);
+
+        Assert.Equal(16, schedule.Slots.Count);
+        Assert.All(schedule.Slots, slot => Assert.Null(slot.Appointment));
+    }
+
+    [Fact]
+    public async Task GetDaySchedule_attaches_the_booked_appointment_to_its_matching_slot_and_leaves_others_available()
+    {
+        await using var context = _factory.CreateDbContext();
+        var customer = await SeedAccount(context, "customer@example.com", Role.Customer, firstName: "Jane", lastName: "Doe");
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var service = NewService(context);
+        await service.Create(customer.Id, barber.Id, "2026-09-01", "10:00", FixedNow);
+
+        var schedule = await service.GetDaySchedule(barber.Id, "2026-09-01", FixedNow);
+
+        var booked = Assert.Single(schedule.Slots, s => s.Appointment is not null);
+        Assert.Equal("10:00", booked.StartTime);
+        Assert.Equal("Jane Doe", booked.Appointment!.CustomerName);
+        Assert.Equal(15, schedule.Slots.Count(s => s.Appointment is null));
+    }
+
+    [Fact]
+    public async Task GetDaySchedule_only_includes_this_barbers_own_appointments()
+    {
+        await using var context = _factory.CreateDbContext();
+        var customerA = await SeedAccount(context, "customerA@example.com", Role.Customer);
+        var customerB = await SeedAccount(context, "customerB@example.com", Role.Customer);
+        var barberA = await SeedAccount(context, "barberA@example.com", Role.Barber);
+        var barberB = await SeedAccount(context, "barberB@example.com", Role.Barber);
+        var service = NewService(context);
+        await service.Create(customerA.Id, barberA.Id, "2026-09-01", "09:00", FixedNow);
+        await service.Create(customerB.Id, barberB.Id, "2026-09-01", "09:00", FixedNow);
+
+        var schedule = await service.GetDaySchedule(barberA.Id, "2026-09-01", FixedNow);
+
+        var booked = Assert.Single(schedule.Slots, s => s.Appointment is not null);
+        Assert.Equal(customerA.Id, booked.Appointment!.CustomerId);
+    }
+
+    [Fact]
+    public async Task GetDaySchedule_excludes_a_cancelled_appointment_from_the_booked_slot()
+    {
+        await using var context = _factory.CreateDbContext();
+        var customer = await SeedAccount(context, "customer@example.com", Role.Customer);
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var service = NewService(context);
+        var created = await service.Create(customer.Id, barber.Id, "2026-09-01", "09:00", FixedNow);
+        await service.Cancel(created.Id, customer.Id, Role.Customer);
+
+        var schedule = await service.GetDaySchedule(barber.Id, "2026-09-01", FixedNow);
+
+        Assert.All(schedule.Slots, slot => Assert.Null(slot.Appointment));
+    }
+
+    [Fact]
+    public async Task GetDaySchedule_defaults_to_todays_EST_date_when_date_is_omitted()
+    {
+        await using var context = _factory.CreateDbContext();
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var service = NewService(context);
+
+        var schedule = await service.GetDaySchedule(barber.Id, date: null, now: FixedNow);
+
+        Assert.Equal(FixedNow.ToString("yyyy-MM-dd"), schedule.Date);
+    }
+
+    [Fact]
+    public async Task GetDaySchedule_returns_a_full_available_slot_list_for_a_weekend_date_with_no_special_casing()
+    {
+        await using var context = _factory.CreateDbContext();
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var service = NewService(context);
+
+        var schedule = await service.GetDaySchedule(barber.Id, "2026-09-05", FixedNow); // Saturday
+
+        Assert.Equal(16, schedule.Slots.Count);
+        Assert.All(schedule.Slots, slot => Assert.Null(slot.Appointment));
     }
 }

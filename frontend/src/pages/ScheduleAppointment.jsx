@@ -41,6 +41,12 @@ export default function ScheduleAppointment() {
   const isMountedRef = useRef(true)
 
   useEffect(() => {
+    // StrictMode double-invokes this effect in dev (mount -> cleanup -> mount
+    // again) to catch missing cleanup. Without resetting to `true` here, the
+    // synthetic first cleanup would leave this permanently `false`, and
+    // refreshAppointments() after that would silently bail before updating
+    // the list (found and fixed in Story 2.5's MySchedule.jsx first).
+    isMountedRef.current = true
     return () => {
       isMountedRef.current = false
     }

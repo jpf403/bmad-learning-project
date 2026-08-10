@@ -98,6 +98,31 @@ export async function getMyAppointments(accessToken) {
   return { ok: true, appointments: body }
 }
 
+export async function getSchedule(accessToken, date) {
+  let response
+  try {
+    response = await fetch(
+      `${API_BASE_URL}/api/booking/schedule${date ? `?date=${date}` : ''}`,
+      {
+        credentials: 'include',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    )
+  } catch {
+    return { ok: false, status: null }
+  }
+
+  const body = await response.json().catch(() => null)
+  if (!response.ok || body === null) {
+    return {
+      ok: false,
+      status: response.ok ? null : response.status,
+      problem: body,
+    }
+  }
+  return { ok: true, schedule: body }
+}
+
 export async function cancelAppointment(accessToken, appointmentId) {
   let response
   try {

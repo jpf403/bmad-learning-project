@@ -66,6 +66,21 @@ public class BookingController(IAccountRepository accountRepository, IBookingSer
         }
     }
 
+    [HttpGet("schedule")]
+    public async Task<IActionResult> GetSchedule([FromQuery] string? date)
+    {
+        var account = (Account)HttpContext.Items["Account"]!;
+        if (account.Role != Role.Barber)
+        {
+            return Problem(statusCode: StatusCodes.Status403Forbidden, title: "Only barbers can view their own schedule.");
+        }
+        if (date is not null && !ValidCalendarDateAttribute.IsValidDate(date))
+        {
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Date must be in yyyy-MM-dd format.");
+        }
+        return Ok(await bookingService.GetDaySchedule(account.Id, date));
+    }
+
     [HttpGet("mine")]
     public async Task<IActionResult> GetMyAppointments()
     {
@@ -89,6 +104,10 @@ public class BookingController(IAccountRepository accountRepository, IBookingSer
         catch (AppointmentAlreadyCancelledException)
         {
             return Problem(statusCode: StatusCodes.Status409Conflict, title: "This appointment has already been cancelled.");
+        }
+        catch (AppointmentAlreadyFinishedException)
+        {
+            return Problem(statusCode: StatusCodes.Status409Conflict, title: "This appointment has already finished and cannot be cancelled.");
         }
         catch (Exception)
         {

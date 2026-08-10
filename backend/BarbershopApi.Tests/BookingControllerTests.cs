@@ -48,6 +48,26 @@ public class BookingControllerTests : IDisposable
         });
     }
 
+    private async Task<Account> FindByEmail(string email)
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        return (await repository.FindByEmail(email))!;
+    }
+
+    private async Task<Appointment> SeedAppointment(int customerId, int barberId, string date, string startTime)
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AppointmentRepository(context);
+        return await repository.Create(new Appointment
+        {
+            CustomerId = customerId,
+            BarberId = barberId,
+            Date = date,
+            StartTime = startTime,
+        });
+    }
+
     private static HttpRequestMessage AuthedRequest(HttpMethod method, string url, string? accessToken)
     {
         var request = new HttpRequestMessage(method, url);
@@ -496,6 +516,22 @@ public class BookingControllerTests : IDisposable
     }
 
     [Fact]
+    public async Task CancelBooking_on_a_finished_appointment_returns_409()
+    {
+        var customer = await SeedAccount("customer@example.com", Role.Customer);
+        using var client = _factory.CreateClient();
+        var barberToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Barber);
+        var barber = await FindByEmail("john@example.com");
+        var pastAppointment = await SeedAppointment(customer.Id, barber.Id, "2020-01-01", "09:00");
+
+        var response = await client.SendAsync(
+            AuthedRequest(HttpMethod.Post, $"/api/booking/{pastAppointment.Id}/cancel", barberToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
     public async Task CancelBooking_on_already_cancelled_appointment_returns_409()
     {
         var barber = await SeedAccount("barber@example.com", Role.Barber);
@@ -527,6 +563,121 @@ public class BookingControllerTests : IDisposable
 
         var response = await client.SendAsync(
             AuthedRequest(HttpMethod.Post, "/api/booking/1/cancel", null),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetSchedule_returns_all_sixteen_slots_with_the_booking_attached_to_its_slot()
+    {
+        using var client = _factory.CreateClient();
+        var customerToken = await RegisterAndLogin(client, email: "customer@example.com");
+        var barberToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Barber, "barber-login@example.com");
+        var barber = await FindByEmail("barber-login@example.com");
+        var date = NextBookableWeekday();
+        await client.SendAsync(
+            AuthedRequest(HttpMethod.Post, "/api/booking", customerToken)
+                .WithJsonBody(new { BarberId = barber.Id, Date = date, StartTime = "09:00" }),
+            TestContext.Current.CancellationToken);
+
+        var response = await client.SendAsync(
+            AuthedRequest(HttpMethod.Get, $"/api/booking/schedule?date={date}", barberToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<DayScheduleView>(ResponseJsonOptions, TestContext.Current.CancellationToken);
+        Assert.NotNull(body);
+        Assert.Equal(16, body.Slots.Count);
+        var booked = Assert.Single(body.Slots, s => s.Appointment is not null);
+        Assert.Equal("09:00", booked.StartTime);
+    }
+
+    [Fact]
+    public async Task GetSchedule_without_date_param_defaults_to_today()
+    {
+        using var client = _factory.CreateClient();
+        var barberToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Barber);
+
+        var response = await client.SendAsync(
+            AuthedRequest(HttpMethod.Get, "/api/booking/schedule", barberToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<DayScheduleView>(ResponseJsonOptions, TestContext.Current.CancellationToken);
+        Assert.NotNull(body);
+        Assert.Equal(DateTime.Today.ToString("yyyy-MM-dd"), body.Date);
+    }
+
+    [Fact]
+    public async Task GetSchedule_only_returns_the_callers_own_appointments_not_another_barbers()
+    {
+        var barberB = await SeedAccount("barberB@example.com", Role.Barber);
+        using var client = _factory.CreateClient();
+        var customerToken = await RegisterAndLogin(client, email: "customer@example.com");
+        var barberAToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Barber, "barberA-login@example.com");
+        var date = NextBookableWeekday();
+        await client.SendAsync(
+            AuthedRequest(HttpMethod.Post, "/api/booking", customerToken)
+                .WithJsonBody(new { BarberId = barberB.Id, Date = date, StartTime = "09:00" }),
+            TestContext.Current.CancellationToken);
+
+        var response = await client.SendAsync(
+            AuthedRequest(HttpMethod.Get, $"/api/booking/schedule?date={date}", barberAToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<DayScheduleView>(ResponseJsonOptions, TestContext.Current.CancellationToken);
+        Assert.NotNull(body);
+        Assert.All(body.Slots, s => Assert.Null(s.Appointment));
+    }
+
+    [Fact]
+    public async Task GetSchedule_with_malformed_date_returns_400()
+    {
+        using var client = _factory.CreateClient();
+        var barberToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Barber);
+
+        var response = await client.SendAsync(
+            AuthedRequest(HttpMethod.Get, "/api/booking/schedule?date=09-01-2026", barberToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetSchedule_customer_caller_returns_403()
+    {
+        using var client = _factory.CreateClient();
+        var accessToken = await RegisterAndLogin(client);
+
+        var response = await client.SendAsync(
+            AuthedRequest(HttpMethod.Get, "/api/booking/schedule", accessToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetSchedule_admin_caller_returns_403()
+    {
+        using var client = _factory.CreateClient();
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin);
+
+        var response = await client.SendAsync(
+            AuthedRequest(HttpMethod.Get, "/api/booking/schedule", adminToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetSchedule_without_access_token_returns_401()
+    {
+        using var client = _factory.CreateClient();
+
+        var response = await client.SendAsync(
+            AuthedRequest(HttpMethod.Get, "/api/booking/schedule", null),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
