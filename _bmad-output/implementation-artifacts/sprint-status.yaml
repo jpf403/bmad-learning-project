@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-27
-last_updated: 2026-08-07
+last_updated: 2026-08-10
 
 
 project: bmad-learning-project
@@ -65,7 +65,7 @@ development_status:
   2-2-customer-books-an-appointment: done
   2-3-double-booking-and-self-conflict-guards: done
   2-4-my-appointments-view-cancel-and-race-safety: done
-  2-5-barbers-own-schedule-view: backlog
+  2-5-barbers-own-schedule-view: ready-for-dev
   2-6-admin-schedule-oversight: backlog
   epic-2-retrospective: optional
 
