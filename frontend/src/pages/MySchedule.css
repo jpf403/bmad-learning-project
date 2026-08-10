@@ -2,7 +2,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--spacing-6);
-  max-width: 1120px;
+  max-width: var(--spacing-content-max-width);
   margin: 0 auto;
   padding: var(--spacing-12) var(--spacing-gutter-mobile);
 }
@@ -30,12 +30,18 @@
   margin: 0;
 }
 
-.date-header-row {
+.my-schedule__error-state {
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--spacing-3);
+}
+
+.date-header-row {
+  display: grid;
+  grid-template-columns: 20px 1fr 20px;
   align-items: center;
-  justify-content: center;
   gap: var(--spacing-5);
-  flex-wrap: wrap;
 }
 
 .date-nav-arrow {
@@ -54,13 +60,18 @@
   color: var(--color-primary);
 }
 
+.date-nav-arrow:disabled {
+  color: var(--color-text-muted);
+  cursor: default;
+  opacity: 0.5;
+}
+
 .date-title {
   font-family: var(--font-family-base);
   font-size: var(--typography-h2-size);
   font-weight: var(--typography-h2-weight);
   color: var(--color-text);
   margin: 0;
-  min-width: 220px;
   text-align: center;
 }
 
@@ -92,7 +103,8 @@
   flex-shrink: 0;
 }
 
-.slot-open .slot-status {
+.slot-open .slot-status,
+.slot-booked .slot-status {
   font-family: var(--font-family-base);
   font-size: var(--typography-body-size);
   color: var(--color-text-muted);

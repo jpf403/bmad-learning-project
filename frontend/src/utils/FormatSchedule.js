@@ -49,8 +49,15 @@ export function isWeekend(date) {
 // Steps one weekday at a time in the given direction (+1/-1), skipping over
 // Saturday/Sunday entirely -- e.g. Friday + 1 lands on Monday, not Saturday.
 export function addWeekdays(date, delta) {
+  if (delta === 0) {
+    return date
+  }
   let result = addDays(date, delta)
-  while (isWeekend(result)) {
+  // A week has 7 days, so at most 7 applications of any non-zero `delta`
+  // are ever needed to leave a weekend -- caps the loop for any `delta`
+  // whose repeated application would otherwise never land on a weekday
+  // (e.g. delta = 7 from a Saturday), not just the delta === 0 case above.
+  for (let i = 0; isWeekend(result) && i < 7; i++) {
     result = addDays(result, delta)
   }
   return result

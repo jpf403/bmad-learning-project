@@ -55,10 +55,10 @@ public class BookingService(IAppointmentRepository appointmentRepository, IAccou
         }
     }
 
-    public async Task<List<AppointmentView>> FindByBarberAndDate(int barberId, string date)
+    public async Task<List<AppointmentView>> FindByBarberAndDate(int barberId, string date, DateTime? now = null)
     {
         var appointments = await appointmentRepository.FindByBarberAndDate(barberId, date);
-        var nowEst = GetNowEst();
+        var nowEst = ResolveNowEst(now);
 
         var views = new List<AppointmentView>();
         foreach (var appointment in appointments)
@@ -112,7 +112,7 @@ public class BookingService(IAppointmentRepository appointmentRepository, IAccou
         var nowEst = ResolveNowEst(now);
         var resolvedDate = date ?? nowEst.ToString("yyyy-MM-dd");
 
-        var booked = await FindByBarberAndDate(barberId, resolvedDate);
+        var booked = await FindByBarberAndDate(barberId, resolvedDate, nowEst);
         var byStartTime = booked.ToDictionary(a => a.StartTime);
 
         var slots = FixedSlots
@@ -146,6 +146,11 @@ public class BookingService(IAppointmentRepository appointmentRepository, IAccou
             // Not-found, not forbidden -- never confirm that a specific
             // appointment id belongs to someone else.
             throw new AppointmentNotFoundException();
+        }
+
+        if (appointment.CancelledAt is not null)
+        {
+            throw new AppointmentAlreadyCancelledException();
         }
 
         var nowEst = ResolveNowEst(now);

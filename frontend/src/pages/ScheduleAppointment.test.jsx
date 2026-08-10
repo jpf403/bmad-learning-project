@@ -207,6 +207,78 @@ describe('ScheduleAppointment', () => {
     expect(screen.getByLabelText('Date')).not.toHaveTextContent('Select a date')
   })
 
+  it('discards a stale 409-retry availability response after the barber selection has since changed', async () => {
+    let amyAvailabilityCalls = 0
+    let resolveStaleRetry
+    vi.spyOn(globalThis, 'fetch').mockImplementation((url, options) => {
+      const href = url.toString()
+      if (href.endsWith('/api/booking/barbers')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => [
+            { id: 1, firstName: 'Amy', lastName: 'Barber' },
+            { id: 2, firstName: 'Ben', lastName: 'Barber' },
+          ],
+        })
+      }
+      if (href.includes('/api/booking/availability')) {
+        const barberId = new URL(href).searchParams.get('barberId')
+        if (barberId === '1') {
+          amyAvailabilityCalls += 1
+          if (amyAvailabilityCalls === 1) {
+            return Promise.resolve({ ok: true, json: async () => ['09:00'] })
+          }
+          // This is the 409-retry's own availability re-fetch -- deliberately
+          // left pending so it resolves after the user has moved on.
+          return new Promise((resolve) => {
+            resolveStaleRetry = () =>
+              resolve({ ok: true, json: async () => ['09:00'] })
+          })
+        }
+        return Promise.resolve({ ok: true, json: async () => ['14:00'] })
+      }
+      if (href.endsWith('/api/booking') && options?.method === 'POST') {
+        return Promise.resolve({
+          ok: false,
+          status: 409,
+          json: async () => ({
+            title: 'That time is no longer available. Choose another.',
+          }),
+        })
+      }
+      if (href.endsWith('/api/booking/mine')) {
+        return Promise.resolve({ ok: true, json: async () => [] })
+      }
+      return Promise.resolve({ ok: false, status: 401 })
+    })
+    const user = userEvent.setup()
+    renderPage()
+
+    await selectBarberAndToday(user)
+    await user.click(await screen.findByLabelText('Time'))
+    await user.click(await screen.findByRole('option', { name: '9:00 AM' }))
+    await user.click(screen.getByRole('button', { name: 'Submit' }))
+
+    // The 409 handler's own availability retry is now pending (never
+    // resolves until resolveStaleRetry() is called below).
+    await screen.findByText('That time is no longer available. Choose another.')
+
+    await user.click(screen.getByLabelText('Barber'))
+    await user.click(await screen.findByRole('option', { name: 'Ben Barber' }))
+    await user.click(await screen.findByLabelText('Time'))
+    expect(
+      await screen.findByRole('option', { name: '2:00 PM' }),
+    ).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+
+    resolveStaleRetry()
+    await user.click(await screen.findByLabelText('Time'))
+    expect(
+      screen.queryByRole('option', { name: '9:00 AM' }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '2:00 PM' })).toBeInTheDocument()
+  })
+
   it('renders "No upcoming appointments." on an empty list', async () => {
     mockFetch({ appointments: [] })
     renderPage()

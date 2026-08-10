@@ -406,6 +406,98 @@ describe('MySchedule', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('renders an error message with a Try again button when the schedule fetch fails', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => null,
+    })
+    renderPage()
+
+    expect(
+      await screen.findByText(
+        'Could not load your schedule. Please try again.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Try again' }),
+    ).toBeInTheDocument()
+  })
+
+  it('clicking Try again re-fetches the date being navigated to, not the previously displayed one', async () => {
+    let nextDayAttempts = 0
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation((url) => {
+        const href = url.toString()
+        if (!href.includes('/api/booking/schedule')) {
+          return Promise.resolve({ ok: false, status: 401 })
+        }
+        const date = new URL(href).searchParams.get('date')
+        if (date === '2026-08-25') {
+          nextDayAttempts += 1
+          if (nextDayAttempts === 1) {
+            return Promise.resolve({
+              ok: false,
+              status: 500,
+              json: async () => null,
+            })
+          }
+          return Promise.resolve({
+            ok: true,
+            json: async () => emptySchedule('2026-08-25'),
+          })
+        }
+        return Promise.resolve({
+          ok: true,
+          json: async () => emptySchedule(date ?? '2026-08-24'),
+        })
+      })
+    const user = userEvent.setup()
+    renderPage()
+
+    expect(await screen.findByText('Monday, August 24')).toBeInTheDocument()
+
+    await user.click(screen.getByLabelText('Next day'))
+
+    expect(
+      await screen.findByText(
+        'Could not load your schedule. Please try again.',
+      ),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+
+    expect(await screen.findByText('Tuesday, August 25')).toBeInTheDocument()
+    const lastCallUrl = fetchMock.mock.calls.at(-1)[0].toString()
+    expect(lastCallUrl).toContain('date=2026-08-25')
+  })
+
+  it('disables the date-nav arrows while a cancel is in flight', async () => {
+    mockFetch({
+      scheduleResponse: scheduleWithBooking('2026-08-24', '10:00', {
+        id: 5,
+        customerId: 2,
+        customerName: 'Jane Doe',
+        barberId: 1,
+        barberName: 'John Smith',
+        date: '2026-08-24',
+        startTime: '10:00',
+        finished: false,
+        cancelledAt: null,
+      }),
+      cancel: new Promise(() => {}), // never resolves -- cancel stays in flight
+    })
+    const user = userEvent.setup()
+    renderPage()
+
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm' }))
+
+    expect(await screen.findByLabelText('Previous day')).toBeDisabled()
+    expect(screen.getByLabelText('Next day')).toBeDisabled()
+  })
+
   it('renders the Admin placeholder and never calls GET /api/booking/schedule', async () => {
     const fetchMock = mockFetch({
       scheduleResponse: emptySchedule('2026-08-24'),

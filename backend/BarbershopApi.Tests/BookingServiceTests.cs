@@ -534,4 +534,32 @@ public class BookingServiceTests : IDisposable
         Assert.Equal(16, schedule.Slots.Count);
         Assert.All(schedule.Slots, slot => Assert.Null(slot.Appointment));
     }
+
+    [Fact]
+    public async Task GetDaySchedule_throws_ArgumentException_when_now_has_a_non_Unspecified_DateTimeKind()
+    {
+        await using var context = _factory.CreateDbContext();
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var service = NewService(context);
+        var utcNow = DateTime.SpecifyKind(FixedNow, DateTimeKind.Utc);
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => service.GetDaySchedule(barber.Id, "2026-09-01", utcNow));
+    }
+
+    [Fact]
+    public async Task GetDaySchedule_computes_Finished_using_the_caller_supplied_now_not_real_wall_clock_time()
+    {
+        await using var context = _factory.CreateDbContext();
+        var customer = await SeedAccount(context, "customer@example.com", Role.Customer);
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var service = NewService(context);
+        await service.Create(customer.Id, barber.Id, "2026-09-01", "09:00", FixedNow);
+        var wellAfter = FixedNow.AddDays(1);
+
+        var schedule = await service.GetDaySchedule(barber.Id, "2026-09-01", wellAfter);
+
+        var booked = Assert.Single(schedule.Slots, s => s.Appointment is not null);
+        Assert.True(booked.Appointment!.Finished);
+    }
 }

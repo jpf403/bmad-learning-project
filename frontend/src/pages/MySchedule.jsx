@@ -23,6 +23,16 @@ export default function MySchedule() {
   const [cancelError, setCancelError] = useState('')
   const [cancellingId, setCancellingId] = useState(null)
   const isMountedRef = useRef(true)
+  // Tracks the date most recently *requested*, independent of whether that
+  // request succeeded -- `date` state only ever updates on success, so a
+  // failed nav-arrow click leaves `date` at the old value. "Try again" must
+  // retry the date the user was navigating to, not the one still displayed.
+  const attemptedDateRef = useRef(null)
+  // Bumped at the start of every loadDate() call. If a newer call starts
+  // before an older one's fetch resolves (e.g. two rapid nav-arrow clicks),
+  // the older call's captured id no longer matches by the time it resolves,
+  // so its result is discarded regardless of which one settles first.
+  const requestIdRef = useRef(0)
 
   useEffect(() => {
     // StrictMode double-invokes this effect in dev (mount -> cleanup -> mount
@@ -52,9 +62,11 @@ export default function MySchedule() {
   }
 
   async function loadDate(explicitDate) {
+    attemptedDateRef.current = explicitDate
+    const requestId = ++requestIdRef.current
     setLoading(true)
     const result = await fetchSchedule(explicitDate)
-    if (!isMountedRef.current) {
+    if (!isMountedRef.current || requestId !== requestIdRef.current) {
       return
     }
     setLoading(false)
@@ -71,6 +83,12 @@ export default function MySchedule() {
     if (user.role !== 'Barber') {
       return
     }
+    // Uses its own per-invocation `cancelled` flag rather than `loadDate`'s
+    // shared `isMountedRef` -- under StrictMode's dev-only double-invoke,
+    // isMountedRef is back to `true` by the second invocation, so it can't
+    // stop two concurrent loadDate(null) calls from both applying state.
+    // `cancelled` is scoped to just the invocation it belongs to, so only
+    // the second (current) invocation's result is ever applied.
     let cancelled = false
 
     async function load() {
@@ -97,12 +115,15 @@ export default function MySchedule() {
 
   async function handleCancelConfirmed() {
     const target = cancelTarget
-    if (cancellingId !== null) {
+    if (!target || cancellingId !== null) {
       return
     }
     setCancellingId(target.id)
     setCancelError('')
     const result = await cancelAppointment(user.accessToken, target.id)
+    if (!isMountedRef.current) {
+      return
+    }
 
     if (result.ok) {
       await loadDate(date)
@@ -147,7 +168,15 @@ export default function MySchedule() {
       {loading ? (
         <p className="my-schedule__loading">Loading…</p>
       ) : scheduleError ? (
-        <p className="my-schedule__error">{scheduleError}</p>
+        <div className="my-schedule__error-state">
+          <p className="my-schedule__error">{scheduleError}</p>
+          <Button
+            variant="secondary"
+            onClick={() => loadDate(attemptedDateRef.current)}
+          >
+            Try again
+          </Button>
+        </div>
       ) : (
         <>
           <div className="date-header-row">
@@ -155,7 +184,12 @@ export default function MySchedule() {
               type="button"
               className="date-nav-arrow"
               aria-label="Previous day"
-              onClick={() => loadDate(addWeekdays(date, -1))}
+              disabled={cancellingId !== null}
+              onClick={() => {
+                setCancelTarget(null)
+                setCancelError('')
+                loadDate(addWeekdays(date, -1))
+              }}
             >
               &#8249;
             </button>
@@ -164,7 +198,12 @@ export default function MySchedule() {
               type="button"
               className="date-nav-arrow"
               aria-label="Next day"
-              onClick={() => loadDate(addWeekdays(date, 1))}
+              disabled={cancellingId !== null}
+              onClick={() => {
+                setCancelTarget(null)
+                setCancelError('')
+                loadDate(addWeekdays(date, 1))
+              }}
             >
               &#8250;
             </button>

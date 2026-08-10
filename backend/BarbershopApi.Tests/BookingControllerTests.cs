@@ -646,6 +646,19 @@ public class BookingControllerTests : IDisposable
     }
 
     [Fact]
+    public async Task GetSchedule_with_empty_date_returns_400()
+    {
+        using var client = _factory.CreateClient();
+        var barberToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Barber);
+
+        var response = await client.SendAsync(
+            AuthedRequest(HttpMethod.Get, "/api/booking/schedule?date=", barberToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task GetSchedule_customer_caller_returns_403()
     {
         using var client = _factory.CreateClient();
