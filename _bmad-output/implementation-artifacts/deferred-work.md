@@ -1,5 +1,16 @@
 # Deferred Work
 
+## Deferred from: code review of story-2.5-barbers-own-schedule-view, round 2 (2026-08-10)
+
+- `MySchedule.jsx`'s `loadDate` always sets `loading = true`, so the post-cancel refresh flashes the whole page to "Loading…" instead of updating just the affected row — pre-existing since the original implementation (not introduced by round 1's fixes); real but low-severity UX rough edge. [frontend/src/pages/MySchedule.jsx:54-68]
+- ~~Rapid double-clicks on the date-nav arrows before the first fetch resolves can show a momentarily mismatched date, since neither request is aborted or superseded by a generation counter — narrow window, same unguarded-fetch-ordering pattern already present elsewhere (e.g. `ScheduleAppointment.jsx`); a proper fix (AbortController/request-generation tracking) is a cross-cutting change, not scoped to one page.~~ **Resolved** (2026-08-10) — added a `requestIdRef` generation counter to both `MySchedule.jsx`'s `loadDate` and `ScheduleAppointment.jsx`'s availability-loading (`fetchAvailability`/`refreshAvailability`), so a stale response is discarded once a newer request has started, regardless of resolution order. See Story 2.5's Review Findings and Story 2.4's Change Log for the full details. [frontend/src/pages/MySchedule.jsx, frontend/src/pages/ScheduleAppointment.jsx]
+- A 401 (expired session) on the schedule fetch gets the same generic retry banner as any other failure, and "Try again" would just resend the same expired access token indefinitely — pre-existing pattern shared verbatim with `ScheduleAppointment.jsx` (Story 2.4, already shipped, not unique to this story); fixing it belongs across both pages. [frontend/src/pages/MySchedule.jsx:38-52]
+
+## Deferred from: code review of story-2.5-barbers-own-schedule-view (2026-08-10)
+
+- Confirm-cancel in-flight guard (`cancellingId !== null` checked in the same synchronous handler that sets it) is a check-then-set race under a true double-click before React's first re-render commits — inherited unmodified from Story 2.4's `ScheduleAppointment.jsx` (already shipped/reviewed), not introduced by this story. Backend's `TryCancel` still makes it safe (a second call just gets a benign 409), so no data-integrity impact. Fix belongs across both files, not scoped to 2.5 alone. [frontend/src/pages/MySchedule.jsx:98-102, frontend/src/pages/ScheduleAppointment.jsx]
+- `BookingApi.js#getSchedule` loses the real HTTP status when `response.ok` is `true` but the body fails to parse as JSON (`status: null` instead of `response.status`) — pre-existing pattern already present in `getBarbers`/`getAvailability`/`getMyAppointments` in the same file; this story correctly matched established style rather than introducing a new shape. [frontend/src/api/BookingApi.js:101-124]
+
 ## Deferred from: code review of story-2.4-my-appointments-view-cancel-and-race-safety (2026-08-07)
 
 - `CancelBooking`'s per-exception-type catch-block mapping duplicates `CreateBooking`'s existing catch-block shape verbatim — pre-existing pattern (`CreateBooking` already established this convention); a shared exception-to-`ProblemDetails` helper would need to touch both actions, out of this story's scope. [backend/BarbershopApi/Controllers/BookingController.cs:76-97, :50-67]

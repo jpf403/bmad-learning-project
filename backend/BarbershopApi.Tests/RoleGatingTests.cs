@@ -32,21 +32,28 @@ public class RoleGatingTests : IDisposable
         LastName = lastName,
     };
 
-    private async Task<string> RegisterAndLoginAs(HttpClient client, Role role)
-    {
-        await client.PostAsJsonAsync("/api/auth/register", NewRequest(), TestContext.Current.CancellationToken);
+    private Task<string> RegisterAndLoginAs(HttpClient client, Role role) =>
+        RegisterAndLoginAs(_factory, client, role);
 
-        await using (var context = _factory.CreateDbContext())
+    // Shared across test classes (e.g. BookingControllerTests) that need an HTTP-authenticated
+    // non-Customer caller: registers via the real endpoint (always seeds Role.Customer), then
+    // flips the role directly in the DB before logging in, since there is no register-as-barber
+    // or register-as-admin endpoint (AD-6 -- Admin is bootstrap-only).
+    internal static async Task<string> RegisterAndLoginAs(SqliteApiFactory factory, HttpClient client, Role role, string email = "john@example.com")
+    {
+        await client.PostAsJsonAsync("/api/auth/register", NewRequest(email), TestContext.Current.CancellationToken);
+
+        await using (var context = factory.CreateDbContext())
         {
             var repository = new AccountRepository(context);
-            var account = await repository.FindByEmail("john@example.com");
+            var account = await repository.FindByEmail(email);
             account!.Role = role;
             await repository.Update(account);
         }
 
         var loginResponse = await client.PostAsJsonAsync(
             "/api/auth/login",
-            new LoginRequest { Email = "john@example.com", Password = "correct-horse-battery-staple" },
+            new LoginRequest { Email = email, Password = "correct-horse-battery-staple" },
             TestContext.Current.CancellationToken);
         var session = await loginResponse.Content.ReadFromJsonAsync<LoginResponse>(LoginResponseJsonOptions, TestContext.Current.CancellationToken);
         return session!.AccessToken;

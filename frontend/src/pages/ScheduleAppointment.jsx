@@ -39,8 +39,22 @@ export default function ScheduleAppointment() {
   const [cancelError, setCancelError] = useState('')
   const [cancellingId, setCancellingId] = useState(null)
   const isMountedRef = useRef(true)
+  // Bumped at the start of every availability fetch (the effect's own
+  // loadAvailability() and refreshAvailability()'s 409-retry path both bump
+  // it). If a newer call starts before an older one's fetch resolves (the
+  // barber/date effect re-firing while a 409 retry is still in flight, or
+  // vice versa), the older call's captured id no longer matches by the time
+  // it resolves, so its result is discarded regardless of which one settles
+  // first.
+  const requestIdRef = useRef(0)
 
   useEffect(() => {
+    // StrictMode double-invokes this effect in dev (mount -> cleanup -> mount
+    // again) to catch missing cleanup. Without resetting to `true` here, the
+    // synthetic first cleanup would leave this permanently `false`, and
+    // refreshAppointments() after that would silently bail before updating
+    // the list (found and fixed in Story 2.5's MySchedule.jsx first).
+    isMountedRef.current = true
     return () => {
       isMountedRef.current = false
     }
@@ -157,35 +171,65 @@ export default function ScheduleAppointment() {
     setCancellingId(null)
   }
 
+  async function fetchAvailability() {
+    const result = await getAvailability(user.accessToken, barberId, date)
+    if (result.ok) {
+      return { slots: result.slots, errorMessage: '' }
+    }
+    return {
+      slots: [],
+      errorMessage: 'Could not load available times. Please try again.',
+    }
+  }
+
+  // handleSubmit's 409 retry needs its own setState-applying wrapper around
+  // the shared, setState-free fetchAvailability() below -- react-hooks/set-
+  // state-in-effect flags an externally-declared function containing a
+  // setState call when invoked directly from an effect body, so the mount
+  // effect can't just call this one (see the effect below, and Story 2.4's
+  // identical fetchAppointments/refreshAppointments split for the same
+  // constraint on this same page).
+  async function refreshAvailability() {
+    const requestId = ++requestIdRef.current
+    setAvailabilityLoading(true)
+    setAvailabilityError('')
+    const { slots, errorMessage } = await fetchAvailability()
+    if (!isMountedRef.current || requestId !== requestIdRef.current) {
+      return
+    }
+    setAvailabilityLoading(false)
+    if (errorMessage) {
+      setAvailableSlots([])
+      setAvailabilityError(errorMessage)
+    } else {
+      setAvailableSlots(slots)
+    }
+  }
+
   useEffect(() => {
     if (!barberId || !date) {
       return
     }
 
-    let cancelled = false
-
     async function loadAvailability() {
+      const requestId = ++requestIdRef.current
       setAvailabilityLoading(true)
       setAvailabilityError('')
-      const result = await getAvailability(user.accessToken, barberId, date)
-      if (cancelled) {
+      const { slots, errorMessage } = await fetchAvailability()
+      if (!isMountedRef.current || requestId !== requestIdRef.current) {
         return
       }
       setAvailabilityLoading(false)
-      if (result.ok) {
-        setAvailableSlots(result.slots)
-      } else {
+      if (errorMessage) {
         setAvailableSlots([])
-        setAvailabilityError(
-          'Could not load available times. Please try again.',
-        )
+        setAvailabilityError(errorMessage)
+      } else {
+        setAvailableSlots(slots)
       }
     }
 
     loadAvailability()
-    return () => {
-      cancelled = true
-    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [barberId, date, user.accessToken])
 
   async function handleSubmit(event) {
@@ -214,10 +258,7 @@ export default function ScheduleAppointment() {
     if (result.status === 409) {
       setFormError('That time is no longer available. Choose another.')
       setStartTime('')
-      setAvailabilityLoading(true)
-      const refreshed = await getAvailability(user.accessToken, barberId, date)
-      setAvailabilityLoading(false)
-      setAvailableSlots(refreshed.ok ? refreshed.slots : [])
+      await refreshAvailability()
       return
     }
 

@@ -66,6 +66,26 @@ public class BookingController(IAccountRepository accountRepository, IBookingSer
         }
     }
 
+    [HttpGet("schedule")]
+    public async Task<IActionResult> GetSchedule([FromQuery] string? date)
+    {
+        var account = (Account)HttpContext.Items["Account"]!;
+        if (account.Role != Role.Barber)
+        {
+            return Problem(statusCode: StatusCodes.Status403Forbidden, title: "Only barbers can view their own schedule.");
+        }
+        // Model binding maps both an omitted `date` and a present-but-empty `date=` to the
+        // same null value, so `date is not null` can't tell "no date supplied" (use today)
+        // apart from "date supplied empty" (malformed, should 400) -- checking the raw query
+        // string directly is what actually distinguishes the two.
+        var dateWasSupplied = Request.Query.ContainsKey("date");
+        if (dateWasSupplied && !ValidCalendarDateAttribute.IsValidDate(date ?? string.Empty))
+        {
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Date must be in yyyy-MM-dd format.");
+        }
+        return Ok(await bookingService.GetDaySchedule(account.Id, dateWasSupplied ? date : null));
+    }
+
     [HttpGet("mine")]
     public async Task<IActionResult> GetMyAppointments()
     {
@@ -89,6 +109,10 @@ public class BookingController(IAccountRepository accountRepository, IBookingSer
         catch (AppointmentAlreadyCancelledException)
         {
             return Problem(statusCode: StatusCodes.Status409Conflict, title: "This appointment has already been cancelled.");
+        }
+        catch (AppointmentAlreadyFinishedException)
+        {
+            return Problem(statusCode: StatusCodes.Status409Conflict, title: "This appointment has already finished and cannot be cancelled.");
         }
         catch (Exception)
         {

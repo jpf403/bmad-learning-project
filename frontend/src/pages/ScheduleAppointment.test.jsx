@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { useEffect } from 'react'
+import { StrictMode, useEffect } from 'react'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router'
@@ -36,18 +36,23 @@ function SignInThenRenderPage() {
   return <ScheduleAppointment />
 }
 
+// Wrapped in StrictMode to match main.jsx's real production tree -- dev-only
+// double-invoked effects previously masked a stale isMountedRef bug that only
+// StrictMode's mount/cleanup/mount cycle exposes (see MySchedule.test.jsx).
 function renderPage() {
   return render(
-    <AuthProvider>
-      <MemoryRouter initialEntries={['/schedule-appointment']}>
-        <Routes>
-          <Route
-            path="/schedule-appointment"
-            element={<SignInThenRenderPage />}
-          />
-        </Routes>
-      </MemoryRouter>
-    </AuthProvider>,
+    <StrictMode>
+      <AuthProvider>
+        <MemoryRouter initialEntries={['/schedule-appointment']}>
+          <Routes>
+            <Route
+              path="/schedule-appointment"
+              element={<SignInThenRenderPage />}
+            />
+          </Routes>
+        </MemoryRouter>
+      </AuthProvider>
+    </StrictMode>,
   )
 }
 
@@ -200,6 +205,78 @@ describe('ScheduleAppointment', () => {
     ).toBeInTheDocument()
     expect(screen.getByLabelText('Barber')).toHaveTextContent('Amy Barber')
     expect(screen.getByLabelText('Date')).not.toHaveTextContent('Select a date')
+  })
+
+  it('discards a stale 409-retry availability response after the barber selection has since changed', async () => {
+    let amyAvailabilityCalls = 0
+    let resolveStaleRetry
+    vi.spyOn(globalThis, 'fetch').mockImplementation((url, options) => {
+      const href = url.toString()
+      if (href.endsWith('/api/booking/barbers')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => [
+            { id: 1, firstName: 'Amy', lastName: 'Barber' },
+            { id: 2, firstName: 'Ben', lastName: 'Barber' },
+          ],
+        })
+      }
+      if (href.includes('/api/booking/availability')) {
+        const barberId = new URL(href).searchParams.get('barberId')
+        if (barberId === '1') {
+          amyAvailabilityCalls += 1
+          if (amyAvailabilityCalls === 1) {
+            return Promise.resolve({ ok: true, json: async () => ['09:00'] })
+          }
+          // This is the 409-retry's own availability re-fetch -- deliberately
+          // left pending so it resolves after the user has moved on.
+          return new Promise((resolve) => {
+            resolveStaleRetry = () =>
+              resolve({ ok: true, json: async () => ['09:00'] })
+          })
+        }
+        return Promise.resolve({ ok: true, json: async () => ['14:00'] })
+      }
+      if (href.endsWith('/api/booking') && options?.method === 'POST') {
+        return Promise.resolve({
+          ok: false,
+          status: 409,
+          json: async () => ({
+            title: 'That time is no longer available. Choose another.',
+          }),
+        })
+      }
+      if (href.endsWith('/api/booking/mine')) {
+        return Promise.resolve({ ok: true, json: async () => [] })
+      }
+      return Promise.resolve({ ok: false, status: 401 })
+    })
+    const user = userEvent.setup()
+    renderPage()
+
+    await selectBarberAndToday(user)
+    await user.click(await screen.findByLabelText('Time'))
+    await user.click(await screen.findByRole('option', { name: '9:00 AM' }))
+    await user.click(screen.getByRole('button', { name: 'Submit' }))
+
+    // The 409 handler's own availability retry is now pending (never
+    // resolves until resolveStaleRetry() is called below).
+    await screen.findByText('That time is no longer available. Choose another.')
+
+    await user.click(screen.getByLabelText('Barber'))
+    await user.click(await screen.findByRole('option', { name: 'Ben Barber' }))
+    await user.click(await screen.findByLabelText('Time'))
+    expect(
+      await screen.findByRole('option', { name: '2:00 PM' }),
+    ).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+
+    resolveStaleRetry()
+    await user.click(await screen.findByLabelText('Time'))
+    expect(
+      screen.queryByRole('option', { name: '9:00 AM' }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '2:00 PM' })).toBeInTheDocument()
   })
 
   it('renders "No upcoming appointments." on an empty list', async () => {
