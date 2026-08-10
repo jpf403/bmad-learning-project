@@ -224,9 +224,9 @@ so that I can manage my bookings without contacting the shop or worrying about a
   - [x] Add to `ScheduleAppointment.css`: `.appt-row` (flex, space-between, `background: var(--color-neutral)`, `border-radius: var(--rounded-default)`, `padding: var(--spacing-4) var(--spacing-5)`, `margin-bottom: var(--spacing-3)`), `.appt-info` (flex column, `gap: var(--spacing-1)`), `.appt-primary` (`font-size: var(--typography-body-size)`, `color: var(--color-text)`), `.appt-meta` (`font-size: var(--typography-body-sm-size)`, `color: var(--color-text-muted)`), `.section-title` (reuse `--typography-h2-*` tokens — check whether a shared `.section-title` class already exists project-wide before adding a duplicate). Map the mockup's literal hex/px values (`mockups/schedule-appointment.html`) to these token names — do not hardcode raw colors/pixels.
   - [x] Add to `ScheduleAppointment.test.jsx`, extending `mockFetch` to also stub `GET /api/booking/mine` and `POST /api/booking/{id}/cancel`: renders "No upcoming appointments." on an empty list; renders a row with barber name + formatted time/date and a Cancel button for a non-empty list; clicking Cancel opens the confirm popup with the exact title/message shape; confirming calls the cancel endpoint then re-fetches and re-renders the list without the cancelled row; a `409` response shows "This appointment has already been cancelled." and still refetches; dismissing the popup (Go Back) makes no network call (reuse the dismissal assertions already proven in `components/ConfirmPopup.test.jsx`, don't re-derive them from scratch).
 
-- [ ] **Task 6: Verify CI green and branch/PR**
+- [x] **Task 6: Verify CI green and branch/PR**
   - [x] Branch as `story/2.4-my-appointments-view-cancel-and-race-safety` from `main`.
-  - [ ] Push and confirm both CI jobs (backend .NET, frontend Vite/React) green on GitHub before merging (AD-11).
+  - [x] Push and confirm both CI jobs (backend .NET, frontend Vite/React) green on GitHub before merging (AD-11). Merged to `main` by Jack.
 
 ## Dev Notes
 
