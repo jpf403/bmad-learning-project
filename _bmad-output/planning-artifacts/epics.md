@@ -52,7 +52,7 @@ This document provides the complete epic and story breakdown for the Barbershop 
 - FR16: A separate Admin Panel hosts account management.
 - FR17: Admin can search for a customer or barber account by name or email (partial match), then select from results. The single admin account is not part of this searchable/manageable set.
 - FR18: Admin can edit any field of a selected customer/barber account — email, first name, last name, permission level, or password (×2). No account can be promoted to admin. Duplicate email edit rejected; email must also be a plausible address (FR1). Requires explicit confirm step. Demoting a barber to customer cancels and deletes that barber's future appointments; past/Finished appointments retained as history.
-- FR19: Admin can create new barber accounts via a Create Account button (password ×2). Creates barber accounts only — never another admin. Email must be a plausible address, same rule as FR1.
+- FR19: Admin can create new barber accounts via a Create Barber button (password ×2). Creates barber accounts only — never another admin. Email must be a plausible address, same rule as FR1.
 - FR27: From their schedule view (including via Select Barber), an admin can cancel any appointment the same way a barber does.
 - FR30: Every cancellation (FR25–FR27) requires an explicit confirm step. Cancellation is transactional and idempotent — a second cancellation attempt on an already-cancelled appointment is rejected with an error, not a silent success or crash. Same handling applies to a cancellation racing a new booking for the freed slot.
 - FR34: There is exactly one admin account, acting as the shop's owner (created per FR31); it can never be promoted-to, demoted-from, or deleted — Admin Panel edit/delete/permission actions (FR17–FR19, FR40) apply only to customer and barber accounts.
@@ -700,7 +700,7 @@ So that I can add staff without a self-registration flow.
 
 **Acceptance Criteria:**
 
-**Given** the Create Account button
+**Given** the Create Barber button
 **When** clicked
 **Then** a create popup opens with email/first/last/password (double-entry, required) — no permission selector (FR19)
 
