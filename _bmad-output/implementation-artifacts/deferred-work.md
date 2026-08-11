@@ -3,8 +3,8 @@
 ## Deferred from: code review of story-2.6-admin-schedule-oversight (2026-08-11)
 
 - No `aria-live` announcement when an admin's barber switch completes — a screen-reader user gets silence, then the slot-list content changing, with nothing announcing "now viewing Barber X's schedule." The codebase has no existing `aria-live`/visually-hidden-status pattern to extend, so adding one is a small new pattern decision rather than a drop-in fix; worth revisiting alongside a broader accessibility pass. [frontend/src/pages/MySchedule.jsx]
-- `SelectDropdown`'s `avoidCollisions={false}` (pre-existing, unchanged) means the admin barber-select's popover — now anchored at the far right edge of the page instead of its prior positions — has no protection against rendering partially off-screen on narrow viewports. [frontend/src/components/SelectDropdown.jsx:59]
 - The zero-barbers state ("No barbers available.") has no retry affordance, unlike the barbers-fetch-failed state which offers "Try again" — a transient failure that resolves to "zero barbers" with no path to recheck without navigating away and back. [frontend/src/pages/MySchedule.jsx:266-273]
+- ~~`SelectDropdown`'s `avoidCollisions={false}`... popover has no protection against rendering partially off-screen on narrow viewports~~ **Resolved** (2026-08-11) — root cause was `MySchedule.css` missing the app's standard `@media (max-width: 639px)` mobile breakpoint entirely (present in every other page's CSS). Added stacking for `.my-schedule--admin .date-header-row` on mobile, matching `NavBar.css`'s existing pattern; the admin barber-select is no longer squeezed against the far-right edge on narrow viewports. Not screenshot-verified (no browser-automation tooling available in this environment) — Jack to spot-check visually via browser dev tools' device toolbar. [frontend/src/pages/MySchedule.css:54-73]
 
 ## Deferred from: story-2.6-admin-schedule-oversight (created 2026-08-10)
 
