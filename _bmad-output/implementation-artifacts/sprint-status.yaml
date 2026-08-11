@@ -67,7 +67,7 @@ development_status:
   2-4-my-appointments-view-cancel-and-race-safety: done
   2-5-barbers-own-schedule-view: done
   2-6-admin-schedule-oversight: done
-  epic-2-retrospective: optional
+  epic-2-retrospective: done
 
   epic-3: backlog
   3-1-account-repository-admin-operations: backlog
@@ -81,16 +81,24 @@ action_items:
   - epic: 1
     action: "At the start of every new story, read deferred-work.md for items assigned to it or generally applicable, and either fix them or explicitly re-defer with a reason"
     owner: "Amelia (Dev)"
-    status: open
+    status: done
   - epic: 1
     action: "Story 2.3's double-booking race tests must use the deterministic two-DbContext staging pattern (from Stories 1.2/1.7's flaky-test fix) instead of a real concurrent-request race"
     owner: "Amelia (Dev)"
-    status: open
+    status: done
   - epic: 1
     action: "Fix the NavBar overflow bug (below ~640px) as part of Epic 2's page work - do not defer again"
     owner: "Amelia (Dev)"
-    status: open
+    status: done
   - epic: 1
     action: "Scope Story 2.2 explicitly to include building the restyled Calendar (UX-DR7) and Select dropdown (UX-DR8) components - not yet built in Epic 1"
     owner: "Amelia (Dev), Sally (UX)"
+    status: done
+  - epic: 2
+    action: "Delete BarberSeedService (and its Program.cs registration) once Story 3.4 ships a real barber-creation path"
+    owner: "Amelia (Dev)"
     status: open
+  - epic: 2
+    action: "Corrected stale bookkeeping: Epic 1's NavBar-overflow action item was marked open despite being resolved in Story 2.2 - now marked done"
+    owner: "Amelia (Dev)"
+    status: done
