@@ -606,7 +606,12 @@ public class BookingControllerTests : IDisposable
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<DayScheduleView>(ResponseJsonOptions, TestContext.Current.CancellationToken);
         Assert.NotNull(body);
-        Assert.Equal(DateTime.Today.ToString("yyyy-MM-dd"), body.Date);
+        // The server always resolves "today" in America/New_York (AD-12), not the host
+        // machine's local time zone -- `DateTime.Today` would flake on any CI runner
+        // whose local time zone isn't Eastern, since UTC rolls over to the next calendar
+        // day 4-5 hours before Eastern does.
+        var estToday = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("America/New_York"));
+        Assert.Equal(estToday.ToString("yyyy-MM-dd"), body.Date);
     }
 
     [Fact]
