@@ -760,7 +760,6 @@ public class BookingControllerTests : IDisposable
         using var client = _factory.CreateClient();
         var customerToken = await RegisterAndLogin(client, email: "customer@example.com");
         var barberToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Barber, "barber-login@example.com");
-        var barber = await FindByEmail("barber-login@example.com");
         var date = NextBookableWeekday();
         await client.SendAsync(
             AuthedRequest(HttpMethod.Post, "/api/booking", customerToken)

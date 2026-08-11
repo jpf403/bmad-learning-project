@@ -275,24 +275,28 @@ export default function MySchedule() {
 
   const weekend = date !== null && isWeekend(date)
 
+  // Reused for both "no date fetched yet" (initial load failed) and "date
+  // already known, a later reload failed" -- same retry action either way.
+  const scheduleErrorBlock = scheduleError && (
+    <div className="my-schedule__error-state">
+      <p className="my-schedule__error">{scheduleError}</p>
+      <Button
+        variant="secondary"
+        onClick={() => loadDate(attemptedDateRef.current)}
+      >
+        Try again
+      </Button>
+    </div>
+  )
+
   return (
     <div
       className={`my-schedule${user.role === 'Admin' ? ' my-schedule--admin' : ''}`}
     >
       <h1 className="my-schedule__title">My Schedule</h1>
 
-      {loading ? (
-        <p className="my-schedule__loading">Loading…</p>
-      ) : scheduleError ? (
-        <div className="my-schedule__error-state">
-          <p className="my-schedule__error">{scheduleError}</p>
-          <Button
-            variant="secondary"
-            onClick={() => loadDate(attemptedDateRef.current)}
-          >
-            Try again
-          </Button>
-        </div>
+      {date === null ? (
+        scheduleErrorBlock || <p className="my-schedule__loading">Loading…</p>
       ) : (
         <>
           <div className="date-header-row">
@@ -372,7 +376,11 @@ export default function MySchedule() {
             )}
           </div>
 
-          {weekend ? (
+          {loading ? (
+            <p className="my-schedule__loading">Loading…</p>
+          ) : scheduleErrorBlock ? (
+            scheduleErrorBlock
+          ) : weekend ? (
             <p className="my-schedule__closed">
               Closed — the shop is not open on weekends.
             </p>
@@ -413,7 +421,9 @@ export default function MySchedule() {
               )}
             </div>
           )}
-          {cancelError && <p className="my-schedule__error">{cancelError}</p>}
+          {!loading && !scheduleError && cancelError && (
+            <p className="my-schedule__error">{cancelError}</p>
+          )}
         </>
       )}
 
