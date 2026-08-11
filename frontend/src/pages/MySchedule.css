@@ -44,6 +44,22 @@
   gap: var(--spacing-5);
 }
 
+.my-schedule--admin .date-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing-5);
+}
+
+.date-nav-group {
+  display: grid;
+  grid-template-columns: 20px 1fr 20px;
+  align-items: center;
+  gap: var(--spacing-5);
+  flex: 1;
+  min-width: 0;
+}
+
 .date-nav-arrow {
   background: none;
   border: none;

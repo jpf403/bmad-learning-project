@@ -98,11 +98,20 @@ export async function getMyAppointments(accessToken) {
   return { ok: true, appointments: body }
 }
 
-export async function getSchedule(accessToken, date) {
+export async function getSchedule(accessToken, date, barberId) {
+  const params = new URLSearchParams()
+  if (date) {
+    params.set('date', date)
+  }
+  if (barberId !== undefined && barberId !== null) {
+    params.set('barberId', barberId)
+  }
+  const query = params.toString()
+
   let response
   try {
     response = await fetch(
-      `${API_BASE_URL}/api/booking/schedule${date ? `?date=${date}` : ''}`,
+      `${API_BASE_URL}/api/booking/schedule${query ? `?${query}` : ''}`,
       {
         credentials: 'include',
         headers: { Authorization: `Bearer ${accessToken}` },

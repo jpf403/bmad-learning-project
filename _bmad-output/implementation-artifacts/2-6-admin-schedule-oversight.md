@@ -4,7 +4,7 @@ baseline_commit: b3a38847999e867e827be32418a81a80a4b08a06
 
 # Story 2.6: Admin Schedule Oversight
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -27,8 +27,8 @@ This story adds **zero new business logic**. `BookingService.GetDaySchedule`, `F
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: `GET /api/booking/schedule` — accept an admin-supplied `barberId`, keep the barber path untouched** (AC #1, #3) — `GetSchedule` (`BookingController.cs:69-87`) currently 403s any non-`Barber` caller. `BookingService.GetDaySchedule`/`FindByBarberAndDate` are already barber-id-generic (built that way in Story 2.5 specifically so this story would need zero service-layer changes — confirmed via direct read, `BookingService.cs:58,110`) — this task only touches the Controller action, satisfying AC #3 by construction (no new query is written, the existing one is just called with a different `barberId` source).
-  - [ ] Add `[FromQuery] int? barberId` to `GetSchedule`'s signature. Branch on `account.Role`:
+- [x] **Task 1: `GET /api/booking/schedule` — accept an admin-supplied `barberId`, keep the barber path untouched** (AC #1, #3) — `GetSchedule` (`BookingController.cs:69-87`) currently 403s any non-`Barber` caller. `BookingService.GetDaySchedule`/`FindByBarberAndDate` are already barber-id-generic (built that way in Story 2.5 specifically so this story would need zero service-layer changes — confirmed via direct read, `BookingService.cs:58,110`) — this task only touches the Controller action, satisfying AC #3 by construction (no new query is written, the existing one is just called with a different `barberId` source).
+  - [x] Add `[FromQuery] int? barberId` to `GetSchedule`'s signature. Branch on `account.Role`:
     ```csharp
     [HttpGet("schedule")]
     public async Task<IActionResult> GetSchedule([FromQuery] string? date, [FromQuery] int? barberId)
@@ -68,18 +68,18 @@ This story adds **zero new business logic**. `BookingService.GetDaySchedule`, `F
     ```
     A `Barber` caller who happens to also pass `barberId` in the query string is **not honored** — `targetBarberId` for that branch is always `account.Id`, exactly as before. This preserves AC #5 from Story 2.5 ("enforced server-side, not just by the UI") unmodified: a barber still cannot view or act on another barber's day by tampering with a query param.
     `accountRepository` is already a constructor dependency on `BookingController` (used by `GetBarbers`/`GetAvailability`/`CreateBooking`) — no new dependency to wire up. The `barber is null || barber.Role != Role.Barber` check and its 400/"Selected barber is not available." message are copied verbatim from `GetAvailability` (`BookingController.cs:30-34`) — reuse that exact wording, don't invent new copy for the same failure mode.
-  - [ ] **Update the now-incorrect existing test** `GetSchedule_admin_caller_returns_403` (`BookingControllerTests.cs:674-685`) — an Admin calling this endpoint is the entire point of this story, so this test's assertion is now wrong, not just incomplete. Replace it (don't leave both an old-and-new version) with the admin-specific cases in Task 5 below.
+  - [x] **Update the now-incorrect existing test** `GetSchedule_admin_caller_returns_403` (`BookingControllerTests.cs:674-685`) — an Admin calling this endpoint is the entire point of this story, so this test's assertion is now wrong, not just incomplete. Replace it (don't leave both an old-and-new version) with the admin-specific cases in Task 5 below.
 
-- [ ] **Task 2: Backend tests for the admin branch** (AC #1, #3)
-  - [ ] `GetSchedule_admin_without_barberId_returns_400`.
-  - [ ] `GetSchedule_admin_with_nonexistent_barberId_returns_400`.
-  - [ ] `GetSchedule_admin_with_a_customer_id_as_barberId_returns_400` (seed a customer, pass their id as `barberId` — same "wrong role, not just wrong id" case `GetAvailability`'s existing tests already cover for booking; mirror that coverage here).
-  - [ ] `GetSchedule_admin_with_valid_barberId_returns_that_barbers_schedule` (seed two barbers via `SeedAccount` — no HTTP login needed for either, since they're only targets, not callers — book one slot for each, call as Admin with each `barberId` in turn, assert each response only contains that barber's own booking — proves the admin path reuses the same barber-scoped read `GetSchedule_only_returns_the_callers_own_appointments_not_another_barbers` already exercises for the Barber path, satisfying AC #3 without re-testing `GetDaySchedule` itself, which Story 2.5 already covers).
-  - [ ] `GetSchedule_barber_supplied_barberId_is_ignored` — a Barber caller passing a *different* barber's id as `barberId` still only ever gets their own schedule back (regression guard for the "not honored" rule in Task 1).
-  - [ ] `GetSchedule_admin_with_malformed_date_returns_400` — the existing malformed-date coverage (`BookingControllerTests.cs:655-659` and neighbors) is Barber-only; since Task 1 resolves `barberId` before validating `date`, add the equivalent case for an Admin caller with a valid `barberId` and a bad `date` value, confirming the ordering doesn't accidentally let a malformed date slip through on the admin branch.
-  - [ ] Reuse `RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, email)` (already used by the test you're replacing) and `SeedAccount`/`AuthedRequest` already in this file — do not add a second Admin-login helper.
+- [x] **Task 2: Backend tests for the admin branch** (AC #1, #3)
+  - [x] `GetSchedule_admin_without_barberId_returns_400`.
+  - [x] `GetSchedule_admin_with_nonexistent_barberId_returns_400`.
+  - [x] `GetSchedule_admin_with_a_customer_id_as_barberId_returns_400` (seed a customer, pass their id as `barberId` — same "wrong role, not just wrong id" case `GetAvailability`'s existing tests already cover for booking; mirror that coverage here).
+  - [x] `GetSchedule_admin_with_valid_barberId_returns_that_barbers_schedule` (seed two barbers via `SeedAccount` — no HTTP login needed for either, since they're only targets, not callers — book one slot for each, call as Admin with each `barberId` in turn, assert each response only contains that barber's own booking — proves the admin path reuses the same barber-scoped read `GetSchedule_only_returns_the_callers_own_appointments_not_another_barbers` already exercises for the Barber path, satisfying AC #3 without re-testing `GetDaySchedule` itself, which Story 2.5 already covers).
+  - [x] `GetSchedule_barber_supplied_barberId_is_ignored` — a Barber caller passing a *different* barber's id as `barberId` still only ever gets their own schedule back (regression guard for the "not honored" rule in Task 1).
+  - [x] `GetSchedule_admin_with_malformed_date_returns_400` — the existing malformed-date coverage (`BookingControllerTests.cs:655-659` and neighbors) is Barber-only; since Task 1 resolves `barberId` before validating `date`, add the equivalent case for an Admin caller with a valid `barberId` and a bad `date` value, confirming the ordering doesn't accidentally let a malformed date slip through on the admin branch.
+  - [x] Reuse `RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, email)` (already used by the test you're replacing) and `SeedAccount`/`AuthedRequest` already in this file — do not add a second Admin-login helper.
 
-- [ ] **Task 3: `BookingApi.js#getSchedule` — accept an optional `barberId`** (AC #1, #2) — the naive extension of the existing template-literal query string (appending `&barberId=` after a possibly-absent `?date=`) breaks the very first admin page load, where `date` is `null` (defaulting to "today") but `barberId` is set — that call would produce `.../schedule&barberId=5` with no leading `?`. Use `URLSearchParams` instead so param order/presence is never hand-assembled:
+- [x] **Task 3: `BookingApi.js#getSchedule` — accept an optional `barberId`** (AC #1, #2) — the naive extension of the existing template-literal query string (appending `&barberId=` after a possibly-absent `?date=`) breaks the very first admin page load, where `date` is `null` (defaulting to "today") but `barberId` is set — that call would produce `.../schedule&barberId=5` with no leading `?`. Use `URLSearchParams` instead so param order/presence is never hand-assembled:
     ```js
     export async function getSchedule(accessToken, date, barberId) {
       const params = new URLSearchParams()
@@ -108,8 +108,8 @@ This story adds **zero new business logic**. `BookingService.GetDaySchedule`, `F
     ```
     A `Barber` caller's existing call sites (`loadDate`'s default param resolves to `barberId` state, which stays `null` for a Barber) never set the `barberId` param — the query string produced for the Barber path is byte-for-byte identical to today's (`?date=...` or empty). Both `null` and `undefined` for `barberId` must be treated as "omit" — `loadDate`'s default-parameter mechanism can hand either through depending on call site, and the explicit `!== undefined && !== null` check (not a truthiness check like `if (barberId)`) is what makes that safe even if a valid `barberId` were ever `0` (not reachable today since account ids start at 1, but don't rely on that).
 
-- [ ] **Task 4: `MySchedule.jsx` — Admin barber-loading, default-selection, and the Select Barber dropdown** (AC #1, #2, #4, plus the required no-barbers state above)
-  - [ ] Replace the current hard `if (user.role !== 'Barber') { return <placeholder> }` early-return with Admin-specific handling. The Barber-only mount effect (`MySchedule.jsx:82-114`) stays completely unchanged — do not fold Admin logic into it; add a **second**, parallel mount effect gated on `user.role === 'Admin'` instead, following the same "own local `cancelled` flag, not `isMountedRef`" shape the existing effect already uses (Story 2.5's Dev Notes: `isMountedRef` is reset to `true` on every StrictMode remount, so it can't distinguish two concurrent invocations the way a per-invocation `cancelled` closure can):
+- [x] **Task 4: `MySchedule.jsx` — Admin barber-loading, default-selection, and the Select Barber dropdown** (AC #1, #2, #4, plus the required no-barbers state above)
+  - [x] Replace the current hard `if (user.role !== 'Barber') { return <placeholder> }` early-return with Admin-specific handling. The Barber-only mount effect (`MySchedule.jsx:82-114`) stays completely unchanged — do not fold Admin logic into it; add a **second**, parallel mount effect gated on `user.role === 'Admin'` instead, following the same "own local `cancelled` flag, not `isMountedRef`" shape the existing effect already uses (Story 2.5's Dev Notes: `isMountedRef` is reset to `true` on every StrictMode remount, so it can't distinguish two concurrent invocations the way a per-invocation `cancelled` closure can):
     ```jsx
     const [barbers, setBarbers] = useState([])
     const [barbersLoading, setBarbersLoading] = useState(true)
@@ -168,7 +168,7 @@ This story adds **zero new business logic**. `BookingService.GetDaySchedule`, `F
     }, [user.accessToken, user.role])
     ```
     `GET /api/booking/barbers` (`BookingApi.js#getBarbers`, already built for Story 2.2) is reused unmodified — it has no per-role gate on the Controller (`[Authorize]` class-level only), so no backend change is needed to let an Admin call it. `AccountRepository.FindAllByRole`'s existing ordering (`FirstName`, then `LastName`, then `Id`) is what "the first barber" means — the same order the customer-facing barber-select dropdown already renders in, so "first" is consistent across both surfaces without this story inventing a new ordering rule.
-  - [ ] Extend `fetchSchedule`/`loadDate` to accept a `barberId`, defaulting to the current selection so every existing call site (nav arrows, the "Try again" retry) keeps working with zero changes to those call sites:
+  - [x] Extend `fetchSchedule`/`loadDate` to accept a `barberId`, defaulting to the current selection so every existing call site (nav arrows, the "Try again" retry) keeps working with zero changes to those call sites:
     ```jsx
     async function fetchSchedule(explicitDate, explicitBarberId) {
       const result = await getSchedule(user.accessToken, explicitDate, explicitBarberId)
@@ -180,7 +180,7 @@ This story adds **zero new business logic**. `BookingService.GetDaySchedule`, `F
     }
     ```
     For a Barber caller, `barberId` state is never set (stays `null`), so `explicitBarberId` defaults to `null`/`undefined` there too — `getSchedule` then omits the query param exactly as it does today, so the Barber path's request shape is byte-for-byte unchanged.
-  - [ ] Add the barber-switch handler, called from the new `SelectDropdown`'s `onChange`. This is the one path required to **not** call `loadDate` from inside an effect (an effect-internal call to an externally-declared, setState-containing function is the exact ESLint gotcha `ScheduleAppointment.jsx`'s Dev Notes already flagged for this codebase) — it's a plain event handler, so calling `loadDate` directly here is fine, same as the nav-arrow `onClick`s already do:
+  - [x] Add the barber-switch handler, called from the new `SelectDropdown`'s `onChange`. This is the one path required to **not** call `loadDate` from inside an effect (an effect-internal call to an externally-declared, setState-containing function is the exact ESLint gotcha `ScheduleAppointment.jsx`'s Dev Notes already flagged for this codebase) — it's a plain event handler, so calling `loadDate` directly here is fine, same as the nav-arrow `onClick`s already do:
     ```jsx
     function handleBarberChange(newBarberId) {
       const id = Number(newBarberId)
@@ -191,7 +191,7 @@ This story adds **zero new business logic**. `BookingService.GetDaySchedule`, `F
     }
     ```
     Passing the *current* `date` (not `null`) is what satisfies AC #2 — switching barbers must not reset the visible date.
-  - [ ] Add a small retry handler for the barbers-list failure state (mirrors the existing schedule-fetch "Try again" button, `MySchedule.jsx:170-179`), declared outside any effect so it may call `loadDate` directly once barbers do load. It guards with `isMountedRef` (not a local `cancelled` flag) because — unlike the mount effect, which can only ever have its *own* invocation racing itself under StrictMode's synthetic remount — this is a one-shot event-handler call with no second concurrent invocation to distinguish from; `isMountedRef`'s only job here is the ordinary "component unmounted mid-await" guard, the same role it plays for `handleCancelConfirmed`:
+  - [x] Add a small retry handler for the barbers-list failure state (mirrors the existing schedule-fetch "Try again" button, `MySchedule.jsx:170-179`), declared outside any effect so it may call `loadDate` directly once barbers do load. It guards with `isMountedRef` (not a local `cancelled` flag) because — unlike the mount effect, which can only ever have its *own* invocation racing itself under StrictMode's synthetic remount — this is a one-shot event-handler call with no second concurrent invocation to distinguish from; `isMountedRef`'s only job here is the ordinary "component unmounted mid-await" guard, the same role it plays for `handleCancelConfirmed`:
     ```jsx
     async function retryLoadBarbers() {
       setBarbersLoading(true)
@@ -211,7 +211,7 @@ This story adds **zero new business logic**. `BookingService.GetDaySchedule`, `F
       }
     }
     ```
-  - [ ] Render, in place of the removed placeholder: first, a **defensive fallback for any role that is neither `Barber` nor `Admin`** (the shared render below assumes one of the two, and while `RequireRole roles={['Barber', 'Admin']}` on the route already prevents a `Customer` from reaching this component today, the placeholder being removed defensively covered "any non-Barber role" — don't narrow that coverage to "any non-Admin-non-Barber falls through with no return and `loading` stuck permanently `true`"):
+  - [x] Render, in place of the removed placeholder: first, a **defensive fallback for any role that is neither `Barber` nor `Admin`** (the shared render below assumes one of the two, and while `RequireRole roles={['Barber', 'Admin']}` on the route already prevents a `Customer` from reaching this component today, the placeholder being removed defensively covered "any non-Barber role" — don't narrow that coverage to "any non-Admin-non-Barber falls through with no return and `loading` stuck permanently `true`"):
     ```jsx
     if (user.role !== 'Barber' && user.role !== 'Admin') {
       return (
@@ -259,7 +259,7 @@ This story adds **zero new business logic**. `BookingService.GetDaySchedule`, `F
     }
     ```
     Falling through past this block, the rest of the component (loading/scheduleError/date-header-row/slot-list/`ConfirmPopup`) is **shared** between Barber and Admin unchanged — this is what makes AC #1's "identical view a barber sees" true structurally, not just by copying markup.
-  - [ ] `.date-header-row` is currently a flat 3-column CSS grid (`20px 1fr 20px`, added in Story 2.5's review round specifically to keep the two arrows pinned at fixed edge positions regardless of the date title's text width — see that story's final Change Log entry). A 4th, admin-only child cannot simply be appended into that same flat grid — per `mockups/my-schedule.html`'s admin layout (`.date-header-row { justify-content: space-between }`, with the date-nav trio grouped on the left and `.admin-barber-select` on the right), the two nav arrows + title must be wrapped in their own group div so the row becomes a 2-item flex (`[nav-group] [admin dropdown]`) for Admin, while the Barber-only render keeps today's flat 3-child grid completely untouched. The JSX must render one of two distinct shapes depending on role — do not merge them into one shared markup block with the dropdown conditionally spliced into the flat grid, which would leave `justify-content: space-between` distributing all 4 flat children instead of grouping arrows+title against the dropdown:
+  - [x] `.date-header-row` is currently a flat 3-column CSS grid (`20px 1fr 20px`, added in Story 2.5's review round specifically to keep the two arrows pinned at fixed edge positions regardless of the date title's text width — see that story's final Change Log entry). A 4th, admin-only child cannot simply be appended into that same flat grid — per `mockups/my-schedule.html`'s admin layout (`.date-header-row { justify-content: space-between }`, with the date-nav trio grouped on the left and `.admin-barber-select` on the right), the two nav arrows + title must be wrapped in their own group div so the row becomes a 2-item flex (`[nav-group] [admin dropdown]`) for Admin, while the Barber-only render keeps today's flat 3-child grid completely untouched. The JSX must render one of two distinct shapes depending on role — do not merge them into one shared markup block with the dropdown conditionally spliced into the flat grid, which would leave `justify-content: space-between` distributing all 4 flat children instead of grouping arrows+title against the dropdown:
     ```jsx
     <div className={`my-schedule${user.role === 'Admin' ? ' my-schedule--admin' : ''}`}>
       <h1 className="my-schedule__title">My Schedule</h1>
@@ -296,7 +296,7 @@ This story adds **zero new business logic**. `BookingService.GetDaySchedule`, `F
     </div>
     ```
     The `my-schedule--admin` modifier class belongs on this single shared outer `<div>` only — **not** on the three Admin-specific early-return blocks above (loading-barbers/barbers-error/no-barbers), which never render `.date-header-row` at all and have no need of the modifier. No `label`/`emptyMessage` prop is passed to the admin `SelectDropdown` — `barbers.length === 0` is already handled by the early-return above, so `SelectDropdown`'s own empty-message branch is unreachable here by construction, and the mockup (`mockups/my-schedule.html`'s `.admin-barber-select`) shows only the selected barber's name inside the trigger itself, no separate label text above it. `ariaLabel="Select barber"` (Task 5) supplies the accessible name a visible `<label>` would otherwise give it, satisfying UX-DR18's keyboard/screen-reader floor without adding visible label text the mockup doesn't show.
-  - [ ] Add the matching CSS, scoped to the `.my-schedule--admin` modifier so the Barber-only `.date-header-row` grid rule is completely untouched:
+  - [x] Add the matching CSS, scoped to the `.my-schedule--admin` modifier so the Barber-only `.date-header-row` grid rule is completely untouched:
     ```css
     .my-schedule--admin .date-header-row {
       display: flex;
@@ -311,7 +311,7 @@ This story adds **zero new business logic**. `BookingService.GetDaySchedule`, `F
       gap: var(--spacing-5);
     }
     ```
-  - [ ] Add the admin-variant floating-shadow-at-rest styling (`DESIGN.md`'s `select-dropdown-admin-barber` token, "the one deliberate exception in the elevation model" per `EXPERIENCE.md`'s Elevation & Depth section) by reusing the app's **one existing** floating-shadow value rather than inventing a second one — `.select-dropdown__content`'s shadow (`SelectDropdown.css:31-33`) is already this app's canonical "floating" elevation; there is no dedicated shadow custom property in `tokens.css` to reference instead:
+  - [x] Add the admin-variant floating-shadow-at-rest styling (`DESIGN.md`'s `select-dropdown-admin-barber` token, "the one deliberate exception in the elevation model" per `EXPERIENCE.md`'s Elevation & Depth section) by reusing the app's **one existing** floating-shadow value rather than inventing a second one — `.select-dropdown__content`'s shadow (`SelectDropdown.css:31-33`) is already this app's canonical "floating" elevation; there is no dedicated shadow custom property in `tokens.css` to reference instead:
     ```css
     .select-dropdown--admin-barber .select-dropdown__trigger {
       box-shadow:
@@ -322,7 +322,7 @@ This story adds **zero new business logic**. `BookingService.GetDaySchedule`, `F
     ```
     (`mockups/my-schedule.html`'s own `.admin-barber-select` illustrates a different, one-off `rgba(23,36,42,0.12)` value — per Information Architecture's own rule that `DESIGN.md`/`EXPERIENCE.md` win over the mocks on conflict, and since neither doc pins an exact rgba, reusing the shadow value the app already has is the more consistent engineering call than adding a second magic shadow definition for one component.)
 
-- [ ] **Task 5: `SelectDropdown.jsx`/`.css` — add `variant` and `ariaLabel` props** (AC #2, plus the accessible-name requirement Task 4 depends on) — small, additive change following `Button.jsx`'s existing `VARIANT_CLASS` map pattern exactly, so this codebase has one consistent way components expose style variants:
+- [x] **Task 5: `SelectDropdown.jsx`/`.css` — add `variant` and `ariaLabel` props** (AC #2, plus the accessible-name requirement Task 4 depends on) — small, additive change following `Button.jsx`'s existing `VARIANT_CLASS` map pattern exactly, so this codebase has one consistent way components expose style variants:
   ```jsx
   const WRAPPER_VARIANT_CLASS = {
     default: 'select-dropdown',
@@ -347,18 +347,18 @@ This story adds **zero new business logic**. `BookingService.GetDaySchedule`, `F
   ```
   Every existing call site (`ScheduleAppointment.jsx`'s barber/time dropdowns) omits both new props, so they keep resolving to `'default'` → the unchanged `select-dropdown` class and no `aria-label` attribute (their existing visible `<label>` already supplies the accessible name) — zero visual/behavioral/accessibility change for them. This also gives tests a reliable, unambiguous query for the label-less admin dropdown: `screen.getByRole('combobox', { name: 'Select barber' })`, since `findByLabelText` (the pattern `ScheduleAppointment.test.jsx` uses for its labeled dropdowns) has nothing to match against a trigger with no associated `<label>`.
 
-- [ ] **Task 6: Frontend tests — extend `MySchedule.test.jsx`** (AC #1, #2, #4, plus the no-barbers state)
-  - [ ] **Remove** the now-obsolete `'renders the Admin placeholder and never calls GET /api/booking/schedule'` test (`MySchedule.test.jsx:501-...`) — this story replaces that placeholder, so the test's premise no longer holds.
-  - [ ] Extend `mockFetch` (`MySchedule.test.jsx:95-118`) with a `barbersResponse` / `barbersFail` option and a branch matching `/api/booking/barbers`, following the same `href.includes(...)` dispatch shape the function already uses for `/api/booking/schedule` and the cancel endpoint — e.g. when `barbersFail` is set, resolve `{ ok: false, status: 500 }` for that URL the same way the existing `cancel` override models a failure; otherwise resolve `{ ok: true, json: async () => barbersResponse }`.
-  - [ ] Admin, barbers load successfully: renders "Loading…" then the schedule for the first (alphabetically, per `AccountRepository.FindAllByRole`'s ordering) barber returned, with the barber's name visible in the Select Barber trigger — query it via `screen.getByRole('combobox', { name: 'Select barber' })` (Task 5's `ariaLabel`), **not** `findByLabelText` (that only works for `SelectDropdown`'s labeled call sites, and this one intentionally renders no visible `<label>`).
-  - [ ] Admin, switching the Select Barber dropdown to a second barber: open it via `userEvent.click` on the `getByRole('combobox', ...)` trigger and select the target option by its rendered name text (mirror `ScheduleAppointment.test.jsx`'s Radix-select interaction mechanics — click-to-open, then click the option — adapted to this label-less query instead of its `findByLabelText`-based one). Assert the `fetch` call to `/api/booking/schedule` includes both the new `barberId` **and** the still-current `date` (proving AC #2 — the date does not reset).
-  - [ ] Admin, zero barbers: asserts "No barbers available." renders and `fetch` is never called with a URL containing `/api/booking/schedule`.
-  - [ ] Admin, barbers fetch fails: asserts the error message and a working "Try again" that succeeds on retry (mirror the existing schedule-fetch retry test's shape, `MySchedule.test.jsx` — locate it via the `attemptedDateRef`/"Try again" tests already covering the schedule-load failure path).
-  - [ ] Admin, cancel flow: reuse the existing Barber cancel-flow test bodies (open confirm popup → confirm → `cancelAppointment` called → re-fetch) against an Admin-rendered page, asserting the re-fetch after a successful cancel includes the currently selected `barberId` (not just `date`) — this is the one behavior genuinely new to the Admin path (AC #4 says "reuses" the flow, but the re-fetch parameters are Admin-specific).
-  - [ ] Barber-role regression assertion (concrete, not just "re-run existing tests"): render as `SIGNED_IN_BARBER` and assert `fetch` is never called with a URL containing `/api/booking/barbers` — proves the new Admin-only mount effect (Task 4) doesn't fire or leak a request for the unmodified Barber path. Combine with running the full existing Barber-role test suite in this file to confirm the `barberId`-defaulted `loadDate`/`fetchSchedule` signature changes introduced no behavioral regression there.
-  - [ ] Unexpected-role defensive fallback: render with a role that is neither `'Barber'` nor `'Admin'` (e.g. `'Customer'`) and assert the "Schedule view is not available for this account." message renders with no `fetch` call at all — covers the defensive early-return Task 4 adds ahead of the Barber/Admin branching.
+- [x] **Task 6: Frontend tests — extend `MySchedule.test.jsx`** (AC #1, #2, #4, plus the no-barbers state)
+  - [x] **Remove** the now-obsolete `'renders the Admin placeholder and never calls GET /api/booking/schedule'` test (`MySchedule.test.jsx:501-...`) — this story replaces that placeholder, so the test's premise no longer holds.
+  - [x] Extend `mockFetch` (`MySchedule.test.jsx:95-118`) with a `barbersResponse` / `barbersFail` option and a branch matching `/api/booking/barbers`, following the same `href.includes(...)` dispatch shape the function already uses for `/api/booking/schedule` and the cancel endpoint — e.g. when `barbersFail` is set, resolve `{ ok: false, status: 500 }` for that URL the same way the existing `cancel` override models a failure; otherwise resolve `{ ok: true, json: async () => barbersResponse }`.
+  - [x] Admin, barbers load successfully: renders "Loading…" then the schedule for the first (alphabetically, per `AccountRepository.FindAllByRole`'s ordering) barber returned, with the barber's name visible in the Select Barber trigger — query it via `screen.getByRole('combobox', { name: 'Select barber' })` (Task 5's `ariaLabel`), **not** `findByLabelText` (that only works for `SelectDropdown`'s labeled call sites, and this one intentionally renders no visible `<label>`).
+  - [x] Admin, switching the Select Barber dropdown to a second barber: open it via `userEvent.click` on the `getByRole('combobox', ...)` trigger and select the target option by its rendered name text (mirror `ScheduleAppointment.test.jsx`'s Radix-select interaction mechanics — click-to-open, then click the option — adapted to this label-less query instead of its `findByLabelText`-based one). Assert the `fetch` call to `/api/booking/schedule` includes both the new `barberId` **and** the still-current `date` (proving AC #2 — the date does not reset).
+  - [x] Admin, zero barbers: asserts "No barbers available." renders and `fetch` is never called with a URL containing `/api/booking/schedule`.
+  - [x] Admin, barbers fetch fails: asserts the error message and a working "Try again" that succeeds on retry (mirror the existing schedule-fetch retry test's shape, `MySchedule.test.jsx` — locate it via the `attemptedDateRef`/"Try again" tests already covering the schedule-load failure path).
+  - [x] Admin, cancel flow: reuse the existing Barber cancel-flow test bodies (open confirm popup → confirm → `cancelAppointment` called → re-fetch) against an Admin-rendered page, asserting the re-fetch after a successful cancel includes the currently selected `barberId` (not just `date`) — this is the one behavior genuinely new to the Admin path (AC #4 says "reuses" the flow, but the re-fetch parameters are Admin-specific).
+  - [x] Barber-role regression assertion (concrete, not just "re-run existing tests"): render as `SIGNED_IN_BARBER` and assert `fetch` is never called with a URL containing `/api/booking/barbers` — proves the new Admin-only mount effect (Task 4) doesn't fire or leak a request for the unmodified Barber path. Combine with running the full existing Barber-role test suite in this file to confirm the `barberId`-defaulted `loadDate`/`fetchSchedule` signature changes introduced no behavioral regression there.
+  - [x] Unexpected-role defensive fallback: render with a role that is neither `'Barber'` nor `'Admin'` (e.g. `'Customer'`) and assert the "Schedule view is not available for this account." message renders with no `fetch` call at all — covers the defensive early-return Task 4 adds ahead of the Barber/Admin branching.
 
-- [ ] **Task 7: `BarberSeedService` — add a second, optional dev-only seed for manual verification** (not tied to any AC; a testing convenience Jack asked for so he can see the Select Barber dropdown actually switch between two real barbers locally, before closing out this story and Epic 2) — `BarberSeedService.cs` already seeds exactly one barber ("Barber One") from `BarberSeed:Email`/`BarberSeed:Password` config (env vars `BarberSeed__Email`/`BarberSeed__Password`), no-op if either is unset, mirroring `AdminBootstrapService`'s AD-6 pattern. Generalize it to loop over two independently-configured seed slots instead of hardcoding one:
+- [x] **Task 7: `BarberSeedService` — add a second, optional dev-only seed for manual verification** (not tied to any AC; a testing convenience Jack asked for so he can see the Select Barber dropdown actually switch between two real barbers locally, before closing out this story and Epic 2) — `BarberSeedService.cs` already seeds exactly one barber ("Barber One") from `BarberSeed:Email`/`BarberSeed:Password` config (env vars `BarberSeed__Email`/`BarberSeed__Password`), no-op if either is unset, mirroring `AdminBootstrapService`'s AD-6 pattern. Generalize it to loop over two independently-configured seed slots instead of hardcoding one:
   ```csharp
   public class BarberSeedService(
       IServiceScopeFactory scopeFactory,
@@ -431,7 +431,7 @@ This story adds **zero new business logic**. `BookingService.GetDaySchedule`, `F
   Behavior for the existing single-seed setup is unchanged (the `"BarberSeed"` slot is identical to today's hardcoded logic, just looped); the `"BarberSeed2"` slot only does anything once Jack sets `BarberSeed2__Email`/`BarberSeed2__Password` locally. **No test coverage needed for this task** — `BarberSeedService` as a whole is throwaway scaffolding, not a permanent feature: it exists only because Epic 3 (specifically Story 3.4, "Admin Creates a Barber Account") hasn't been built yet, and the entire class — this story's second slot included — is expected to be deleted once that story lands and barber accounts can be created through the real Admin Panel UI instead. Don't add a test file for it now; that effort would be discarded almost immediately.
 
 - [ ] **Task 8: Verify CI green and branch/PR**
-  - [ ] Branch as `story/2.6-admin-schedule-oversight` from `main`.
+  - [x] Branch as `story/2.6-admin-schedule-oversight` from `main`.
   - [ ] Push and confirm both CI jobs (backend .NET, frontend Vite/React) green on GitHub before merging (AD-11). Per standing preference, Jack handles commit/push/PR/CI-confirmation himself — leave this checkbox unchecked for him to update.
 
 ## Dev Notes
@@ -490,8 +490,38 @@ This story adds **zero new business logic**. `BookingService.GetDaySchedule`, `F
 
 ### Agent Model Used
 
+claude-sonnet-5 (Amelia)
+
 ### Debug Log References
+
+- Task 6 first run: 2 test failures — the `barbersFail` mock branch omitted a `json` method (`getBarbers` unconditionally calls `response.json()` before checking `response.ok`, matching the rest of `BookingApi.js`'s existing pattern), and the defensive-fallback test's `not.toHaveBeenCalled()` assertion didn't account for `AuthProvider`'s own mount-time `/api/auth/refresh` call. Both fixed in the test file itself (added `json: async () => null` to the failure mock; narrowed the assertion to "no `/api/booking/` call"); no production code changes needed.
+- `npx prettier --check .` flagged `SelectDropdown.jsx`, `MySchedule.jsx`, and `MySchedule.test.jsx` after implementation (inline code samples in the story file aren't pre-formatted); ran `npx prettier --write` on the three files and reconfirmed clean.
 
 ### Completion Notes List
 
-### File List
+- All 4 ACs implemented and covered by tests, plus the required zero-barbers state: AC1 (identical Barber view + Select Barber dropdown defaulting to the first barber, never empty) — Admin mount effect in `MySchedule.jsx` + shared render block; AC2 (switching barbers re-renders the same visible date) — `handleBarberChange` passes the current `date` into `loadDate`, covered by a test asserting both `barberId` and `date` on the re-fetch; AC3 (reads through the exact same shared `BookingService.GetDaySchedule`/`FindByBarberAndDate`) — satisfied by construction, Task 1 only branches at the Controller level, no service/repository change; AC4 (Cancel reuses Story 2.4's confirm-popup-then-soft-cancel flow) — zero changes to `ConfirmPopup`/`BookingService.Cancel`, only the re-fetch now carries `barberId`; zero-barbers state — dedicated early-return rendering "No barbers available." with no schedule fetch attempted.
+- Implementation matched the story's provided code almost verbatim — no deviations from the specified approach (Controller-only backend change, `URLSearchParams`-based query building, the two-mount-effect/`cancelled`-flag pattern, the `date-nav-group` flex restructuring). No new files were needed; no planning-doc drift occurred (unlike Story 2.5, no scope changes were requested mid-story).
+- Task 7 (`BarberSeedService` second seed slot) has no test coverage by design, per the story's explicit instruction — the whole class is throwaway scaffolding slated for deletion once Story 3.4 ships a real barber-creation path.
+- Task 8's branch subtask is satisfied (already on `story/2.6-admin-schedule-oversight`); its push/PR/CI-confirmation subtask is intentionally left unchecked per the story's own instruction and Jack's standing preference to handle that step himself.
+- Final verification: backend `dotnet test` — 176/176 passed (full suite, no regressions). Frontend `npx vitest run` — 146/146 passed (19 files, full suite). `npx eslint .` — clean. `npx prettier --check .` — clean.
+- **Post-review layout fix (requested by Jack)**: `.date-nav-group` (the Admin-only wrapper around the two nav arrows + date title) was originally plain `flex` with a `gap`, so the next-day arrow's position shifted with the date title's text width — silently reintroducing the exact jitter bug Story 2.5's review fixed for the Barber view (`.date-header-row`'s `20px 1fr 20px` grid, which pins each arrow to a fixed-width column regardless of title width). Fixed by giving `.date-nav-group` the same `20px 1fr 20px` grid technique, with `flex: 1; min-width: 0` so it still fills the row's available space to the left of the Select Barber dropdown. Net effect: previous-day arrow pinned to the row's left edge (matching the Barber view), next-day arrow now pinned immediately left of the dropdown instead of the row's far-right edge (which the dropdown now occupies), and the date title stays centered between the two arrows via the grid's `1fr` middle column — same principle as 2.5, just anchored against the dropdown instead of the row's outer edge. CSS-only change, no JSX/markup change. Full regression suite still green (176 backend, 146 frontend); ESLint/Prettier clean.
+
+## File List
+
+**Backend — modified:**
+- backend/BarbershopApi/Controllers/BookingController.cs
+- backend/BarbershopApi/Services/BarberSeedService.cs
+- backend/BarbershopApi.Tests/BookingControllerTests.cs
+
+**Frontend — modified:**
+- frontend/src/api/BookingApi.js
+- frontend/src/pages/MySchedule.jsx
+- frontend/src/pages/MySchedule.css
+- frontend/src/pages/MySchedule.test.jsx
+- frontend/src/components/SelectDropdown.jsx
+- frontend/src/components/SelectDropdown.css
+
+## Change Log
+
+- 2026-08-10: Implemented Story 2.6 (Tasks 1-7) — `BookingController.GetSchedule` admin `barberId` branch (Controller-only, no service/repository changes per AD-17), `BookingApi.js#getSchedule` extended with an optional `barberId` via `URLSearchParams`, `MySchedule.jsx`'s Admin path (barber-loading mount effect, Select Barber dropdown, barber-switch/retry handlers, loading/error/zero-barbers states, `.date-header-row` flex restructuring for Admin), `SelectDropdown`'s new `variant`/`ariaLabel` props, and `BarberSeedService`'s second dev-only seed slot. Backend and frontend test coverage added for all 4 ACs plus the zero-barbers state. Full regression suite green (176 backend, 146 frontend); ESLint/Prettier clean.
+- 2026-08-10: Post-review layout fix requested by Jack — the Admin-only nav-arrows+title wrapper (`.date-nav-group`) used plain flex, so the next-day arrow's position shifted with the date title's text width, reintroducing the exact jitter bug Story 2.5 fixed for the Barber view. Changed `.date-nav-group` to the same `20px 1fr 20px` grid technique (plus `flex: 1; min-width: 0` so it still fills the row alongside the Select Barber dropdown) — previous-day arrow now pinned to the row's left edge, next-day arrow pinned immediately left of the dropdown, date title centered between the two. CSS-only; no JSX change. Full regression suite still green (176 backend, 146 frontend); ESLint/Prettier clean.
