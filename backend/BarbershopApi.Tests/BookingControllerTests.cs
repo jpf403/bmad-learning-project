@@ -606,7 +606,12 @@ public class BookingControllerTests : IDisposable
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<DayScheduleView>(ResponseJsonOptions, TestContext.Current.CancellationToken);
         Assert.NotNull(body);
-        Assert.Equal(DateTime.Today.ToString("yyyy-MM-dd"), body.Date);
+        // The server always resolves "today" in America/New_York (AD-12), not the host
+        // machine's local time zone -- `DateTime.Today` would flake on any CI runner
+        // whose local time zone isn't Eastern, since UTC rolls over to the next calendar
+        // day 4-5 hours before Eastern does.
+        var estToday = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("America/New_York"));
+        Assert.Equal(estToday.ToString("yyyy-MM-dd"), body.Date);
     }
 
     [Fact]
@@ -672,7 +677,7 @@ public class BookingControllerTests : IDisposable
     }
 
     [Fact]
-    public async Task GetSchedule_admin_caller_returns_403()
+    public async Task GetSchedule_admin_without_barberId_returns_400()
     {
         using var client = _factory.CreateClient();
         var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin);
@@ -681,7 +686,108 @@ public class BookingControllerTests : IDisposable
             AuthedRequest(HttpMethod.Get, "/api/booking/schedule", adminToken),
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetSchedule_admin_with_nonexistent_barberId_returns_400()
+    {
+        using var client = _factory.CreateClient();
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin);
+
+        var response = await client.SendAsync(
+            AuthedRequest(HttpMethod.Get, "/api/booking/schedule?barberId=999999", adminToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetSchedule_admin_with_a_customer_id_as_barberId_returns_400()
+    {
+        var customer = await SeedAccount("customer@example.com", Role.Customer);
+        using var client = _factory.CreateClient();
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin);
+
+        var response = await client.SendAsync(
+            AuthedRequest(HttpMethod.Get, $"/api/booking/schedule?barberId={customer.Id}", adminToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetSchedule_admin_with_valid_barberId_returns_that_barbers_schedule()
+    {
+        var barberA = await SeedAccount("barberA@example.com", Role.Barber);
+        var barberB = await SeedAccount("barberB@example.com", Role.Barber);
+        using var client = _factory.CreateClient();
+        var customerToken = await RegisterAndLogin(client, email: "customer@example.com");
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin);
+        var date = NextBookableWeekday();
+        await client.SendAsync(
+            AuthedRequest(HttpMethod.Post, "/api/booking", customerToken)
+                .WithJsonBody(new { BarberId = barberA.Id, Date = date, StartTime = "09:00" }),
+            TestContext.Current.CancellationToken);
+        await client.SendAsync(
+            AuthedRequest(HttpMethod.Post, "/api/booking", customerToken)
+                .WithJsonBody(new { BarberId = barberB.Id, Date = date, StartTime = "09:30" }),
+            TestContext.Current.CancellationToken);
+
+        var responseA = await client.SendAsync(
+            AuthedRequest(HttpMethod.Get, $"/api/booking/schedule?date={date}&barberId={barberA.Id}", adminToken),
+            TestContext.Current.CancellationToken);
+        var responseB = await client.SendAsync(
+            AuthedRequest(HttpMethod.Get, $"/api/booking/schedule?date={date}&barberId={barberB.Id}", adminToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, responseA.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, responseB.StatusCode);
+        var bodyA = await responseA.Content.ReadFromJsonAsync<DayScheduleView>(ResponseJsonOptions, TestContext.Current.CancellationToken);
+        var bodyB = await responseB.Content.ReadFromJsonAsync<DayScheduleView>(ResponseJsonOptions, TestContext.Current.CancellationToken);
+        Assert.NotNull(bodyA);
+        Assert.NotNull(bodyB);
+        var bookedA = Assert.Single(bodyA.Slots, s => s.Appointment is not null);
+        var bookedB = Assert.Single(bodyB.Slots, s => s.Appointment is not null);
+        Assert.Equal("09:00", bookedA.StartTime);
+        Assert.Equal("09:30", bookedB.StartTime);
+    }
+
+    [Fact]
+    public async Task GetSchedule_barber_supplied_barberId_is_ignored()
+    {
+        var otherBarber = await SeedAccount("otherBarber@example.com", Role.Barber);
+        using var client = _factory.CreateClient();
+        var customerToken = await RegisterAndLogin(client, email: "customer@example.com");
+        var barberToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Barber, "barber-login@example.com");
+        var date = NextBookableWeekday();
+        await client.SendAsync(
+            AuthedRequest(HttpMethod.Post, "/api/booking", customerToken)
+                .WithJsonBody(new { BarberId = otherBarber.Id, Date = date, StartTime = "09:00" }),
+            TestContext.Current.CancellationToken);
+
+        var response = await client.SendAsync(
+            AuthedRequest(HttpMethod.Get, $"/api/booking/schedule?date={date}&barberId={otherBarber.Id}", barberToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<DayScheduleView>(ResponseJsonOptions, TestContext.Current.CancellationToken);
+        Assert.NotNull(body);
+        Assert.All(body.Slots, s => Assert.Null(s.Appointment));
+    }
+
+    [Fact]
+    public async Task GetSchedule_admin_with_malformed_date_returns_400()
+    {
+        var barber = await SeedAccount("barber@example.com", Role.Barber);
+        using var client = _factory.CreateClient();
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin);
+
+        var response = await client.SendAsync(
+            AuthedRequest(HttpMethod.Get, $"/api/booking/schedule?barberId={barber.Id}&date=09-01-2026", adminToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]

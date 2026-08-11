@@ -67,13 +67,33 @@ public class BookingController(IAccountRepository accountRepository, IBookingSer
     }
 
     [HttpGet("schedule")]
-    public async Task<IActionResult> GetSchedule([FromQuery] string? date)
+    public async Task<IActionResult> GetSchedule([FromQuery] string? date, [FromQuery] int? barberId)
     {
         var account = (Account)HttpContext.Items["Account"]!;
-        if (account.Role != Role.Barber)
+
+        int targetBarberId;
+        if (account.Role == Role.Barber)
         {
-            return Problem(statusCode: StatusCodes.Status403Forbidden, title: "Only barbers can view their own schedule.");
+            targetBarberId = account.Id;
         }
+        else if (account.Role == Role.Admin)
+        {
+            if (barberId is null)
+            {
+                return Problem(statusCode: StatusCodes.Status400BadRequest, title: "barberId is required.");
+            }
+            var barber = await accountRepository.FindById(barberId.Value);
+            if (barber is null || barber.Role != Role.Barber)
+            {
+                return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Selected barber is not available.");
+            }
+            targetBarberId = barberId.Value;
+        }
+        else
+        {
+            return Problem(statusCode: StatusCodes.Status403Forbidden, title: "Only barbers and admins can view a schedule.");
+        }
+
         // Model binding maps both an omitted `date` and a present-but-empty `date=` to the
         // same null value, so `date is not null` can't tell "no date supplied" (use today)
         // apart from "date supplied empty" (malformed, should 400) -- checking the raw query
@@ -83,7 +103,7 @@ public class BookingController(IAccountRepository accountRepository, IBookingSer
         {
             return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Date must be in yyyy-MM-dd format.");
         }
-        return Ok(await bookingService.GetDaySchedule(account.Id, dateWasSupplied ? date : null));
+        return Ok(await bookingService.GetDaySchedule(targetBarberId, dateWasSupplied ? date : null));
     }
 
     [HttpGet("mine")]

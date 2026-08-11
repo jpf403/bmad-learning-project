@@ -92,10 +92,25 @@ function renderPage(user = SIGNED_IN_BARBER) {
   )
 }
 
-function mockFetch({ scheduleResponse, cancel } = {}) {
+function mockFetch({
+  scheduleResponse,
+  cancel,
+  barbersResponse,
+  barbersFail,
+} = {}) {
   return vi.spyOn(globalThis, 'fetch').mockImplementation((url, options) => {
     const href = url.toString()
 
+    if (href.includes('/api/booking/barbers')) {
+      if (barbersFail) {
+        return Promise.resolve({
+          ok: false,
+          status: 500,
+          json: async () => null,
+        })
+      }
+      return Promise.resolve({ ok: true, json: async () => barbersResponse })
+    }
     if (href.includes('/api/booking/schedule')) {
       const date = new URL(href).searchParams.get('date')
       const body =
@@ -498,20 +513,158 @@ describe('MySchedule', () => {
     expect(screen.getByLabelText('Next day')).toBeDisabled()
   })
 
-  it('renders the Admin placeholder and never calls GET /api/booking/schedule', async () => {
-    const fetchMock = mockFetch({
+  it('Admin: loads barbers, then renders "Loading…" then the first barber\'s schedule with their name in the Select Barber trigger', async () => {
+    mockFetch({
+      barbersResponse: [
+        { id: 1, firstName: 'Amy', lastName: 'Barber' },
+        { id: 2, firstName: 'Zed', lastName: 'Barber' },
+      ],
       scheduleResponse: emptySchedule('2026-08-24'),
     })
     renderPage(SIGNED_IN_ADMIN)
 
+    expect(screen.getByText('Loading…')).toBeInTheDocument()
+
+    expect(
+      await screen.findByRole('combobox', { name: 'Select barber' }),
+    ).toHaveTextContent('Amy Barber')
+    expect(await screen.findAllByText('Available')).toHaveLength(16)
+  })
+
+  it('Admin: switching the Select Barber dropdown re-fetches with the new barberId and the still-current date', async () => {
+    const fetchMock = mockFetch({
+      barbersResponse: [
+        { id: 1, firstName: 'Amy', lastName: 'Barber' },
+        { id: 2, firstName: 'Zed', lastName: 'Barber' },
+      ],
+      scheduleResponse: (date) => emptySchedule(date ?? '2026-08-24'),
+    })
+    const user = userEvent.setup()
+    renderPage(SIGNED_IN_ADMIN)
+
+    expect(
+      await screen.findByRole('combobox', { name: 'Select barber' }),
+    ).toHaveTextContent('Amy Barber')
+
+    await user.click(screen.getByRole('combobox', { name: 'Select barber' }))
+    await user.click(await screen.findByRole('option', { name: 'Zed Barber' }))
+
+    expect(
+      await screen.findByRole('combobox', { name: 'Select barber' }),
+    ).toHaveTextContent('Zed Barber')
+    const lastCallUrl = fetchMock.mock.calls.at(-1)[0].toString()
+    expect(lastCallUrl).toContain('barberId=2')
+    expect(lastCallUrl).toContain('date=2026-08-24')
+  })
+
+  it('Admin: zero barbers renders "No barbers available." and never calls GET /api/booking/schedule', async () => {
+    const fetchMock = mockFetch({ barbersResponse: [] })
+    renderPage(SIGNED_IN_ADMIN)
+
+    expect(await screen.findByText('No barbers available.')).toBeInTheDocument()
+    expect(
+      fetchMock.mock.calls.some(([url]) =>
+        url.toString().includes('/api/booking/schedule'),
+      ),
+    ).toBe(false)
+  })
+
+  it('Admin: barbers fetch failure shows an error with a working Try again that succeeds on retry', async () => {
+    mockFetch({ barbersFail: true })
+    const user = userEvent.setup()
+    renderPage(SIGNED_IN_ADMIN)
+
+    expect(
+      await screen.findByText('Could not load barbers. Please try again.'),
+    ).toBeInTheDocument()
+
+    mockFetch({
+      barbersResponse: [{ id: 1, firstName: 'Amy', lastName: 'Barber' }],
+      scheduleResponse: emptySchedule('2026-08-24'),
+    })
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+
+    expect(
+      await screen.findByRole('combobox', { name: 'Select barber' }),
+    ).toHaveTextContent('Amy Barber')
+  })
+
+  it('Admin: cancel flow re-fetches with the currently selected barberId', async () => {
+    const fetchMock = mockFetch({
+      barbersResponse: [{ id: 1, firstName: 'Amy', lastName: 'Barber' }],
+      scheduleResponse: scheduleWithBooking('2026-08-24', '10:00', {
+        id: 5,
+        customerId: 2,
+        customerName: 'Jane Doe',
+        barberId: 1,
+        barberName: 'Amy Barber',
+        date: '2026-08-24',
+        startTime: '10:00',
+        finished: false,
+        cancelledAt: null,
+      }),
+    })
+    const user = userEvent.setup()
+    renderPage(SIGNED_IN_ADMIN)
+
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }))
+    fetchMock.mockImplementation((url, options) => {
+      const href = url.toString()
+      if (href.includes('/api/booking/schedule')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => emptySchedule('2026-08-24'),
+        })
+      }
+      if (
+        href.match(/\/api\/booking\/\d+\/cancel$/) &&
+        options?.method === 'POST'
+      ) {
+        return Promise.resolve({
+          ok: true,
+          status: 204,
+          json: async () => null,
+        })
+      }
+      return Promise.resolve({ ok: false, status: 401 })
+    })
+    await user.click(screen.getByRole('button', { name: 'Confirm' }))
+
+    expect(await screen.findAllByText('Available')).toHaveLength(16)
+    const lastCallUrl = fetchMock.mock.calls.at(-1)[0].toString()
+    expect(lastCallUrl).toContain('barberId=1')
+    expect(lastCallUrl).toContain('date=2026-08-24')
+  })
+
+  it('Barber-role regression: never calls GET /api/booking/barbers', async () => {
+    const fetchMock = mockFetch({
+      scheduleResponse: emptySchedule('2026-08-24'),
+    })
+    renderPage()
+
+    await screen.findAllByText('Available')
+
+    expect(
+      fetchMock.mock.calls.some(([url]) =>
+        url.toString().includes('/api/booking/barbers'),
+      ),
+    ).toBe(false)
+  })
+
+  it('renders the defensive fallback for a role that is neither Barber nor Admin, with no fetch call', async () => {
+    const fetchMock = mockFetch({
+      scheduleResponse: emptySchedule('2026-08-24'),
+    })
+    renderPage({ ...SIGNED_IN_BARBER, role: 'Customer' })
+
     expect(
       await screen.findByText(
-        'Barber schedule selection is not yet available.',
+        'Schedule view is not available for this account.',
       ),
     ).toBeInTheDocument()
     expect(
       fetchMock.mock.calls.some(([url]) =>
-        url.toString().includes('/api/booking/schedule'),
+        url.toString().includes('/api/booking/'),
       ),
     ).toBe(false)
   })
