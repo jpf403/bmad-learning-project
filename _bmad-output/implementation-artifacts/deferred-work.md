@@ -1,5 +1,9 @@
 # Deferred Work
 
+## Deferred from: story-2.6-admin-schedule-oversight (created 2026-08-10)
+
+- `BarberSeedService.cs` (dev-only, env-var-gated barber account seeding, extended by this story to a second optional slot for manual multi-barber testing) is throwaway scaffolding standing in for a real creation path — delete the whole class (and its `Program.cs` registration) when Story 3.4 ("Admin Creates a Barber Account") ships, since barber accounts can be created through the real Admin Panel UI at that point. No test coverage was ever added for it, by design — nothing to migrate, just remove. [backend/BarbershopApi/Services/BarberSeedService.cs, backend/BarbershopApi/Program.cs]
+
 ## Deferred from: code review of story-2.5-barbers-own-schedule-view, round 2 (2026-08-10)
 
 - `MySchedule.jsx`'s `loadDate` always sets `loading = true`, so the post-cancel refresh flashes the whole page to "Loading…" instead of updating just the affected row — pre-existing since the original implementation (not introduced by round 1's fixes); real but low-severity UX rough edge. [frontend/src/pages/MySchedule.jsx:54-68]

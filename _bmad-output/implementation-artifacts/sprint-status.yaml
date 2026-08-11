@@ -66,7 +66,7 @@ development_status:
   2-3-double-booking-and-self-conflict-guards: done
   2-4-my-appointments-view-cancel-and-race-safety: done
   2-5-barbers-own-schedule-view: done
-  2-6-admin-schedule-oversight: backlog
+  2-6-admin-schedule-oversight: ready-for-dev
   epic-2-retrospective: optional
 
   epic-3: backlog
