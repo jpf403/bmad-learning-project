@@ -33,3 +33,34 @@ export async function updateAccount(
   }
   return { ok: true, identity: body }
 }
+
+export async function searchAccounts(accessToken, query) {
+  const params = new URLSearchParams()
+  if (query && query.trim()) {
+    params.set('query', query.trim())
+  }
+  const search = params.toString()
+
+  let response
+  try {
+    response = await fetch(
+      `${API_BASE_URL}/api/account/search${search ? `?${search}` : ''}`,
+      {
+        credentials: 'include',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    )
+  } catch {
+    return { ok: false, status: null }
+  }
+
+  const body = await response.json().catch(() => null)
+  if (!response.ok || body === null) {
+    return {
+      ok: false,
+      status: response.ok ? null : response.status,
+      problem: body,
+    }
+  }
+  return { ok: true, accounts: body }
+}

@@ -10,6 +10,7 @@ import Login from './pages/Login'
 import Account from './pages/Account'
 import ScheduleAppointment from './pages/ScheduleAppointment'
 import MySchedule from './pages/MySchedule'
+import AdminPanel from './pages/AdminPanel'
 import './App.css'
 
 function App() {
@@ -45,6 +46,14 @@ function App() {
               element={
                 <RequireRole roles={['Barber', 'Admin']}>
                   <MySchedule />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/admin"
+              element={
+                <RequireRole roles={['Admin']}>
+                  <AdminPanel />
                 </RequireRole>
               }
             />

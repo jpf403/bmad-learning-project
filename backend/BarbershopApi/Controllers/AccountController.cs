@@ -39,4 +39,12 @@ public class AccountController(IAccountService accountService) : ControllerBase
             return Problem(statusCode: StatusCodes.Status500InternalServerError, title: "Something went wrong. Please try again.");
         }
     }
+
+    [HttpGet("search")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> Search([FromQuery] string? query)
+    {
+        var accounts = await accountService.SearchAccounts(query ?? string.Empty);
+        return Ok(accounts.Select(a => new AccountSummary(a.Id, a.Email, a.FirstName, a.LastName, a.Role)));
+    }
 }

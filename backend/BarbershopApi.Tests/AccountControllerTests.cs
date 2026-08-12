@@ -51,6 +51,16 @@ public class AccountControllerTests : IDisposable
         return request;
     }
 
+    private static HttpRequestMessage SearchRequest(string? query, string? accessToken = null)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, $"/api/account/search?query={Uri.EscapeDataString(query ?? string.Empty)}");
+        if (accessToken is not null)
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        }
+        return request;
+    }
+
     private async Task<string> RegisterAndLogin(HttpClient client, string email = "john@example.com", string password = "correct-horse-battery-staple")
     {
         await client.PostAsJsonAsync("/api/auth/register", NewRegisterRequest(email: email, password: password), TestContext.Current.CancellationToken);
@@ -367,5 +377,107 @@ public class AccountControllerTests : IDisposable
         }
 
         Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Search_as_admin_returns_matching_accounts()
+    {
+        using var client = _factory.CreateClient();
+        await client.PostAsJsonAsync(
+            "/api/auth/register",
+            NewRegisterRequest(email: "anderson.customer@example.com", firstName: "Anderson", lastName: "Cooper"),
+            TestContext.Current.CancellationToken);
+        await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Barber, "anderson.barber@example.com");
+        await using (var context = _factory.CreateDbContext())
+        {
+            var repository = new AccountRepository(context);
+            var barber = await repository.FindByEmail("anderson.barber@example.com");
+            barber!.FirstName = "Andersonia";
+            barber.LastName = "Barberton";
+            await repository.Update(barber);
+        }
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, "admin-search@example.com");
+
+        var response = await client.SendAsync(SearchRequest("anderson", adminToken), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<List<AccountSummary>>(ResponseJsonOptions, TestContext.Current.CancellationToken);
+        Assert.NotNull(body);
+        Assert.Equal(2, body.Count);
+        Assert.Contains(body, a => a.Email == "anderson.customer@example.com" && a.FirstName == "Anderson" && a.LastName == "Cooper" && a.Role == Role.Customer);
+        Assert.Contains(body, a => a.Email == "anderson.barber@example.com" && a.FirstName == "Andersonia" && a.LastName == "Barberton" && a.Role == Role.Barber);
+    }
+
+    [Fact]
+    public async Task Search_excludes_the_admin_account_from_results()
+    {
+        using var client = _factory.CreateClient();
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, "admin-excluded@example.com");
+        await using (var context = _factory.CreateDbContext())
+        {
+            var repository = new AccountRepository(context);
+            var admin = await repository.FindByEmail("admin-excluded@example.com");
+            admin!.FirstName = "Excludo";
+            admin.LastName = "Adminson";
+            await repository.Update(admin);
+        }
+
+        var response = await client.SendAsync(SearchRequest("excludo", adminToken), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<List<AccountSummary>>(ResponseJsonOptions, TestContext.Current.CancellationToken);
+        Assert.NotNull(body);
+        Assert.Empty(body);
+    }
+
+    [Fact]
+    public async Task Search_with_blank_query_returns_empty_array()
+    {
+        using var client = _factory.CreateClient();
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, "admin-blank@example.com");
+
+        var response = await client.SendAsync(SearchRequest("   ", adminToken), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<List<AccountSummary>>(ResponseJsonOptions, TestContext.Current.CancellationToken);
+        Assert.NotNull(body);
+        Assert.Empty(body);
+    }
+
+    [Fact]
+    public async Task Search_with_no_matches_returns_empty_array()
+    {
+        using var client = _factory.CreateClient();
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, "admin-nomatch@example.com");
+
+        var response = await client.SendAsync(SearchRequest("zzz-no-such-account", adminToken), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<List<AccountSummary>>(ResponseJsonOptions, TestContext.Current.CancellationToken);
+        Assert.NotNull(body);
+        Assert.Empty(body);
+    }
+
+    [Theory]
+    [InlineData(Role.Customer)]
+    [InlineData(Role.Barber)]
+    public async Task Search_as_non_admin_returns_403(Role role)
+    {
+        using var client = _factory.CreateClient();
+        var accessToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, role, $"search-{role}@example.com");
+
+        var response = await client.SendAsync(SearchRequest("anything", accessToken), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Search_without_access_token_returns_401()
+    {
+        using var client = _factory.CreateClient();
+
+        var response = await client.SendAsync(SearchRequest("anything"), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 }
