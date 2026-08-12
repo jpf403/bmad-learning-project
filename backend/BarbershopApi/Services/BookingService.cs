@@ -182,6 +182,13 @@ public class BookingService(IAppointmentRepository appointmentRepository, IAccou
             catch (AppointmentAlreadyFinishedException)
             {
             }
+            catch (Exception)
+            {
+                // An unexpected failure on one appointment must not abort the cascade for
+                // the rest -- the account mutation that triggered this cascade already
+                // committed, so leaving later appointments uncancelled is worse than
+                // leaving this one uncancelled.
+            }
         }
     }
 

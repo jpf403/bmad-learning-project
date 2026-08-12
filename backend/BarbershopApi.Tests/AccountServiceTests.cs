@@ -15,7 +15,6 @@ public class AccountServiceTests : IDisposable
     public void Dispose() => _factory.Dispose();
 
     private const string ExistingPassword = "correct-horse-battery-staple";
-    private static readonly DateTime FixedNow = new(2026, 9, 1, 8, 0, 0);
 
     private Account NewAccount(string email = "john@example.com", Role role = Role.Customer, string firstName = "John", string lastName = "Smith")
     {
@@ -260,6 +259,27 @@ public class AccountServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task AdminUpdateAccount_racing_a_self_service_UpdateOwnProfile_throws_AccountConflictException()
+    {
+        await using var contextA = _factory.CreateDbContext();
+        var repositoryA = new AccountRepository(contextA);
+        var serviceA = new AccountService(repositoryA, _passwordHasher, NewBookingService(contextA, repositoryA));
+        var created = await repositoryA.Create(NewAccount());
+        var admin = await repositoryA.Create(NewAccount(email: "admin@example.com", role: Role.Admin));
+
+        await using var contextB = _factory.CreateDbContext();
+        var repositoryB = new AccountRepository(contextB);
+        var serviceB = new AccountService(repositoryB, _passwordHasher, NewBookingService(contextB, repositoryB));
+        var staleCopy = await repositoryB.FindById(created.Id);
+        Assert.NotNull(staleCopy);
+
+        await serviceA.UpdateOwnProfile(created.Id, "Self-service update", created.LastName, null, null);
+
+        await Assert.ThrowsAsync<AccountConflictException>(
+            () => serviceB.AdminUpdateAccount(staleCopy!.Id, staleCopy.Email, "Admin update", staleCopy.LastName, staleCopy.Role, null, admin.Id));
+    }
+
+    [Fact]
     public async Task AdminUpdateAccount_demoting_barber_to_customer_cancels_future_appointments_but_retains_past()
     {
         await using var context = _factory.CreateDbContext();
@@ -285,7 +305,7 @@ public class AccountServiceTests : IDisposable
             StartTime = "09:00",
         });
 
-        await service.AdminUpdateAccount(barber.Id, barber.Email, barber.FirstName, barber.LastName, Role.Customer, null, admin.Id);
+        var updated = await service.AdminUpdateAccount(barber.Id, barber.Email, barber.FirstName, barber.LastName, Role.Customer, null, admin.Id);
 
         await using var verifyContext = _factory.CreateDbContext();
         var futureReloaded = await verifyContext.Appointments.FirstOrDefaultAsync(a => a.Id == future.Id, TestContext.Current.CancellationToken);
@@ -295,6 +315,7 @@ public class AccountServiceTests : IDisposable
         Assert.NotNull(futureReloaded!.CancelledAt);
         Assert.NotNull(pastReloaded);
         Assert.Null(pastReloaded!.CancelledAt);
+        Assert.Equal(0, updated.SessionVersion);
     }
 
     [Fact]

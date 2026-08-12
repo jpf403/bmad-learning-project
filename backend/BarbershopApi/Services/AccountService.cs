@@ -9,7 +9,22 @@ namespace BarbershopApi.Services;
 public class AccountService(IAccountRepository accountRepository, IPasswordHasher<Account> passwordHasher, IBookingService bookingService) : IAccountService
 {
     private const int SqliteConstraintViolation = 19;
+    private const int MinPasswordLength = 8;
+    private const int MaxPasswordLength = 128;
 
+    // Same shape as RegisterRequest's/UpdateAccountRequest's DTO-level password validation
+    // attributes -- this story has no Controller/DTO layer yet, so the admin-only methods
+    // below enforce the same rule directly rather than accepting anything unvalidated.
+    private static void ValidatePassword(string password)
+    {
+        if (string.IsNullOrEmpty(password) ||
+            password.Length < MinPasswordLength ||
+            password.Length > MaxPasswordLength ||
+            password.Any(char.IsWhiteSpace))
+        {
+            throw new InvalidPasswordException();
+        }
+    }
 
     public async Task<Account> UpdateOwnProfile(int accountId, string firstName, string lastName, string? newPassword, string? currentPassword)
     {
@@ -56,6 +71,8 @@ public class AccountService(IAccountRepository accountRepository, IPasswordHashe
 
     public async Task<Account> AdminCreateBarber(string email, string firstName, string lastName, string password)
     {
+        ValidatePassword(password);
+
         var existing = await accountRepository.FindByEmail(email);
         if (existing is not null)
         {
@@ -106,8 +123,9 @@ public class AccountService(IAccountRepository accountRepository, IPasswordHashe
         account.FirstName = firstName.Trim();
         account.LastName = lastName.Trim();
         account.Role = role;
-        if (!string.IsNullOrEmpty(newPassword))
+        if (newPassword is not null)
         {
+            ValidatePassword(newPassword);
             account.PasswordHash = passwordHasher.HashPassword(account, newPassword);
             account.SessionVersion++;
         }

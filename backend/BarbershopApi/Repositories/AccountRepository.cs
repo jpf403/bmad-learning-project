@@ -63,6 +63,7 @@ public class AccountRepository(BarbershopDbContext context) : IAccountRepository
             .Where(a => a.Role != Role.Admin && a.DeletedAt == null)
             .Where(a => a.FirstName.ToLower().Contains(normalizedQuery) ||
                 a.LastName.ToLower().Contains(normalizedQuery) ||
+                (a.FirstName + " " + a.LastName).ToLower().Contains(normalizedQuery) ||
                 a.Email.Contains(normalizedQuery))
             .ToListAsync();
     }

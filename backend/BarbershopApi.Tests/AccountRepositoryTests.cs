@@ -342,6 +342,20 @@ public class AccountRepositoryTests : IDisposable
     }
 
     [Fact]
+    public async Task Search_matches_combined_first_and_last_name()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        var nameMatch = await repository.Create(NewAccount(email: "jane@example.com", firstName: "Jane", lastName: "Doeling"));
+        var noMatch = await repository.Create(NewAccount(email: "nomatch@example.com", firstName: "Zed", lastName: "Zephyr"));
+
+        var results = await repository.Search("jane doeling");
+
+        Assert.Equal([nameMatch.Id], results.Select(a => a.Id));
+        Assert.DoesNotContain(results, a => a.Id == noMatch.Id);
+    }
+
+    [Fact]
     public async Task Search_with_blank_query_returns_empty_list()
     {
         await using var context = _factory.CreateDbContext();
@@ -402,6 +416,25 @@ public class AccountRepositoryTests : IDisposable
         await repositoryA.AdminUpdate(created);
 
         staleCopy.FirstName = "Second update";
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => repositoryB.AdminUpdate(staleCopy));
+    }
+
+    [Fact]
+    public async Task AdminUpdate_racing_a_self_service_Update_throws_DbUpdateConcurrencyException()
+    {
+        await using var contextA = _factory.CreateDbContext();
+        var repositoryA = new AccountRepository(contextA);
+        var created = await repositoryA.Create(NewAccount());
+
+        await using var contextB = _factory.CreateDbContext();
+        var repositoryB = new AccountRepository(contextB);
+        var staleCopy = await repositoryB.FindById(created.Id);
+        Assert.NotNull(staleCopy);
+
+        created.FirstName = "Self-service update";
+        await repositoryA.Update(created);
+
+        staleCopy!.FirstName = "Admin update";
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => repositoryB.AdminUpdate(staleCopy));
     }
 
