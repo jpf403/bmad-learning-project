@@ -38,6 +38,19 @@ public class AppointmentRepository(BarbershopDbContext context) : IAppointmentRe
             .ToListAsync();
     }
 
+    public async Task<List<Appointment>> FindFutureByBarber(int barberId, DateTime nowEst)
+    {
+        var nowDate = nowEst.ToString("yyyy-MM-dd");
+        var nowStartTime = nowEst.ToString("HH:mm");
+
+        return await context.Appointments
+            .Where(a => a.BarberId == barberId && a.CancelledAt == null &&
+                (a.Date.CompareTo(nowDate) > 0 ||
+                 (a.Date == nowDate && a.StartTime.CompareTo(nowStartTime) > 0)))
+            .OrderBy(a => a.Date).ThenBy(a => a.StartTime)
+            .ToListAsync();
+    }
+
     public async Task<bool> TryCancel(int appointmentId, DateTime cancelledAtUtc)
     {
         var rowsAffected = await context.Appointments

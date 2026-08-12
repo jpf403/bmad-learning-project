@@ -2,6 +2,7 @@ using BarbershopApi.Data;
 using BarbershopApi.Entities;
 using BarbershopApi.Repositories;
 using BarbershopApi.Services;
+using Microsoft.EntityFrameworkCore;
 
 namespace BarbershopApi.Tests;
 
@@ -561,5 +562,77 @@ public class BookingServiceTests : IDisposable
 
         var booked = Assert.Single(schedule.Slots, s => s.Appointment is not null);
         Assert.True(booked.Appointment!.Finished);
+    }
+
+    [Fact]
+    public async Task CancelAllFutureForBarber_cancels_all_future_appointments_for_that_barber_only()
+    {
+        await using var context = _factory.CreateDbContext();
+        var customerA = await SeedAccount(context, "customerA@example.com", Role.Customer);
+        var customerB = await SeedAccount(context, "customerB@example.com", Role.Customer);
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var otherBarber = await SeedAccount(context, "other-barber@example.com", Role.Barber);
+        var admin = await SeedAccount(context, "admin@example.com", Role.Admin);
+        var appointmentRepository = new AppointmentRepository(context);
+        var service = NewService(context);
+        var future = await appointmentRepository.Create(new Appointment
+        {
+            CustomerId = customerA.Id,
+            BarberId = barber.Id,
+            Date = "2099-01-01",
+            StartTime = "09:00",
+        });
+        var otherBarberFuture = await appointmentRepository.Create(new Appointment
+        {
+            CustomerId = customerB.Id,
+            BarberId = otherBarber.Id,
+            Date = "2099-01-01",
+            StartTime = "09:00",
+        });
+
+        await service.CancelAllFutureForBarber(barber.Id, admin.Id, Role.Admin, FixedNow);
+
+        await using var verifyContext = _factory.CreateDbContext();
+        var cancelled = await verifyContext.Appointments.FirstOrDefaultAsync(a => a.Id == future.Id, TestContext.Current.CancellationToken);
+        var untouched = await verifyContext.Appointments.FirstOrDefaultAsync(a => a.Id == otherBarberFuture.Id, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(cancelled);
+        Assert.NotNull(cancelled!.CancelledAt);
+        Assert.NotNull(untouched);
+        Assert.Null(untouched!.CancelledAt);
+    }
+
+    [Fact]
+    public async Task CancelAllFutureForBarber_tolerates_an_already_cancelled_appointment_without_aborting_the_rest()
+    {
+        await using var context = _factory.CreateDbContext();
+        var customer = await SeedAccount(context, "customer@example.com", Role.Customer);
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var admin = await SeedAccount(context, "admin@example.com", Role.Admin);
+        var appointmentRepository = new AppointmentRepository(context);
+        var service = NewService(context);
+        var alreadyCancelled = await appointmentRepository.Create(new Appointment
+        {
+            CustomerId = customer.Id,
+            BarberId = barber.Id,
+            Date = "2099-01-01",
+            StartTime = "09:00",
+        });
+        await appointmentRepository.TryCancel(alreadyCancelled.Id, DateTime.UtcNow);
+        var stillPending = await appointmentRepository.Create(new Appointment
+        {
+            CustomerId = customer.Id,
+            BarberId = barber.Id,
+            Date = "2099-01-01",
+            StartTime = "10:00",
+        });
+
+        await service.CancelAllFutureForBarber(barber.Id, admin.Id, Role.Admin, FixedNow);
+
+        await using var verifyContext = _factory.CreateDbContext();
+        var reloaded = await verifyContext.Appointments.FirstOrDefaultAsync(a => a.Id == stillPending.Id, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(reloaded);
+        Assert.NotNull(reloaded!.CancelledAt);
     }
 }

@@ -1,5 +1,6 @@
 using BarbershopApi.Entities;
 using BarbershopApi.Repositories;
+using BarbershopApi.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace BarbershopApi.Tests;
@@ -87,8 +88,7 @@ public class AccountRepositoryTests : IDisposable
         var repository = new AccountRepository(context);
         var first = await repository.Create(NewAccount(email: "john@example.com"));
 
-        first.DeletedAt = DateTime.UtcNow;
-        await repository.Update(first);
+        await repository.SoftDelete(first);
 
         var second = await repository.Create(NewAccount(email: "john@example.com"));
 
@@ -128,8 +128,7 @@ public class AccountRepositoryTests : IDisposable
         await using var context = _factory.CreateDbContext();
         var repository = new AccountRepository(context);
         var created = await repository.Create(NewAccount(email: "john@example.com"));
-        created.DeletedAt = DateTime.UtcNow;
-        await repository.Update(created);
+        await repository.SoftDelete(created);
 
         var found = await repository.FindByEmail("john@example.com");
 
@@ -153,8 +152,7 @@ public class AccountRepositoryTests : IDisposable
         await using var context = _factory.CreateDbContext();
         var repository = new AccountRepository(context);
         var created = await repository.Create(NewAccount());
-        created.DeletedAt = DateTime.UtcNow;
-        await repository.Update(created);
+        await repository.SoftDelete(created);
 
         var found = await repository.FindById(created.Id);
 
@@ -283,8 +281,7 @@ public class AccountRepositoryTests : IDisposable
         await using var context = _factory.CreateDbContext();
         var repository = new AccountRepository(context);
         var barber = await repository.Create(NewAccount(email: "barber@example.com", role: Role.Barber));
-        barber.DeletedAt = DateTime.UtcNow;
-        await repository.Update(barber);
+        await repository.SoftDelete(barber);
 
         var barbers = await repository.FindAllByRole(Role.Barber);
 
@@ -300,5 +297,166 @@ public class AccountRepositoryTests : IDisposable
         var barbers = await repository.FindAllByRole(Role.Barber);
 
         Assert.Empty(barbers);
+    }
+
+    [Fact]
+    public async Task Search_matches_partial_name_or_email_case_insensitive()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        var nameMatch = await repository.Create(NewAccount(email: "jane@example.com", firstName: "Jane", lastName: "Doeling"));
+        var emailMatch = await repository.Create(NewAccount(email: "doe-family@example.com", firstName: "Other", lastName: "Person"));
+        var noMatch = await repository.Create(NewAccount(email: "nomatch@example.com", firstName: "Zed", lastName: "Zephyr"));
+
+        var results = await repository.Search("DOE");
+
+        Assert.Equal(2, results.Count);
+        Assert.Contains(results, a => a.Id == nameMatch.Id);
+        Assert.Contains(results, a => a.Id == emailMatch.Id);
+        Assert.DoesNotContain(results, a => a.Id == noMatch.Id);
+    }
+
+    [Fact]
+    public async Task Search_excludes_admin_account()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        await repository.Create(NewAccount(email: "admin@example.com", role: Role.Admin, firstName: "Adminstrator", lastName: "Root"));
+
+        var results = await repository.Search("adminstrator");
+
+        Assert.Empty(results);
+    }
+
+    [Fact]
+    public async Task Search_excludes_soft_deleted_accounts()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        var deleted = await repository.Create(NewAccount(email: "deleted@example.com", firstName: "Deleted", lastName: "Person"));
+        await repository.SoftDelete(deleted);
+
+        var results = await repository.Search("deleted");
+
+        Assert.Empty(results);
+    }
+
+    [Fact]
+    public async Task Search_with_blank_query_returns_empty_list()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        await repository.Create(NewAccount());
+
+        var results = await repository.Search("   ");
+
+        Assert.Empty(results);
+    }
+
+    [Fact]
+    public async Task AdminUpdate_updates_fields_and_increments_RowVersion()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        var created = await repository.Create(NewAccount(role: Role.Customer));
+        var initialRowVersion = created.RowVersion;
+
+        created.FirstName = "Updated";
+        created.Role = Role.Barber;
+        await repository.AdminUpdate(created);
+
+        await using var verifyContext = _factory.CreateDbContext();
+        var verifyRepository = new AccountRepository(verifyContext);
+        var reloaded = await verifyRepository.FindById(created.Id);
+
+        Assert.NotNull(reloaded);
+        Assert.Equal("Updated", reloaded.FirstName);
+        Assert.Equal(Role.Barber, reloaded.Role);
+        Assert.Equal(initialRowVersion + 1, reloaded.RowVersion);
+    }
+
+    [Fact]
+    public async Task AdminUpdate_on_admin_account_throws_AdminAccountProtectedException()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        var admin = await repository.Create(NewAccount(email: "admin@example.com", role: Role.Admin));
+
+        admin.FirstName = "Attempted Update";
+        await Assert.ThrowsAsync<AdminAccountProtectedException>(() => repository.AdminUpdate(admin));
+    }
+
+    [Fact]
+    public async Task AdminUpdate_on_stale_RowVersion_throws_DbUpdateConcurrencyException()
+    {
+        await using var contextA = _factory.CreateDbContext();
+        var repositoryA = new AccountRepository(contextA);
+        var created = await repositoryA.Create(NewAccount());
+
+        await using var contextB = _factory.CreateDbContext();
+        var repositoryB = new AccountRepository(contextB);
+        var staleCopy = await repositoryB.FindById(created.Id);
+        Assert.NotNull(staleCopy);
+
+        created.FirstName = "First update";
+        await repositoryA.AdminUpdate(created);
+
+        staleCopy.FirstName = "Second update";
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => repositoryB.AdminUpdate(staleCopy));
+    }
+
+    [Fact]
+    public async Task AdminUpdate_promoting_a_non_admin_account_to_Admin_throws_InvalidRoleAssignmentException()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        var created = await repository.Create(NewAccount(role: Role.Barber));
+
+        created.Role = Role.Admin;
+        await Assert.ThrowsAsync<InvalidRoleAssignmentException>(() => repository.AdminUpdate(created));
+    }
+
+    [Fact]
+    public async Task SoftDelete_sets_DeletedAt()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        var created = await repository.Create(NewAccount());
+
+        await repository.SoftDelete(created);
+
+        await using var verifyContext = _factory.CreateDbContext();
+        var reloaded = await verifyContext.Accounts.FirstOrDefaultAsync(a => a.Id == created.Id, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(reloaded);
+        Assert.NotNull(reloaded!.DeletedAt);
+    }
+
+    [Fact]
+    public async Task SoftDelete_on_admin_account_throws_AdminAccountProtectedException()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        var admin = await repository.Create(NewAccount(email: "admin@example.com", role: Role.Admin));
+
+        await Assert.ThrowsAsync<AdminAccountProtectedException>(() => repository.SoftDelete(admin));
+    }
+
+    [Fact]
+    public async Task SoftDelete_on_stale_RowVersion_throws_DbUpdateConcurrencyException()
+    {
+        await using var contextA = _factory.CreateDbContext();
+        var repositoryA = new AccountRepository(contextA);
+        var created = await repositoryA.Create(NewAccount());
+
+        await using var contextB = _factory.CreateDbContext();
+        var repositoryB = new AccountRepository(contextB);
+        var staleCopy = await repositoryB.FindById(created.Id);
+        Assert.NotNull(staleCopy);
+
+        created.FirstName = "First update";
+        await repositoryA.AdminUpdate(created);
+
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => repositoryB.SoftDelete(staleCopy));
     }
 }

@@ -70,7 +70,7 @@ development_status:
   epic-2-retrospective: done
 
   epic-3: in-progress
-  3-1-account-repository-admin-operations: ready-for-dev
+  3-1-account-repository-admin-operations: in-progress
   3-2-admin-account-search: backlog
   3-3-admin-edits-an-account: backlog
   3-4-admin-creates-a-barber-account: backlog

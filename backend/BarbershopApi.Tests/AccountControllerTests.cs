@@ -252,7 +252,8 @@ public class AccountControllerTests : IDisposable
         await repositoryA.Update(created);
 
         using var scope = _factory.Services.CreateScope();
-        var controller = new AccountController(new AccountService(repositoryB, passwordHasher))
+        var bookingService = new BookingService(new AppointmentRepository(contextB), repositoryB);
+        var controller = new AccountController(new AccountService(repositoryB, passwordHasher, bookingService))
         {
             ControllerContext = new ControllerContext
             {
