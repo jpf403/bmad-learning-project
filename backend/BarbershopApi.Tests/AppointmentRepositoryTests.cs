@@ -261,6 +261,28 @@ public class AppointmentRepositoryTests : IDisposable
     }
 
     [Fact]
+    public async Task FindFutureByBarber_excludes_past_and_cancelled_appointments()
+    {
+        await using var context = _factory.CreateDbContext();
+        var customer = await SeedAccount(context, "customer@example.com", Role.Customer);
+        var barberA = await SeedAccount(context, "barberA@example.com", Role.Barber);
+        var barberB = await SeedAccount(context, "barberB@example.com", Role.Barber);
+        var repository = new AppointmentRepository(context);
+        var nowEst = new DateTime(2026, 9, 1, 10, 0, 0);
+
+        await repository.Create(NewAppointment(customer.Id, barberA.Id, date: "2026-08-31", startTime: "09:00"));
+        var upcoming = await repository.Create(NewAppointment(customer.Id, barberA.Id, date: "2026-09-01", startTime: "11:00"));
+        var toCancel = await repository.Create(NewAppointment(customer.Id, barberA.Id, date: "2026-09-02", startTime: "09:00"));
+        await repository.TryCancel(toCancel.Id, DateTime.UtcNow);
+        await repository.Create(NewAppointment(customer.Id, barberB.Id, date: "2026-09-02", startTime: "09:00"));
+
+        var found = await repository.FindFutureByBarber(barberA.Id, nowEst);
+
+        var result = Assert.Single(found);
+        Assert.Equal(upcoming.Id, result.Id);
+    }
+
+    [Fact]
     public async Task ExistsConflict_false_when_matching_slot_is_cancelled()
     {
         await using var context = _factory.CreateDbContext();

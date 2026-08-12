@@ -1,5 +1,6 @@
 using BarbershopApi.Data;
 using BarbershopApi.Entities;
+using BarbershopApi.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace BarbershopApi.Repositories;
@@ -48,5 +49,57 @@ public class AccountRepository(BarbershopDbContext context) : IAccountRepository
             .ThenBy(a => a.LastName)
             .ThenBy(a => a.Id)
             .ToListAsync();
+    }
+
+    public async Task<List<Account>> Search(string query)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return [];
+        }
+
+        var normalizedQuery = query.Trim().ToLowerInvariant();
+        return await context.Accounts
+            .Where(a => a.Role != Role.Admin && a.DeletedAt == null)
+            .Where(a => a.FirstName.ToLower().Contains(normalizedQuery) ||
+                a.LastName.ToLower().Contains(normalizedQuery) ||
+                (a.FirstName + " " + a.LastName).ToLower().Contains(normalizedQuery) ||
+                a.Email.Contains(normalizedQuery))
+            .ToListAsync();
+    }
+
+    public async Task AdminUpdate(Account account)
+    {
+        await EnsureNotCurrentlyAdmin(account.Id);
+        if (account.Role == Role.Admin)
+        {
+            throw new InvalidRoleAssignmentException();
+        }
+
+        account.Email = account.Email.Trim().ToLowerInvariant();
+        context.Update(account);
+        await context.SaveChangesAsync();
+        await context.Entry(account).ReloadAsync();
+    }
+
+    public async Task SoftDelete(Account account)
+    {
+        await EnsureNotCurrentlyAdmin(account.Id);
+
+        account.DeletedAt = DateTime.UtcNow;
+        context.Update(account);
+        await context.SaveChangesAsync();
+    }
+
+    private async Task EnsureNotCurrentlyAdmin(int accountId)
+    {
+        var currentRole = await context.Accounts.AsNoTracking()
+            .Where(a => a.Id == accountId)
+            .Select(a => a.Role)
+            .FirstOrDefaultAsync();
+        if (currentRole == Role.Admin)
+        {
+            throw new AdminAccountProtectedException();
+        }
     }
 }

@@ -166,6 +166,32 @@ public class BookingService(IAppointmentRepository appointmentRepository, IAccou
         }
     }
 
+    public async Task CancelAllFutureForBarber(int barberId, int callerAccountId, Role callerRole, DateTime? now = null)
+    {
+        var nowEst = ResolveNowEst(now);
+        var appointments = await appointmentRepository.FindFutureByBarber(barberId, nowEst);
+        foreach (var appointment in appointments)
+        {
+            try
+            {
+                await Cancel(appointment.Id, callerAccountId, callerRole, now);
+            }
+            catch (AppointmentAlreadyCancelledException)
+            {
+            }
+            catch (AppointmentAlreadyFinishedException)
+            {
+            }
+            catch (Exception)
+            {
+                // An unexpected failure on one appointment must not abort the cascade for
+                // the rest -- the account mutation that triggered this cascade already
+                // committed, so leaving later appointments uncancelled is worse than
+                // leaving this one uncancelled.
+            }
+        }
+    }
+
     private static DateTime GetNowEst() => TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, EasternTimeZone);
 
     // `now` is always Eastern wall-clock time with no offset info (matching GetNowEst()'s

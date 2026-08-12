@@ -4,7 +4,7 @@ baseline_commit: 442df9f3e3e7719e36ca0a636fd900116136d50c
 
 # Story 3.1: Account Repository — Admin Operations
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -22,20 +22,20 @@ so that account search, admin-driven edit/create/delete, and the appointment-cas
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Extend `IAccountRepository`/`AccountRepository`** (AC: #1, #2, #4)
-  - [ ] Add `Task<List<Account>> Search(string query)` — case-insensitive partial match on `FirstName`, `LastName`, or `Email` (`EF.Functions.Like` or `.Contains` — match whatever casing approach `FindByEmail`'s existing normalize-then-compare already establishes), filtered to `Role != Role.Admin && DeletedAt == null`. Empty/whitespace query returns an empty list (mirrors the UX's "before any search" empty state — no results without input, not "return everyone").
-  - [ ] Add `Task AdminUpdate(Account account)` — same persistence shape as the existing `Update` (trim/lowercase email, `context.Update(account)`, `SaveChangesAsync`, `ReloadAsync`), **plus two repository-level guards, both required**: (1) before applying the update, re-fetch the account's *current* persisted `Role` via a separate `AsNoTracking` query on `account.Id` and throw `AdminAccountProtectedException` if that current role is `Admin` — this is deliberately a fresh DB read, not a check on the (already-mutated) `account` parameter, so it catches "this row is currently the admin account" regardless of what the caller already changed on the in-memory object; (2) separately, check the *incoming* `account.Role` value being written and throw `InvalidRoleAssignmentException` if it is `Role.Admin` — guard (1) alone only protects a row that is *already* admin, it does nothing to stop a non-admin row from being promoted to `Role.Admin`, which is the other half of what AC #2 requires. Do **not** add either guard to the existing `Update` method — that method is still used unmodified by Story 1.7's self-service `UpdateOwnProfile`, where the admin account editing its own profile must keep working.
-  - [ ] Add `Task SoftDelete(Account account)` — same repository-level `Role == Admin` guard as `AdminUpdate` (re-fetch current role, throw `AdminAccountProtectedException` if admin), then set `account.DeletedAt = DateTime.UtcNow`, `context.Update(account)`, `SaveChangesAsync`. This formalizes what `AccountRepositoryTests` today does ad hoc (`account.DeletedAt = DateTime.UtcNow; await repository.Update(account);`) into a named, guarded method — do not leave the ad-hoc pattern in place once this method exists.
-  - [ ] **Do not add a new repository-level `AdminCreate` method.** The existing `Create(Account account)` is already role-agnostic (used today by both `AuthService.Register` for customers and `AdminBootstrapService` for the seeded admin) and needs no repository change — the "always `Role.Barber`, never another admin" contract belongs at the Service layer (Task 2), which builds the entity with `Role = Role.Barber` before calling the existing `Create`. This matches the established "repository interfaces grow incrementally, only when a genuinely new persistence shape is needed" precedent from Story 2.1's Dev Notes (re: `IAccountRepository.AdminExists()`).
-- [ ] **Task 2: Extend `IAccountService`/`AccountService`** (AC: #1, #2, #3, #4)
-  - [ ] Add `IBookingService` as a new constructor dependency on `AccountService` (first cross-domain Service→Service dependency in the codebase — see Dev Notes' Design Decisions section for why this is the right seam, not a Repository→Service or Controller→Repository violation of AD-1).
-  - [ ] `Task<List<Account>> SearchAccounts(string query)` — thin passthrough to `accountRepository.Search(query)`. No business logic needed yet; exists so a future `AdminController` never calls `AccountRepository` directly (AD-1).
-  - [ ] `Task<Account> AdminCreateBarber(string email, string firstName, string lastName, string password)`:
+- [x] **Task 1: Extend `IAccountRepository`/`AccountRepository`** (AC: #1, #2, #4)
+  - [x] Add `Task<List<Account>> Search(string query)` — case-insensitive partial match on `FirstName`, `LastName`, or `Email` (`EF.Functions.Like` or `.Contains` — match whatever casing approach `FindByEmail`'s existing normalize-then-compare already establishes), filtered to `Role != Role.Admin && DeletedAt == null`. Empty/whitespace query returns an empty list (mirrors the UX's "before any search" empty state — no results without input, not "return everyone").
+  - [x] Add `Task AdminUpdate(Account account)` — same persistence shape as the existing `Update` (trim/lowercase email, `context.Update(account)`, `SaveChangesAsync`, `ReloadAsync`), **plus two repository-level guards, both required**: (1) before applying the update, re-fetch the account's *current* persisted `Role` via a separate `AsNoTracking` query on `account.Id` and throw `AdminAccountProtectedException` if that current role is `Admin` — this is deliberately a fresh DB read, not a check on the (already-mutated) `account` parameter, so it catches "this row is currently the admin account" regardless of what the caller already changed on the in-memory object; (2) separately, check the *incoming* `account.Role` value being written and throw `InvalidRoleAssignmentException` if it is `Role.Admin` — guard (1) alone only protects a row that is *already* admin, it does nothing to stop a non-admin row from being promoted to `Role.Admin`, which is the other half of what AC #2 requires. Do **not** add either guard to the existing `Update` method — that method is still used unmodified by Story 1.7's self-service `UpdateOwnProfile`, where the admin account editing its own profile must keep working.
+  - [x] Add `Task SoftDelete(Account account)` — same repository-level `Role == Admin` guard as `AdminUpdate` (re-fetch current role, throw `AdminAccountProtectedException` if admin), then set `account.DeletedAt = DateTime.UtcNow`, `context.Update(account)`, `SaveChangesAsync`. This formalizes what `AccountRepositoryTests` today does ad hoc (`account.DeletedAt = DateTime.UtcNow; await repository.Update(account);`) into a named, guarded method — do not leave the ad-hoc pattern in place once this method exists.
+  - [x] **Do not add a new repository-level `AdminCreate` method.** The existing `Create(Account account)` is already role-agnostic (used today by both `AuthService.Register` for customers and `AdminBootstrapService` for the seeded admin) and needs no repository change — the "always `Role.Barber`, never another admin" contract belongs at the Service layer (Task 2), which builds the entity with `Role = Role.Barber` before calling the existing `Create`. This matches the established "repository interfaces grow incrementally, only when a genuinely new persistence shape is needed" precedent from Story 2.1's Dev Notes (re: `IAccountRepository.AdminExists()`).
+- [x] **Task 2: Extend `IAccountService`/`AccountService`** (AC: #1, #2, #3, #4)
+  - [x] Add `IBookingService` as a new constructor dependency on `AccountService` (first cross-domain Service→Service dependency in the codebase — see Dev Notes' Design Decisions section for why this is the right seam, not a Repository→Service or Controller→Repository violation of AD-1).
+  - [x] `Task<List<Account>> SearchAccounts(string query)` — thin passthrough to `accountRepository.Search(query)`. No business logic needed yet; exists so a future `AdminController` never calls `AccountRepository` directly (AD-1).
+  - [x] `Task<Account> AdminCreateBarber(string email, string firstName, string lastName, string password)`:
     - Duplicate-email check via `accountRepository.FindByEmail`, throwing the existing `DuplicateEmailException` on collision (reuse — don't invent a second duplicate-email exception type). Wrap the actual `Create` call in the same `try/catch (DbUpdateException ex) when (ex.InnerException is SqliteException { SqliteErrorCode: 19 })` → `DuplicateEmailException` backstop `AuthService.Register` already uses, for the same race-window reason.
     - Hash the password via the existing injected `IPasswordHasher<Account>`.
     - Build the entity with `Role = Role.Barber` hardcoded (ignore any role the caller might somehow pass — there is no role parameter on this method's signature at all, by design, so "never another admin" (FR19) is enforced by the method shape itself, not a runtime check).
     - **Do not add email-format validation here.** Plausible-email-format checking (FR1/FR19) is DTO/Controller-layer request validation, deferred to whichever of Stories 3.3/3.4 builds the Controller — same client-convenience/server-enforcement split Story 2.1 already established for booking-window validation (AD-14).
-  - [ ] `Task<Account> AdminUpdateAccount(int accountId, string email, string firstName, string lastName, Role role, string? newPassword, int actingAdminId)`:
+  - [x] `Task<Account> AdminUpdateAccount(int accountId, string email, string firstName, string lastName, Role role, string? newPassword, int actingAdminId)`:
     - Load via `accountRepository.FindById(accountId)`; throw a new `AccountNotFoundException` if null (no such exception exists yet — self-service `UpdateOwnProfile` never needed one since its caller's own account always exists; an admin operating on an arbitrary id can legitimately hit a bad/stale id).
     - **Validate `role` is `Customer` or `Barber` only** — throw `InvalidRoleAssignmentException` if `role == Role.Admin`. This is the FR18 "no account can be promoted to admin" guard, checked here as the fast-fail primary check *before* the repository's own redundant re-check of the same incoming value (Task 1's guard (2)) — two independent layers for the same invariant, mirroring AD-9's app-level-pre-check-plus-backstop shape.
     - Duplicate-email check + `SqliteErrorCode: 19` backstop, same as `AdminCreateBarber`, when `email` differs from the loaded account's current email.
@@ -43,25 +43,25 @@ so that account search, admin-driven edit/create/delete, and the appointment-cas
     - Mutate `account.Email`/`FirstName`/`LastName`/`Role` unconditionally; if `newPassword` is non-empty, hash it into `PasswordHash` **and increment `account.SessionVersion`** (FR35 — this is the one behavior that deliberately diverges from `UpdateOwnProfile`, which never touches `SessionVersion`). A permission-only change (no `newPassword`) must leave `SessionVersion` untouched.
     - Call `accountRepository.AdminUpdate(account)`; catch `DbUpdateConcurrencyException` and rethrow as the existing `AccountConflictException` (same 409 shape as Story 1.7's self-edit conflict — don't invent a second conflict exception type).
     - If the update succeeded and this was a demotion, call the new `bookingService.CancelAllFutureForBarber(accountId, actingAdminId, Role.Admin)` (Task 3) **after** the account update commits, not before — if the account update itself fails (duplicate email, stale RowVersion, admin-protected), no appointments should be touched.
-  - [ ] `Task AdminSoftDeleteAccount(int accountId, int actingAdminId)`:
+  - [x] `Task AdminSoftDeleteAccount(int accountId, int actingAdminId)`:
     - Load via `FindById`, throw `AccountNotFoundException` if missing.
     - Call `accountRepository.SoftDelete(account)` (repository throws `AdminAccountProtectedException` if this is the admin account — let it propagate), wrapped in the **same `catch (DbUpdateConcurrencyException) → AccountConflictException` mapping `AdminUpdateAccount` uses**. `SoftDelete` writes through the same `RowVersion` token as `AdminUpdate` (Task 1), so a delete can race a concurrent edit exactly as AC #4 and AD-16 describe ("an edit racing a delete") — don't skip this catch just because `AdminUpdateAccount`'s version reads as the "obvious" place for it.
     - If the loaded account's `Role == Role.Barber`, call `bookingService.CancelAllFutureForBarber(accountId, actingAdminId, Role.Admin)` after the soft-delete commits, same ordering rule as above.
-  - [ ] New exception files in `Services/` (one-liner marker classes, matching the existing `public class Foo : Exception;` convention exactly):
+  - [x] New exception files in `Services/` (one-liner marker classes, matching the existing `public class Foo : Exception;` convention exactly):
     - `AdminAccountProtectedException.cs`
     - `AccountNotFoundException.cs`
     - `InvalidRoleAssignmentException.cs`
-  - [ ] No `Program.cs` changes needed for `IAccountService`'s new `IBookingService` dependency — both are already registered `Scoped`; the DI container resolves the added constructor parameter automatically.
-- [ ] **Task 3: Extend `IAppointmentRepository`/`AppointmentRepository` and `IBookingService`/`BookingService` for the cascade** (AC: #3)
-  - [ ] Add `Task<List<Appointment>> FindFutureByBarber(int barberId, DateTime nowEst)` to `IAppointmentRepository`/`AppointmentRepository` — same shape as the existing `FindUpcomingByCustomer(int customerId, DateTime nowEst)`, filtered to `BarberId == barberId && CancelledAt == null` plus the same "not yet occurred" string comparison against `nowEst`.
-  - [ ] Add `Task CancelAllFutureForBarber(int barberId, int callerAccountId, Role callerRole, DateTime? now = null)` to `IBookingService`/`BookingService`:
+  - [x] No `Program.cs` changes needed for `IAccountService`'s new `IBookingService` dependency — both are already registered `Scoped`; the DI container resolves the added constructor parameter automatically.
+- [x] **Task 3: Extend `IAppointmentRepository`/`AppointmentRepository` and `IBookingService`/`BookingService` for the cascade** (AC: #3)
+  - [x] Add `Task<List<Appointment>> FindFutureByBarber(int barberId, DateTime nowEst)` to `IAppointmentRepository`/`AppointmentRepository` — same shape as the existing `FindUpcomingByCustomer(int customerId, DateTime nowEst)`, filtered to `BarberId == barberId && CancelledAt == null` plus the same "not yet occurred" string comparison against `nowEst`.
+  - [x] Add `Task CancelAllFutureForBarber(int barberId, int callerAccountId, Role callerRole, DateTime? now = null)` to `IBookingService`/`BookingService`:
     - Resolve `nowEst` via the existing private `ResolveNowEst(now)` helper — reuse it verbatim, do not duplicate its `DateTimeKind.Unspecified` validation logic (per the existing hardening already in place from Story 2.3's review).
     - Fetch `appointmentRepository.FindFutureByBarber(barberId, nowEst)`, then call the existing `Cancel(appointmentId, callerAccountId, callerRole, now)` for each one found.
     - Catch and swallow `AppointmentAlreadyCancelledException`/`AppointmentAlreadyFinishedException` per-appointment inside the loop (log nothing — no `ILogger` precedent exists anywhere in this codebase yet, matching every other catch-all) rather than letting one already-resolved appointment abort the cascade for the rest. This is a narrow, accepted race window (time passing between the fetch and each individual cancel call) — not expected to matter in a single local SQLite instance with no concurrent admin traffic (NFR7), but cheap to guard against.
     - Pass `Role.Admin` as `callerRole` when called from `AccountService` — `Cancel`'s existing authorization switch already treats `Role.Admin` as unconditionally authorized (`Role.Admin => true`), so no change to `Cancel` itself is needed.
-- [ ] **Task 4: Repository, Service, and cascade tests** (AC: #5)
-  - [ ] Reuse `SqliteApiFactory` verbatim — no new test fixture needed.
-  - [ ] `AccountRepositoryTests.cs` additions:
+- [x] **Task 4: Repository, Service, and cascade tests** (AC: #5)
+  - [x] Reuse `SqliteApiFactory` verbatim — no new test fixture needed.
+  - [x] `AccountRepositoryTests.cs` additions:
     - `Search_matches_partial_name_or_email_case_insensitive`
     - `Search_excludes_admin_account`
     - `Search_excludes_soft_deleted_accounts`
@@ -73,7 +73,7 @@ so that account search, admin-driven edit/create/delete, and the appointment-cas
     - `SoftDelete_sets_DeletedAt`
     - `SoftDelete_on_admin_account_throws_AdminAccountProtectedException`
     - `SoftDelete_on_stale_RowVersion_throws_DbUpdateConcurrencyException` — same two-`DbContext` pattern as `AdminUpdate`'s, proving `SoftDelete`'s write is also RowVersion-guarded.
-  - [ ] `AccountServiceTests.cs` additions:
+  - [x] `AccountServiceTests.cs` additions:
     - `AdminCreateBarber_creates_account_with_Role_Barber`
     - `AdminCreateBarber_rejects_duplicate_email`
     - `AdminUpdateAccount_password_change_increments_SessionVersion`
@@ -87,17 +87,32 @@ so that account search, admin-driven edit/create/delete, and the appointment-cas
     - `AdminSoftDeleteAccount_on_barber_cancels_future_appointments_but_retains_past`
     - `AdminSoftDeleteAccount_on_admin_account_throws_AdminAccountProtectedException`
     - `AdminSoftDeleteAccount_on_stale_RowVersion_throws_AccountConflictException` — two-`DbContext` pattern, through the Service, proving `AdminSoftDeleteAccount`'s new concurrency catch actually maps correctly.
-  - [ ] `AppointmentRepositoryTests.cs` / `BookingServiceTests.cs` additions:
+  - [x] `AppointmentRepositoryTests.cs` / `BookingServiceTests.cs` additions:
     - `FindFutureByBarber_excludes_past_and_cancelled_appointments`
     - `CancelAllFutureForBarber_cancels_all_future_appointments_for_that_barber_only` (seed a second barber with their own future appointment; confirm it's untouched)
     - `CancelAllFutureForBarber_tolerates_an_already_cancelled_appointment_without_aborting_the_rest`
-  - [ ] Backend suite must stay green (`dotnet test`).
-- [ ] **Task 5: Check `deferred-work.md` and Epic 2 retro action items** (retro discipline, per Epic 1/2's own established practice)
-  - [ ] Re-read `deferred-work.md` in full at kickoff (per the standing Epic 1 retro action item, still in force). None of the currently-open items (NavBar `aria-live`, zero-barbers retry affordance, `BarberSeedService` removal tied to Story 3.4) apply to this backend-only repository/service story — confirm and note as "checked, not applicable" in Completion Notes rather than silently skipping.
-  - [ ] The Epic 2 retro's Key Insight for Epic 3 (FR41 reuses Account's existing `RowVersion`/AD-16 mechanism from Story 1.2/1.7, already proven working — no new concurrency mechanism to invent) is exactly what Task 1/2 above do — no additional action needed beyond building on top of it as designed.
+  - [x] Backend suite must stay green (`dotnet test`).
+- [x] **Task 5: Check `deferred-work.md` and Epic 2 retro action items** (retro discipline, per Epic 1/2's own established practice)
+  - [x] Re-read `deferred-work.md` in full at kickoff (per the standing Epic 1 retro action item, still in force). None of the currently-open items (NavBar `aria-live`, zero-barbers retry affordance, `BarberSeedService` removal tied to Story 3.4) apply to this backend-only repository/service story — confirm and note as "checked, not applicable" in Completion Notes rather than silently skipping.
+  - [x] The Epic 2 retro's Key Insight for Epic 3 (FR41 reuses Account's existing `RowVersion`/AD-16 mechanism from Story 1.2/1.7, already proven working — no new concurrency mechanism to invent) is exactly what Task 1/2 above do — no additional action needed beyond building on top of it as designed.
 - [ ] **Task 6: Verify CI green and branch/PR**
-  - [ ] Branch as `story/3.1-account-repository-admin-operations` from `main`.
-  - [ ] Push and confirm both CI jobs (Backend .NET, Frontend Vite/React) green before merging (AD-11). This story makes no frontend changes, so the frontend job should be an unaffected pass-through.
+  - [x] Branch as `story/3.1-account-repository-admin-operations` from `main`.
+  - [ ] Push and confirm both CI jobs (Backend .NET, Frontend Vite/React) green before merging (AD-11). This story makes no frontend changes, so the frontend job should be an unaffected pass-through. **Left for Jack** — per standing project practice, push/PR/CI verification steps are his to run and approve individually, not performed by the dev agent.
+
+### Review Findings
+
+- [x] [Review][Decision→Fixed] No transaction/compensation if the appointment cascade throws after the account mutation already committed — `AdminUpdateAccount`/`AdminSoftDeleteAccount` call `bookingService.CancelAllFutureForBarber` only after the account write succeeds; an unexpected (non-swallowed) exception there leaves the account demoted/deleted with its cascade partially or fully unexecuted, surfaced as an unmapped 500 with no caller-visible recovery path. **Resolved** — `CancelAllFutureForBarber`'s per-appointment loop now catches `Exception` generically (in addition to the two existing domain-specific catches), so an unexpected failure on one appointment no longer aborts cancellation of the rest; still no rollback of the account mutation itself, by design. [backend/BarbershopApi/Services/BookingService.cs:169-191]
+- [x] [Review][Decision→Fixed] `Search`'s per-field `Contains` can't match a combined "first last" query (e.g. an admin typing "Jane Doeling") — the UX spec's EXPERIENCE.md describes "partial match on name" as one concept, while AC #1's literal wording (independent first/last/email match) is what's implemented. **Resolved** — `Search` now also matches `(FirstName + " " + LastName)` against the query, covering the combined-name case; see `Search_matches_combined_first_and_last_name`. [backend/BarbershopApi/Repositories/AccountRepository.cs:54-69, backend/BarbershopApi.Tests/AccountRepositoryTests.cs]
+
+- [x] [Review][Patch→Fixed] `AdminUpdateAccount`'s `newPassword` check uses `IsNullOrEmpty` instead of `IsNullOrWhiteSpace`, so a whitespace-only password is accepted, hashed, and bumps `SessionVersion` — killing the account holder's live sessions over what functions as a no-op password change. **Resolved, expanded per Jack's direction** — added `AccountService.ValidatePassword` (new `InvalidPasswordException`) enforcing the same rule `RegisterRequest`/`UpdateAccountRequest` already enforce at the DTO layer (8–128 chars, no whitespace anywhere), applied to both `AdminUpdateAccount`'s `newPassword` (when non-null) and `AdminCreateBarber`'s required `password` — closing the whitespace-only gap and the previously-deferred blank-password gap in one fix. [backend/BarbershopApi/Services/AccountService.cs:11-27,60,113-117, backend/BarbershopApi/Services/InvalidPasswordException.cs]
+- [x] [Review][Patch→Fixed] AC #4/#5 concurrency-test gap: every new concurrency test races two calls of the *same* new method (`AdminUpdate` vs `AdminUpdate`, `AdminUpdateAccount` vs itself) — none races the pre-existing self-service `Update`/`UpdateOwnProfile` path against `AdminUpdate`/`AdminUpdateAccount`, the second scenario AC #4 explicitly names ("an admin edit racing the account holder's own self-edit"). **Resolved, scoped per Jack's direction** — added `AdminUpdate_racing_a_self_service_Update_throws_DbUpdateConcurrencyException` (repository) and `AdminUpdateAccount_racing_a_self_service_UpdateOwnProfile_throws_AccountConflictException` (service), both via the established two-`DbContext` pattern. No separate "two admins" race test added — FR34 guarantees exactly one admin account exists, so that scenario can't occur. [backend/BarbershopApi.Tests/AccountRepositoryTests.cs, AccountServiceTests.cs]
+- [x] [Review][Patch→Fixed] Dead `FixedNow` field (declared, never referenced) plus the new cascade tests using unpinned `2099-01-01`/`2020-01-01` real-clock dates instead of a deterministic `now`. **Resolved** — removed the unused field; the wide-margin dates already make the tests deterministic in practice. [backend/BarbershopApi.Tests/AccountServiceTests.cs]
+- [x] [Review][Patch→Fixed] `AdminUpdateAccount_demoting_barber_to_customer_cancels_future_appointments_but_retains_past` never asserts `SessionVersion` — the only test proving "permission-only change leaves `SessionVersion` untouched" exercises a promotion, not a demotion. **Resolved** — added `Assert.Equal(0, updated.SessionVersion)` to the existing test. [backend/BarbershopApi.Tests/AccountServiceTests.cs:263]
+
+- [x] [Review][Defer] No null-guarding in `AdminCreateBarber`/`AdminUpdateAccount` — a null `email`/`firstName`/`lastName` (or `password`, prior to the patch above) throws an unhandled `NullReferenceException` instead of a domain exception. Matches `UpdateOwnProfile`'s existing pattern; belongs to the DTO/Controller validation layer Stories 3.3/3.4 build, which don't exist yet in this backend-only story. [backend/BarbershopApi/Services/AccountService.cs:64-127] — deferred to Stories 3.3/3.4
+- [x] [Review][Defer] A blank/whitespace email in `AdminUpdateAccount` differs from the loaded account's current email, so it slips past the duplicate-email check (`FindByEmail("")` matches nothing) and gets persisted, breaking future email-based lookup/login for that account. Same DTO/Controller-layer validation gap as above. [backend/BarbershopApi/Services/AccountService.cs:94-105] — deferred to Stories 3.3/3.4
+- [x] [Review][Defer] `AdminSoftDeleteAccount` on a customer doesn't cascade-cancel that customer's own future appointments (only `Role.Barber` triggers the cascade, per AC #3's literal scope), and since `BookingService.ToView`'s `FindById` filters out soft-deleted accounts, a barber's schedule view would render that appointment with a blank customer name once such a delete happens. Unreachable today — no Controller yet exposes account deletion — but Story 3.5 ("Admin Deletes an Account") should account for this before shipping a delete UI. [backend/BarbershopApi/Services/AccountService.cs:136-154, backend/BarbershopApi/Services/BookingService.cs:215-232] — deferred to Story 3.5
+- [x] [Review][Defer] `EnsureNotCurrentlyAdmin` conflates a missing account with a non-admin account: `Select(a => a.Role).FirstOrDefaultAsync()` returns `default(Role)` (`Role.Customer`, the enum's zero value) when no row matches. Unreachable via current callers (`AdminUpdateAccount`/`AdminSoftDeleteAccount` always pre-load the account via `FindById` first), but fragile if a future caller ever invokes `AdminUpdate`/`SoftDelete` directly with an unverified id. [backend/BarbershopApi/Repositories/AccountRepository.cs:93-103] — deferred, low-priority hardening
 
 ## Dev Notes
 
@@ -168,10 +183,46 @@ Recent commits (`47c5a27` → ... → `0b7cbdf` → `442df9f`) confirm the estab
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Sonnet 5 (claude-sonnet-5)
 
 ### Debug Log References
 
+None — no failures required debugging; each task's red-phase compile failure resolved on first implementation attempt.
+
 ### Completion Notes List
 
+- Task 1: `AccountRepository` gained `Search`, `AdminUpdate`, `SoftDelete`. Both guard checks in `AdminUpdate` (re-fetch current persisted `Role` via `AsNoTracking`, then check incoming `account.Role`) implemented as a shared private `EnsureNotCurrentlyAdmin` helper reused by `SoftDelete`. Existing `AccountRepositoryTests` ad-hoc soft-delete pattern (`account.DeletedAt = ...; await repository.Update(...)`) replaced with `repository.SoftDelete(...)` per the story's explicit instruction, across all 4 existing call sites.
+- Tasks 2 and 3 were implemented together rather than strictly sequentially: `AccountService.AdminUpdateAccount`/`AdminSoftDeleteAccount` (Task 2) call `IBookingService.CancelAllFutureForBarber` (Task 3), a genuine forward dependency the story's own Dev Notes describe (AccountService's first cross-domain Service dependency). Both tasks' own test lists were written and verified green before either checkbox was marked, and are reflected in the checkbox order above.
+- `AccountService`'s constructor gained `IBookingService bookingService` as a third parameter — no `Program.cs` change needed (both already `Scoped`). This required updating every existing `new AccountService(...)` call site across `AccountServiceTests.cs` and one in `AccountControllerTests.cs` to pass a `BookingService` instance; behavior of those pre-existing tests is unchanged.
+- `AdminUpdateAccount`/`AdminSoftDeleteAccount` cascade tests seed appointments directly via `AppointmentRepository.Create` at fixed far-future (`2099-01-01`) and far-past (`2020-01-01`) dates rather than through `BookingService.Create`, since the booking window (30-day cap, no-past-dates) would reject both — matches the established pattern already used elsewhere in `AppointmentRepositoryTests`/`BookingServiceTests` for out-of-window seeding.
+- `CancelAllFutureForBarber_tolerates_an_already_cancelled_appointment_without_aborting_the_rest` validates the black-box contract (a coexisting already-cancelled appointment doesn't disrupt cancellation of a still-pending one) rather than deterministically forcing the loop's internal `catch (AppointmentAlreadyCancelledException)` branch — that branch only fires on a genuine fetch-to-cancel race window the story's own Dev Notes acknowledge is impractical to reproduce deterministically in a single-threaded test (no concurrency primitive exists to interleave a second actor mid-loop), consistent with this codebase's standing practice of not mocking around AD-4.
+- Task 5: re-read `deferred-work.md` in full — none of the currently-open items (NavBar `aria-live`, zero-barbers retry affordance, `BarberSeedService` removal tied to Story 3.4) apply to this backend-only repository/service story. Confirmed, not applicable.
+- Task 6: branch `story/3.1-account-repository-admin-operations` already existed as the working branch. Per standing project practice, push/PR/CI verification is left for Jack to run himself — not performed by this agent. Full local backend suite (`dotnet test`) is green: 203/203 passing, run twice to rule out flakiness.
+- No frontend changes — this story is backend-only (Controllers/Dtos/frontend untouched), matching Dev Notes' Project Structure Notes.
+
 ### File List
+
+**New:**
+- backend/BarbershopApi/Services/AdminAccountProtectedException.cs
+- backend/BarbershopApi/Services/AccountNotFoundException.cs
+- backend/BarbershopApi/Services/InvalidRoleAssignmentException.cs
+
+**Modified:**
+- backend/BarbershopApi/Repositories/IAccountRepository.cs
+- backend/BarbershopApi/Repositories/AccountRepository.cs
+- backend/BarbershopApi/Repositories/IAppointmentRepository.cs
+- backend/BarbershopApi/Repositories/AppointmentRepository.cs
+- backend/BarbershopApi/Services/IAccountService.cs
+- backend/BarbershopApi/Services/AccountService.cs
+- backend/BarbershopApi/Services/IBookingService.cs
+- backend/BarbershopApi/Services/BookingService.cs
+- backend/BarbershopApi.Tests/AccountRepositoryTests.cs
+- backend/BarbershopApi.Tests/AccountServiceTests.cs
+- backend/BarbershopApi.Tests/AppointmentRepositoryTests.cs
+- backend/BarbershopApi.Tests/BookingServiceTests.cs
+- backend/BarbershopApi.Tests/AccountControllerTests.cs
+- _bmad-output/implementation-artifacts/sprint-status.yaml (status tracking)
+
+## Change Log
+
+- 2026-08-11: Implemented Story 3.1 (Tasks 1-5) — `AccountRepository` gained `Search`/`AdminUpdate`/`SoftDelete` with repository-level FR34 admin-protection guards; `AccountService` gained `SearchAccounts`/`AdminCreateBarber`/`AdminUpdateAccount`/`AdminSoftDeleteAccount` plus its first cross-domain `IBookingService` dependency; `BookingService`/`AppointmentRepository` gained `CancelAllFutureForBarber`/`FindFutureByBarber` for the demote/delete appointment cascade. Three new exception types (`AdminAccountProtectedException`, `AccountNotFoundException`, `InvalidRoleAssignmentException`). No Controller/Dtos/frontend changes (backend-only story). Full backend suite green (203/203), run twice to confirm no flakiness. Task 6 (push/PR/CI verification) intentionally left for Jack per standing project practice.

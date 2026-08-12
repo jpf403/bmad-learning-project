@@ -10,4 +10,7 @@ public interface IAccountRepository
     Task Update(Account account);
     Task<bool> AdminExists();
     Task<List<Account>> FindAllByRole(Role role);
+    Task<List<Account>> Search(string query);
+    Task AdminUpdate(Account account);
+    Task SoftDelete(Account account);
 }
