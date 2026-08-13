@@ -4,7 +4,7 @@ baseline_commit: 5882f61350a144e7dbd5fcdf13b695bca4aa2e51
 
 # Story 3.2: Admin Account Search
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -22,37 +22,37 @@ so that I can quickly find the account I need to manage.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Add the search endpoint to the existing `AccountController`** (AC: #1, #2, #5)
-  - [ ] Add `public record AccountSummary(int Id, string Email, string FirstName, string LastName, Role Role);` to `backend/BarbershopApi/Dtos/`. **Do not reuse `MeResponse`** even though the shape is identical today — `MeResponse` is the caller's-own-identity contract (`GET /api/auth/me`, `PUT /api/account/me`); this is a different contract (an admin's view of an arbitrary target account in a list) that happens to coincide in shape now. Coupling them would make an independent future change to either endpoint's contract awkward. This matches the project's own existing precedent of one DTO per endpoint context (`BarberSummary` vs `MeResponse` vs `AppointmentView` are all distinct despite overlapping fields).
-  - [ ] Add `[HttpGet("search")]` to `AccountController` (`GET /api/account/search?query=...`):
+- [x] **Task 1: Add the search endpoint to the existing `AccountController`** (AC: #1, #2, #5)
+  - [x] Add `public record AccountSummary(int Id, string Email, string FirstName, string LastName, Role Role);` to `backend/BarbershopApi/Dtos/`. **Do not reuse `MeResponse`** even though the shape is identical today — `MeResponse` is the caller's-own-identity contract (`GET /api/auth/me`, `PUT /api/account/me`); this is a different contract (an admin's view of an arbitrary target account in a list) that happens to coincide in shape now. Coupling them would make an independent future change to either endpoint's contract awkward. This matches the project's own existing precedent of one DTO per endpoint context (`BarberSummary` vs `MeResponse` vs `AppointmentView` are all distinct despite overlapping fields).
+  - [x] Add `[HttpGet("search")]` to `AccountController` (`GET /api/account/search?query=...`):
     - `[Authorize(Roles = "Admin")]` on the action, **in addition to** the class-level `[Authorize]` (ASP.NET Core combines both — caller must be authenticated *and* hold the Admin role). This is the first production endpoint in the codebase to use attribute-based role gating rather than a manual `HttpContext.Items["Account"]` role branch (which `BookingController.GetSchedule` uses because it needs multi-role *branching* logic, not a hard single-role gate). Attribute gating is provably correct here: `SessionLivenessMiddleware` (registered before `UseAuthorization()` in `Program.cs`) already refreshes the `ClaimTypes.Role` claim from a fresh DB read on every request (AD-2), and `RoleGatingTests.cs`/`RoleGateTestController` already prove `[Authorize(Roles = "Admin")]` correctly yields 401 (no/invalid token) vs 403 (wrong role) vs 200 (admin) against that exact middleware pipeline — reuse that proven mechanism rather than hand-rolling a redundant check.
     - Parameter: `[FromQuery] string? query`.
     - Body: `var accounts = await accountService.SearchAccounts(query ?? string.Empty); return Ok(accounts.Select(a => new AccountSummary(a.Id, a.Email, a.FirstName, a.LastName, a.Role)));`
     - No try/catch needed — `SearchAccounts`/`Search` never throw (confirmed by reading `AccountRepository.Search`/`AccountService.SearchAccounts`, Story 3.1).
-  - [ ] No `IAccountService`/`AccountService`/`AccountRepository` changes — `Search`/`SearchAccounts` already exist, already exclude `Role.Admin` and soft-deleted rows, and already return `[]` for a blank/whitespace query (Story 3.1). This story is Controller + DTO only on the backend.
-- [ ] **Task 2: `AccountControllerTests.cs` additions** (AC: #2, #5)
-  - [ ] `Search_as_admin_returns_matching_accounts` — register two accounts (one Customer, one Barber via direct role-flip like `RoleGatingTests` does), search by a shared name substring, assert both appear with correct `Email`/`FirstName`/`LastName`/`Role`.
-  - [ ] `Search_excludes_the_admin_account_from_results` — search with a query that would also match the seeded/promoted admin's name; assert the admin never appears in the response body (AC #5 — this is the HTTP-level proof that Story 3.1's repository-level exclusion actually reaches the caller; the repository/service layers are already unit-tested, this test is new because no HTTP surface existed before this story).
-  - [ ] `Search_with_blank_query_returns_empty_array`.
-  - [ ] `Search_with_no_matches_returns_empty_array`.
-  - [ ] `Search_as_non_admin_returns_403` — parametrize or duplicate for both `Role.Customer` and `Role.Barber` callers.
-  - [ ] `Search_without_access_token_returns_401`.
-  - [ ] Reuse `RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, email)` (internal static, already reused cross-file by `BookingControllerTests`) to obtain an authenticated admin caller — do not duplicate that register→promote→login dance a third time in this file.
-- [ ] **Task 3: `searchAccounts` in `AccountApi.js`** (AC: #2, #3, #4)
-  - [ ] Add `export async function searchAccounts(accessToken, query)` — `GET /api/account/search`, built with `URLSearchParams` exactly like `BookingApi.js`'s `getSchedule` (`params.set('query', query)` only when `query` is truthy after trimming, so an empty/whitespace call omits the param entirely rather than sending `?query=`). Success envelope `{ ok: true, accounts: body }`; failure envelope `{ ok: false, status, problem }` — same shape as every other `*Api.js` function (`getBarbers`, `getSchedule`).
-- [ ] **Task 4: `AdminPanel` page, route, and styling** (AC: #1, #2, #3, #4, #5)
-  - [ ] Create `frontend/src/pages/AdminPanel.jsx` + `frontend/src/pages/AdminPanel.css`. **Name it `AdminPanel`, not `AdminAccounts`** — per `EXPERIENCE.md`'s Information Architecture, the `/admin` route is one dedicated surface hosting search *and* (in Stories 3.3–3.5) the edit/create/delete popups; naming the file for just this story's slice would be misleading once those stories extend the same page. Stories 3.3/3.4/3.5 add popups and buttons to this same file — do not create separate pages for them.
-  - [ ] Page state: `query` (controlled input string), `searched` (bool — has a search actually been submitted yet), `accounts` (array), `loading` (bool), `error` (string). Use a `requestIdRef` generation counter exactly like `MySchedule.jsx`'s `loadDate` (`frontend/src/pages/MySchedule.jsx:40,75,78`) so a stale response from an earlier submit can't clobber a newer one.
-  - [ ] Wrap the search input in a `<form onSubmit={...}>` so both Enter and a "Search" button submit — the AC's wording ("enters a search query... when submitted") describes an explicit submit, not live/debounced search; don't add a debounce mechanism nobody asked for. On submit: if `query.trim()` is empty, do nothing (stay on/return to the AC #3 "before any search" state — don't call the API or ever show "No accounts match your search" for an empty query, since AC #3 and AC #4 are meant to be mutually exclusive triggers). Otherwise call `searchAccounts`, set `searched = true`, and on success set `accounts`; on failure set a generic `error` (own state, same "message + Try again button" shape `MySchedule.jsx` already establishes for fetch failures — EXPERIENCE.md doesn't specify a search-failure state, so extend the app's one existing convention rather than inventing a new shape).
-  - [ ] Render, in order: an `<h1>Admin Panel</h1>` (matches `EXPERIENCE.md`'s IA naming and `DESIGN.md`'s `{typography.h1}` example usage of exactly this string); the search form (`Input` component, `label="Search"`, `placeholder="Name or email"`); then exactly one of:
+  - [x] No `IAccountService`/`AccountService`/`AccountRepository` changes — `Search`/`SearchAccounts` already exist, already exclude `Role.Admin` and soft-deleted rows, and already return `[]` for a blank/whitespace query (Story 3.1). This story is Controller + DTO only on the backend.
+- [x] **Task 2: `AccountControllerTests.cs` additions** (AC: #2, #5)
+  - [x] `Search_as_admin_returns_matching_accounts` — register two accounts (one Customer, one Barber via direct role-flip like `RoleGatingTests` does), search by a shared name substring, assert both appear with correct `Email`/`FirstName`/`LastName`/`Role`.
+  - [x] `Search_excludes_the_admin_account_from_results` — search with a query that would also match the seeded/promoted admin's name; assert the admin never appears in the response body (AC #5 — this is the HTTP-level proof that Story 3.1's repository-level exclusion actually reaches the caller; the repository/service layers are already unit-tested, this test is new because no HTTP surface existed before this story).
+  - [x] `Search_with_blank_query_returns_empty_array`.
+  - [x] `Search_with_no_matches_returns_empty_array`.
+  - [x] `Search_as_non_admin_returns_403` — parametrize or duplicate for both `Role.Customer` and `Role.Barber` callers.
+  - [x] `Search_without_access_token_returns_401`.
+  - [x] Reuse `RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, email)` (internal static, already reused cross-file by `BookingControllerTests`) to obtain an authenticated admin caller — do not duplicate that register→promote→login dance a third time in this file.
+- [x] **Task 3: `searchAccounts` in `AccountApi.js`** (AC: #2, #3, #4)
+  - [x] Add `export async function searchAccounts(accessToken, query)` — `GET /api/account/search`, built with `URLSearchParams` exactly like `BookingApi.js`'s `getSchedule` (`params.set('query', query)` only when `query` is truthy after trimming, so an empty/whitespace call omits the param entirely rather than sending `?query=`). Success envelope `{ ok: true, accounts: body }`; failure envelope `{ ok: false, status, problem }` — same shape as every other `*Api.js` function (`getBarbers`, `getSchedule`).
+- [x] **Task 4: `AdminPanel` page, route, and styling** (AC: #1, #2, #3, #4, #5)
+  - [x] Create `frontend/src/pages/AdminPanel.jsx` + `frontend/src/pages/AdminPanel.css`. **Name it `AdminPanel`, not `AdminAccounts`** — per `EXPERIENCE.md`'s Information Architecture, the `/admin` route is one dedicated surface hosting search *and* (in Stories 3.3–3.5) the edit/create/delete popups; naming the file for just this story's slice would be misleading once those stories extend the same page. Stories 3.3/3.4/3.5 add popups and buttons to this same file — do not create separate pages for them.
+  - [x] Page state: `query` (controlled input string), `searched` (bool — has a search actually been submitted yet), `accounts` (array), `loading` (bool), `error` (string). Use a `requestIdRef` generation counter exactly like `MySchedule.jsx`'s `loadDate` (`frontend/src/pages/MySchedule.jsx:40,75,78`) so a stale response from an earlier submit can't clobber a newer one.
+  - [x] Wrap the search input in a `<form onSubmit={...}>` so both Enter and a "Search" button submit — the AC's wording ("enters a search query... when submitted") describes an explicit submit, not live/debounced search; don't add a debounce mechanism nobody asked for. On submit: if `query.trim()` is empty, do nothing (stay on/return to the AC #3 "before any search" state — don't call the API or ever show "No accounts match your search" for an empty query, since AC #3 and AC #4 are meant to be mutually exclusive triggers). Otherwise call `searchAccounts`, set `searched = true`, and on success set `accounts`; on failure set a generic `error` (own state, same "message + Try again button" shape `MySchedule.jsx` already establishes for fetch failures — EXPERIENCE.md doesn't specify a search-failure state, so extend the app's one existing convention rather than inventing a new shape).
+  - [x] Render, in order: an `<h1>Admin Panel</h1>` (matches `EXPERIENCE.md`'s IA naming and `DESIGN.md`'s `{typography.h1}` example usage of exactly this string); the search form (`Input` component, `label="Search"`, `placeholder="Name or email"`); then exactly one of:
     - `!searched` → `<p>Search by name or email to find an account.</p>` (AC #3, exact copy).
     - `loading` → a `Searching…` loading line (same convention as `Loading…` elsewhere).
     - `error` → error message + "Try again" button that resubmits the last query.
     - `searched && accounts.length === 0` → `<p>No accounts match your search.</p>` (AC #4, exact copy).
     - `searched && accounts.length > 0` → a list of rows, one per account.
-  - [ ] Each result row is a full-width `<button type="button" className="admin-account-row">` (native `<button>`, not a `<div>` with manual key handlers — gets Tab-focus, Enter/Space activation, and a visible focus ring for free, satisfying `EXPERIENCE.md`'s accessibility note that admin rows are fully custom, not Radix-backed, so keyboard operability must be deliberate). Row content: full name, email, and role label — DESIGN.md's `admin-account-row` token only specifies the background/hover/foreground styling, not which fields render, so this is this story's own call (an admin needs name+email+role to tell accounts apart before Story 3.3's edit popup exists). **`onClick` is an intentional no-op placeholder** (e.g. a comment-only empty handler) — Story 3.3 is explicitly "an account row is clicked → the edit popup opens"; do not build a stub popup or partial edit UI now, just the clickable/focusable row shell AC #2 requires.
-  - [ ] `AdminPanel.css`: reuse the `admin-account-row` tokens already established for the shared "tinted sections" look (`{colors.neutral}` resting fill / `{colors.border}` hover, no border, `{colors.text}` foreground — same family as `.schedule-row-open`/`.schedule-row-booked` in `MySchedule.css`). Add a `@media (max-width: 639px)` block stacking the search bar full-width above a full-width stack of rows (per `EXPERIENCE.md`'s Responsive & Platform table: "Admin Panel's search bar sits above a full-width stack of account rows") — the project's other page CSS files (`NavBar.css`, `MySchedule.css`) already use this exact breakpoint; match it, don't introduce a different one.
-  - [ ] Add the route to `frontend/src/App.jsx`, following the exact `RequireRole` pattern already used for `/my-schedule`:
+  - [x] Each result row is a full-width `<button type="button" className="admin-account-row">` (native `<button>`, not a `<div>` with manual key handlers — gets Tab-focus, Enter/Space activation, and a visible focus ring for free, satisfying `EXPERIENCE.md`'s accessibility note that admin rows are fully custom, not Radix-backed, so keyboard operability must be deliberate). Row content: full name, email, and role label — DESIGN.md's `admin-account-row` token only specifies the background/hover/foreground styling, not which fields render, so this is this story's own call (an admin needs name+email+role to tell accounts apart before Story 3.3's edit popup exists). **`onClick` is an intentional no-op placeholder** (e.g. a comment-only empty handler) — Story 3.3 is explicitly "an account row is clicked → the edit popup opens"; do not build a stub popup or partial edit UI now, just the clickable/focusable row shell AC #2 requires.
+  - [x] `AdminPanel.css`: reuse the `admin-account-row` tokens already established for the shared "tinted sections" look (`{colors.neutral}` resting fill / `{colors.border}` hover, no border, `{colors.text}` foreground — same family as `.schedule-row-open`/`.schedule-row-booked` in `MySchedule.css`). Add a `@media (max-width: 639px)` block stacking the search bar full-width above a full-width stack of rows (per `EXPERIENCE.md`'s Responsive & Platform table: "Admin Panel's search bar sits above a full-width stack of account rows") — the project's other page CSS files (`NavBar.css`, `MySchedule.css`) already use this exact breakpoint; match it, don't introduce a different one.
+  - [x] Add the route to `frontend/src/App.jsx`, following the exact `RequireRole` pattern already used for `/my-schedule`:
     ```jsx
     <Route
       path="/admin"
@@ -64,18 +64,24 @@ so that I can quickly find the account I need to manage.
     />
     ```
     This resolves the pre-existing dangling nav link — `NavBar.jsx:20` already declares `{ label: 'Admin Panel', to: '/admin', roles: ['Admin'] }` with no matching route in `App.jsx` today; no `NavBar.jsx`/`NavBar.css` change is needed, only `App.jsx`. (`NavBar.test.jsx` already stubs its own independent `<Route path="/admin">` and doesn't render the real `App`, so it needs no change either.)
-- [ ] **Task 5: `AdminPanel.test.jsx`** (AC: #1, #2, #3, #4, #5)
-  - [ ] Renders "Search by name or email to find an account." before any search.
-  - [ ] Submitting a blank/whitespace-only query does not call `searchAccounts` and leaves the "before any search" message visible.
-  - [ ] Submitting a query that returns matches renders one row per account (name + email visible).
-  - [ ] Submitting a query that returns no matches shows "No accounts match your search."
-  - [ ] A failed fetch shows the error message + "Try again" button; clicking it resubmits the same query.
-  - [ ] Stub `searchAccounts` directly (`vi.fn()`/`vi.spyOn`, per this project's frontend testing convention — no MSW, AD-4) rather than mocking `fetch` for this component's own tests.
-- [ ] **Task 6: Check `deferred-work.md`** (retro discipline, per the standing Epic 1 action item still in force)
-  - [ ] Re-read `deferred-work.md` in full at kickoff. None of the currently-open items apply directly to this story's scope (search-only, no edit/create/delete, no cascade) — confirm and note as "checked, not applicable" in Completion Notes. The four items deferred from Story 3.1's review (null-guarding on `AdminCreateBarber`/`AdminUpdateAccount`, blank-email slipping past duplicate-email check, customer soft-delete not cascading, `EnsureNotCurrentlyAdmin`'s missing-vs-non-admin conflation) are explicitly scoped to Stories 3.3/3.4/3.5, not this one.
+- [x] **Task 5: `AdminPanel.test.jsx`** (AC: #1, #2, #3, #4, #5)
+  - [x] Renders "Search by name or email to find an account." before any search.
+  - [x] Submitting a blank/whitespace-only query does not call `searchAccounts` and leaves the "before any search" message visible.
+  - [x] Submitting a query that returns matches renders one row per account (name + email visible).
+  - [x] Submitting a query that returns no matches shows "No accounts match your search."
+  - [x] A failed fetch shows the error message + "Try again" button; clicking it resubmits the same query.
+  - [x] Stub `searchAccounts` directly (`vi.fn()`/`vi.spyOn`, per this project's frontend testing convention — no MSW, AD-4) rather than mocking `fetch` for this component's own tests.
+- [x] **Task 6: Check `deferred-work.md`** (retro discipline, per the standing Epic 1 action item still in force)
+  - [x] Re-read `deferred-work.md` in full at kickoff. None of the currently-open items apply directly to this story's scope (search-only, no edit/create/delete, no cascade) — confirm and note as "checked, not applicable" in Completion Notes. The four items deferred from Story 3.1's review (null-guarding on `AdminCreateBarber`/`AdminUpdateAccount`, blank-email slipping past duplicate-email check, customer soft-delete not cascading, `EnsureNotCurrentlyAdmin`'s missing-vs-non-admin conflation) are explicitly scoped to Stories 3.3/3.4/3.5, not this one.
 - [ ] **Task 7: Verify CI green and branch/PR**
-  - [ ] Branch as `story/3.2-admin-account-search` from `main`.
+  - [x] Branch as `story/3.2-admin-account-search` from `main`.
   - [ ] Push and confirm both CI jobs (Backend .NET, Frontend Vite/React) green before merging (AD-11). **Left for Jack** — per standing project practice, push/PR/CI verification steps are his to run and approve individually, not performed by the dev agent.
+
+### Review Findings
+
+- [x] [Review][Patch] `AdminPanel.jsx` drops the `isMountedRef` unmount guard that `MySchedule.jsx` (this story's own designated pattern to follow) pairs with its `requestIdRef` generation counter — if an admin navigates away mid-search, the resolved fetch still calls `setLoading`/`setSearched`/`setAccounts`/`setError` on an unmounted component. [frontend/src/pages/AdminPanel.jsx] — Fixed: added `isMountedRef` guard mirroring `MySchedule.jsx`.
+- [x] [Review][Patch] Neither the "Search" submit button nor the "Try again" button is `disabled` while `loading` is true, unlike every other submit form in the codebase (`ScheduleAppointment.jsx`, `Login.jsx` both disable their submit button during in-flight requests) — a user can double-click and fire redundant concurrent requests. [frontend/src/pages/AdminPanel.jsx:64,76-78] — Fixed: `disabled={loading}` added to the Search submit button (the only one that stays mounted while `loading` is true — the error-state "Try again" button unmounts as soon as loading starts, so it carried no real double-click risk).
+- [x] [Review][Patch] `runSearch`'s failure branch has no special case for a `401` (expired/invalid access token) — every other page that calls an authenticated endpoint (`Account.jsx:131-135`) logs the user out and redirects to `/login` with a "session expired" message on 401; `AdminPanel` instead shows the generic error + "Try again," which just repeats the same expired-token request forever. [frontend/src/pages/AdminPanel.jsx] — Fixed: added a `result.status === 401` branch that calls `logout()` and navigates to `/login` with the same session-expired message `Account.jsx` uses.
 
 ## Dev Notes
 
@@ -148,8 +154,41 @@ Recent commits: `5882f61` (Story 3.1 merge, current `main` tip) → `d84f877` �
 
 ### Agent Model Used
 
+Claude Sonnet 5 (claude-sonnet-5)
+
 ### Debug Log References
+
+- Backend: `dotnet test` — 213/213 passed (7 new `AccountControllerTests` cases for the search endpoint, no regressions).
+- Frontend: `npx vitest run` — 20 files / 151 tests passed, including new `AdminPanel.test.jsx` (5 tests). `npx eslint .` clean. `npx prettier --check .` clean after one `--write` pass on `AdminPanel.jsx`.
+- RED confirmed before implementation on both sides: backend's 7 new Search tests failed with 404 (no endpoint) before `AccountController.Search` was added; frontend's `AdminPanel.test.jsx` failed to resolve `./AdminPanel` before the component existed.
+- One self-caught test bug: the first run of the frontend "Try again" test showed `searchAccounts` called 4 times instead of 2 — the module-level `vi.fn()` from `vi.mock('../api/AccountApi')` was accumulating calls across tests in the file since nothing reset it between tests. Fixed with `searchAccounts.mockReset()` in `beforeEach`; not a component bug.
 
 ### Completion Notes List
 
+- Task 1/2 (backend): Added `AccountSummary` DTO and `GET /api/account/search` on the existing `AccountController`, gated with `[Authorize(Roles = "Admin")]` per the story's attribute-based-gating decision. No `Service`/`Repository` changes — `SearchAccounts`/`Search` already existed from Story 3.1. 7 new `AccountControllerTests` cases cover matching, admin-exclusion, blank query, no-match, non-admin 403 (Customer + Barber), and missing-token 401.
+- Task 3 (frontend API): Added `searchAccounts(accessToken, query)` to `AccountApi.js`, following `BookingApi.js#getSchedule`'s `URLSearchParams`-omit-when-blank pattern and the project's standard `{ ok, accounts }` / `{ ok: false, status, problem }` envelope.
+- Task 4/5 (frontend page): Built `AdminPanel.jsx` + `AdminPanel.css` per the story's exact state/render-order spec (`query`/`searched`/`accounts`/`loading`/`error`, `requestIdRef` generation counter matching `MySchedule.jsx`'s pattern), wired the `/admin` route in `App.jsx` behind `RequireRole roles={['Admin']}` (no `NavBar.jsx` change needed — the link already existed). Result rows are native `<button>` elements with an intentional no-op `onClick` (Story 3.3 owns the edit popup). 5 new `AdminPanel.test.jsx` cases stub `searchAccounts` directly (no MSW, no `fetch` mocking for this component's own behavior).
+- Task 6: Re-read `deferred-work.md` in full at kickoff — confirmed none of the currently-open items apply to this story's scope (search-only, no edit/create/delete, no cascade). The four items deferred from Story 3.1's review are explicitly scoped to Stories 3.3/3.4/3.5.
+- Task 7: Branch `story/3.2-admin-account-search` already existed from story creation. Push/PR/CI verification intentionally left unchecked for Jack, per standing project practice (see Story 3.1's identical Task 6 precedent).
+
 ### File List
+
+**Backend — new:**
+- `backend/BarbershopApi/Dtos/AccountSummary.cs`
+
+**Backend — modified:**
+- `backend/BarbershopApi/Controllers/AccountController.cs`
+- `backend/BarbershopApi.Tests/AccountControllerTests.cs`
+
+**Frontend — new:**
+- `frontend/src/pages/AdminPanel.jsx`
+- `frontend/src/pages/AdminPanel.css`
+- `frontend/src/pages/AdminPanel.test.jsx`
+
+**Frontend — modified:**
+- `frontend/src/api/AccountApi.js`
+- `frontend/src/App.jsx`
+
+## Change Log
+
+- 2026-08-12: Implemented Story 3.2 (Tasks 1-6) — `AccountController` gained its second action, `GET /api/account/search`, gated with `[Authorize(Roles = "Admin")]` (this codebase's first attribute-based role gate) and backed by the new `AccountSummary` DTO. Frontend gained the `AdminPanel` page (search form, four render states, `admin-account-row` result rows) wired to the previously-dangling `/admin` nav link via `RequireRole`, plus `searchAccounts` in `AccountApi.js`. Backend suite green (213/213); frontend suite green (151/151, 20 files); ESLint and Prettier clean. Task 7 (push/PR/CI verification) intentionally left for Jack per standing project practice.
