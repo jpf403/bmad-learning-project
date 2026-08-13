@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router'
 import { useAuth } from '../context/AuthContext'
 import { searchAccounts } from '../api/AccountApi'
 import Input from '../components/Input'
@@ -6,7 +7,8 @@ import Button from '../components/Button'
 import './AdminPanel.css'
 
 export default function AdminPanel() {
-  const { user } = useAuth()
+  const navigate = useNavigate()
+  const { user, logout } = useAuth()
 
   const [query, setQuery] = useState('')
   const [searched, setSearched] = useState(false)
@@ -14,10 +16,18 @@ export default function AdminPanel() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const lastQueryRef = useRef('')
+  const isMountedRef = useRef(true)
   // Bumped at the start of every submitted search. If a newer search starts
   // before an older one's fetch resolves, the older call's captured id no
   // longer matches by the time it resolves, so its result is discarded.
   const requestIdRef = useRef(0)
+
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
 
   async function runSearch(trimmedQuery) {
     lastQueryRef.current = trimmedQuery
@@ -25,7 +35,14 @@ export default function AdminPanel() {
     setLoading(true)
     setError('')
     const result = await searchAccounts(user.accessToken, trimmedQuery)
-    if (requestId !== requestIdRef.current) {
+    if (!isMountedRef.current || requestId !== requestIdRef.current) {
+      return
+    }
+    if (result.status === 401) {
+      logout()
+      navigate('/login', {
+        state: { message: 'Your session has expired. Please sign in again.' },
+      })
       return
     }
     setLoading(false)
@@ -61,7 +78,9 @@ export default function AdminPanel() {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
-        <Button type="submit">Search</Button>
+        <Button type="submit" disabled={loading}>
+          Search
+        </Button>
       </form>
 
       {!searched ? (

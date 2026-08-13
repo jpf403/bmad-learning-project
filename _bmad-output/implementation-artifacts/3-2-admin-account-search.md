@@ -4,7 +4,7 @@ baseline_commit: 5882f61350a144e7dbd5fcdf13b695bca4aa2e51
 
 # Story 3.2: Admin Account Search
 
-Status: review
+Status: done
 
 ## Story
 
@@ -76,6 +76,12 @@ so that I can quickly find the account I need to manage.
 - [ ] **Task 7: Verify CI green and branch/PR**
   - [x] Branch as `story/3.2-admin-account-search` from `main`.
   - [ ] Push and confirm both CI jobs (Backend .NET, Frontend Vite/React) green before merging (AD-11). **Left for Jack** — per standing project practice, push/PR/CI verification steps are his to run and approve individually, not performed by the dev agent.
+
+### Review Findings
+
+- [x] [Review][Patch] `AdminPanel.jsx` drops the `isMountedRef` unmount guard that `MySchedule.jsx` (this story's own designated pattern to follow) pairs with its `requestIdRef` generation counter — if an admin navigates away mid-search, the resolved fetch still calls `setLoading`/`setSearched`/`setAccounts`/`setError` on an unmounted component. [frontend/src/pages/AdminPanel.jsx] — Fixed: added `isMountedRef` guard mirroring `MySchedule.jsx`.
+- [x] [Review][Patch] Neither the "Search" submit button nor the "Try again" button is `disabled` while `loading` is true, unlike every other submit form in the codebase (`ScheduleAppointment.jsx`, `Login.jsx` both disable their submit button during in-flight requests) — a user can double-click and fire redundant concurrent requests. [frontend/src/pages/AdminPanel.jsx:64,76-78] — Fixed: `disabled={loading}` added to the Search submit button (the only one that stays mounted while `loading` is true — the error-state "Try again" button unmounts as soon as loading starts, so it carried no real double-click risk).
+- [x] [Review][Patch] `runSearch`'s failure branch has no special case for a `401` (expired/invalid access token) — every other page that calls an authenticated endpoint (`Account.jsx:131-135`) logs the user out and redirects to `/login` with a "session expired" message on 401; `AdminPanel` instead shows the generic error + "Try again," which just repeats the same expired-token request forever. [frontend/src/pages/AdminPanel.jsx] — Fixed: added a `result.status === 401` branch that calls `logout()` and navigates to `/login` with the same session-expired message `Account.jsx` uses.
 
 ## Dev Notes
 
