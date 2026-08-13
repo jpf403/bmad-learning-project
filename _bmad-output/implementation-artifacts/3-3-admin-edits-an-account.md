@@ -1,0 +1,218 @@
+---
+baseline_commit: d49d9a4cc2c5983135e12f376ea97fe2f56ae27d
+---
+
+# Story 3.3: Admin Edits an Account
+
+Status: ready-for-dev
+
+## Story
+
+As an admin,
+I want to edit any customer or barber account's email, name, permission level, or password,
+so that I can correct mistakes or manage staff without touching the database.
+
+## Acceptance Criteria
+
+1. **Given** an account row is clicked, **when** the edit popup opens, **then** it shows editable email/first name/last name/permission (customer/barber only)/password (optional double-entry, blank = unchanged) fields (FR18).
+2. **Given** a save, **when** confirmed via the confirm-action popup (non-destructive), **then** the change takes effect (FR18).
+3. **Given** a password change via this popup, **when** saved, **then** every active session for that account is immediately terminated, forcing re-sign-in (FR35).
+4. **Given** a permission-level change via this popup, **when** saved, **then** the account's existing sessions are not force-ended — a page refresh picks up the new role (FR35).
+5. **Given** a duplicate email on save, **when** submitted, **then** it's rejected with "That email is already in use." and the email field is retained (FR18).
+6. **Given** an email with no `@` or no domain `.`, **when** submitted, **then** it's rejected with an error and the email field is retained (FR18/FR1).
+7. **Given** demoting a barber to customer, **when** saved, **then** that barber's future appointments are cancelled and past ones retained as history (FR18).
+8. **Given** two conflicting edits (two admin tabs, or an admin edit racing the holder's own self-edit), **when** both are submitted, **then** the first commit wins and the second gets "This account was changed elsewhere. Refresh and try again." (FR41).
+
+## Tasks / Subtasks
+
+- [ ] **Task 1: Add the admin-update endpoint to the existing `AccountController`** (AC: #1–#8)
+  - [ ] Add `backend/BarbershopApi/Dtos/AdminUpdateAccountRequest.cs`:
+    ```csharp
+    public class AdminUpdateAccountRequest
+    {
+        [Required] [PlausibleEmail] [StringLength(254)]
+        public string Email { get; set; } = string.Empty;
+
+        [Required] [StringLength(100)] [RegularExpression(@"(?s).*\S.*", ErrorMessage = "First name is required.")]
+        public string FirstName { get; set; } = string.Empty;
+
+        [Required] [StringLength(100)] [RegularExpression(@"(?s).*\S.*", ErrorMessage = "Last name is required.")]
+        public string LastName { get; set; } = string.Empty;
+
+        [Required]
+        public Role Role { get; set; }
+
+        [MinLength(8, ErrorMessage = "Password must be at least 8 characters.")]
+        [StringLength(128)]
+        [RegularExpression(@"^\S+$", ErrorMessage = "Password cannot contain spaces.")]
+        public string? NewPassword { get; set; }
+    }
+    ```
+    This mirrors `RegisterRequest`'s email attributes and `UpdateAccountRequest`'s name/password attributes verbatim — same duplication-is-deliberate rationale Story 1.7's Dev Notes already documented ("AD consistency, not a new policy"). `NewPassword` has no `[Required]`: blank/omitted means "keep current password," per AC #1 and `EXPERIENCE.md`'s admin-edit-popup spec.
+    - **This DTO is what actually resolves two items open in `deferred-work.md` since Story 3.1's review**: the missing null-guard on `AdminUpdateAccount`'s email/first/last-name parameters, and the blank-email-slips-past-duplicate-check gap. Both were explicitly deferred to "whichever of Stories 3.3/3.4 builds the Controller" — this is that story. `[ApiController]`'s automatic model validation now rejects a null/blank/malformed email or a null/blank name with a 400 *before* `AccountService.AdminUpdateAccount` ever runs, closing both gaps without touching the Service/Repository code Story 3.1 already shipped and tested.
+  - [ ] Add `[HttpPut("{id:int}")]` to `AccountController` (`PUT /api/account/{id}`), gated `[Authorize(Roles = "Admin")]` — same attribute-based gating precedent Story 3.2 established for `Search`, reusing the identical proven middleware pipeline (`SessionLivenessMiddleware` → `UseAuthorization()`). No conflict with the existing `[HttpPut("me")]` action: ASP.NET Core routes the literal `me` segment to that action and any numeric segment to this new one.
+    - Body:
+      ```csharp
+      var admin = (Account)HttpContext.Items["Account"]!;
+      try
+      {
+          var updated = await accountService.AdminUpdateAccount(id, request.Email, request.FirstName, request.LastName, request.Role, request.NewPassword, admin.Id);
+          return Ok(new AccountSummary(updated.Id, updated.Email, updated.FirstName, updated.LastName, updated.Role));
+      }
+      catch (AccountNotFoundException) { return Problem(statusCode: StatusCodes.Status404NotFound, title: "Account not found."); }
+      catch (AdminAccountProtectedException) { return Problem(statusCode: StatusCodes.Status400BadRequest, title: "The admin account cannot be edited."); }
+      catch (InvalidRoleAssignmentException) { return Problem(statusCode: StatusCodes.Status400BadRequest, title: "An account cannot be promoted to admin."); }
+      catch (InvalidPasswordException) { return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Password must be at least 8 characters and cannot contain spaces."); }
+      catch (DuplicateEmailException) { return Problem(statusCode: StatusCodes.Status409Conflict, title: "That email is already in use."); }
+      catch (AccountConflictException) { return Problem(statusCode: StatusCodes.Status409Conflict, title: "This account was changed elsewhere. Refresh and try again."); }
+      catch (Exception) { return Problem(statusCode: StatusCodes.Status500InternalServerError, title: "Something went wrong. Please try again."); }
+      ```
+    - **Reuse `AccountSummary` (Story 3.2) for the response — do not add a new DTO.** Same shape, same "admin's view of an arbitrary account" semantic contract `AccountSummary` was already given a distinct identity for; inventing a second near-identical DTO here would contradict Story 3.2's own stated rationale for creating it.
+    - **Two 409s, disambiguated by `title`, matching `AuthController.Register`'s existing `DuplicateEmailException` → 409 mapping** — don't invent a 400 for duplicate email just because it "feels like a validation error"; follow the established precedent so the same exception type always maps to the same status code everywhere in this codebase.
+    - The exact "This account was changed elsewhere. Refresh and try again." copy is `EXPERIENCE.md`'s literal State Patterns wording for this state (FR41) — deliberately *not* reused from `AccountController.UpdateMe`'s own conflict message ("This account was updated elsewhere...") which is a different surface's copy.
+  - [ ] No `Services/`/`Repositories/` changes. `AccountService.AdminUpdateAccount` (Story 3.1) already implements every behavior AC #1–#8 need — role-guard, duplicate-email check, demotion cascade via `IBookingService.CancelAllFutureForBarber`, `SessionVersion` bump only on password change, `RowVersion`-backed conflict detection — and is already fully unit/integration-tested at the Service/Repository layer. This story is Controller + DTO + frontend only, exactly like Story 3.2 was for `Search`.
+- [ ] **Task 2: `AccountControllerTests.cs` additions** (AC: #1–#8)
+  - [ ] `AdminUpdate_as_admin_updates_account_and_returns_summary` — edit email/first/last/role, assert 200 and the returned `AccountSummary` reflects every changed field.
+  - [ ] `AdminUpdate_password_change_terminates_target_accounts_existing_session` — register+login a target account to get its access token, have an admin `PUT` a `NewPassword` for that account, then use the target's *original* token against `GET /api/auth/me` and assert 401. This proves FR35's session-termination end-to-end through the real `SessionLivenessMiddleware`/`SessionVersion` mechanism (AD-2/AD-3) — no mocking, matching AD-4.
+  - [ ] `AdminUpdate_permission_only_change_does_not_terminate_target_accounts_session` — same setup, admin changes only `Role` (no `NewPassword`); assert the target's original token still returns 200 on `GET /api/auth/me` and reflects the new role (mirrors `RoleGatingTests`' already-proven "role-change reflected without re-login" behavior).
+  - [ ] `AdminUpdate_demoting_barber_to_customer_cancels_future_appointments_via_http` — thin Controller-level smoke test (seed a barber + one far-future and one far-past appointment directly via `AppointmentRepository.Create`, same out-of-window seeding convention `AppointmentRepositoryTests` already uses), call the real HTTP endpoint with `Role.Customer`, then assert via a fresh `AccountRepository`/`AppointmentRepository` read that the future appointment is cancelled and the past one isn't. Story 3.1 already proves this exhaustively at the Service layer — this test only proves the HTTP path wires to it correctly, don't re-derive that whole matrix here.
+  - [ ] `AdminUpdate_with_duplicate_email_returns_409`.
+  - [ ] `AdminUpdate_with_implausible_email_returns_400` (e.g. `"testbademail"`, no `@`/domain `.`).
+  - [ ] `AdminUpdate_with_blank_first_name_returns_400`.
+  - [ ] `AdminUpdate_on_missing_account_returns_404`.
+  - [ ] `AdminUpdate_on_the_admin_account_returns_400` — target the seeded/promoted admin's own id.
+  - [ ] `AdminUpdate_promoting_to_Role_Admin_returns_400`.
+  - [ ] `AdminUpdate_on_stale_RowVersion_returns_409` — two independent `DbContext`/repository/service instances loading the same row before either writes, same deterministic pattern as `UpdateMe_on_stale_RowVersion_returns_409` above and Story 3.1's Service-level equivalent; never a real concurrent-HTTP race (standing practice since Stories 1.2/1.7).
+  - [ ] `AdminUpdate_as_non_admin_returns_403` — `[Theory]` over `Role.Customer` and `Role.Barber`, same shape as `Search_as_non_admin_returns_403`.
+  - [ ] `AdminUpdate_without_access_token_returns_401`.
+  - [ ] Reuse `RoleGatingTests.RegisterAndLoginAs` for admin/target setup, same as `AccountControllerTests`' existing `Search_*` tests — do not re-derive the register→promote→login dance a third time in this file.
+- [ ] **Task 3: `adminUpdateAccount` in `AccountApi.js`** (AC: #1, #2, #5, #6, #8)
+  - [ ] Add `export async function adminUpdateAccount(accessToken, accountId, { email, firstName, lastName, role, newPassword })` — `PUT /api/account/${accountId}`, `Content-Type: application/json`, `credentials: 'include'` (AD-13), body `{ email, firstName, lastName, role, newPassword: newPassword || null }`. Same try/catch/`response.json().catch(() => null)`/`{ ok, status, problem }` envelope shape as `updateAccount` — mirror it directly, this is the same "PUT an account, get back a summary or a problem" pattern with a different target id.
+  - [ ] Success envelope: `{ ok: true, account: body }` (body is the `AccountSummary` JSON: `{ id, email, firstName, lastName, role }`).
+- [ ] **Task 4: Admin account-edit popup in `AdminPanel.jsx`** (AC: #1, #2, #3, #4, #5, #6, #7, #8)
+  - [ ] **Password is its own save, entirely separate from email/name/permission — do not combine them into one Save action.** This directly mirrors `Account.jsx`'s existing `isEditingName`/`isChangingPassword` split (two independent sections, two independent Save buttons, two independent confirm-popup round-trips) rather than the single-Save design an admin-edit form might otherwise suggest. Concretely:
+    - **Identity fields (email, first name, last name, permission) are always editable** the moment the popup opens — no separate "click to edit" toggle for these, since the popup itself already *is* the edit affordance (unlike Account.jsx's name section, which starts read-only). They share one "Save Changes" button and one confirm round-trip.
+    - **Password is collapsed behind its own "Change Password" toggle button**, same as `Account.jsx`'s password section: clicking it reveals the double-entry password fields plus their own "Save"/"Cancel" row; "Cancel" there collapses the section and clears both password fields without affecting the identity fields at all. This toggle-and-reveal shape (not an always-visible password pair) is what makes the two saves feel genuinely independent to the admin, not just independent internally.
+    - **The popup itself also has its own explicit "Cancel" button**, separate from the two inner Cancel/Save pairs — visible whenever the identity section is showing, it discards *all* in-progress edits (identity and any open password entry) and closes the popup via `setEditingAccount(null)`. Don't rely on `Esc`/outside-click alone to cover this — those already work for free via `Modal`'s `onOpenChange`, but AC-independent of that, the popup needs a visible, explicit Cancel affordance an admin can click, matching every other popup/section in this codebase (`ConfirmPopup`'s "Go Back", `Account.jsx`'s per-section "Cancel").
+  - [ ] Replace the intentional no-op `onClick` on each result row (Story 3.2's placeholder, `AdminPanel.jsx` current line ~108) with a handler that sets `editingAccount` to that row's account object and seeds identity-field state from it: `editEmail`, `editFirstName`, `editLastName`, `editRole`; clear `editFieldErrors`, collapse `isChangingPassword` to `false`, and clear `editNewPassword`/`editConfirmPassword`/`passwordError`/`passwordFieldErrors`.
+  - [ ] Render an admin-edit `Modal` (`open={!!editingAccount}`, `title="Edit Account"`) containing, in order:
+    1. Identity section: `Input` for Email (`error={editFieldErrors.Email?.[0]}`), `Input` for First Name, `Input` for Last Name, `SelectDropdown` for permission (`options: [{value: 'Customer', label: 'Customer'}, {value: 'Barber', label: 'Barber'}]` — **never an `Admin` option**, matching `EXPERIENCE.md`'s literal spec and FR34), then a "Save Changes" / "Cancel" action row (Cancel here is the popup-level Cancel described above).
+    2. Password section, below the identity section: if `!isChangingPassword`, a single secondary "Change Password" button; if `isChangingPassword`, the double-entry password pair (`Input type="password"` × 2, labeled "New Password" / "Confirm New Password") plus their own "Save" / "Cancel" row (this inner Cancel just calls `handleCancelPassword` — collapses the section, does not close the popup).
+  - [ ] `handleSaveDetailsClick`: opens the shared `ConfirmPopup` (`destructive={false}`, `pendingAction = 'details'`, message e.g. "Save changes to this account?").
+  - [ ] `handleSavePasswordClick`: if `editNewPassword`/`editConfirmPassword` don't match, show "Passwords do not match" as a caption on both and clear them — do **not** open the confirm popup (same shape as `Account.jsx`'s `handleSavePasswordClick`). Otherwise open the shared `ConfirmPopup` (`destructive={false}`, `pendingAction = 'password'`, message e.g. "Save the new password for this account?").
+  - [ ] One shared `ConfirmPopup` instance, distinguishing the two flows via `pendingAction` (`'details' | 'password'`) exactly as `Account.jsx` already does. Confirm handler (`handleConfirmEdit`) branches on `pendingAction`:
+    - `'details'`: call `adminUpdateAccount(user.accessToken, editingAccount.id, { email: editEmail, firstName: editFirstName, lastName: editLastName, role: editRole, newPassword: null })`.
+    - `'password'`: call `adminUpdateAccount(user.accessToken, editingAccount.id, { email: editingAccount.email, firstName: editingAccount.firstName, lastName: editingAccount.lastName, role: editingAccount.role, newPassword: editNewPassword })`. **Read the identity fields from `editingAccount` (the last-confirmed values), never from the live `editEmail`/`editFirstName`/`editLastName`/`editRole` form state** — otherwise an unsaved, unconfirmed identity edit would silently ride along on a password-only save. This is the exact bug `Account.jsx`'s own Dev Notes flag and avoid ("a password save must never carry a name change... send the last-confirmed name, not local component state") — same hazard, same fix, here for email/name/permission instead of just name.
+    - Both branches, on success: replace the matching entry in `accounts` (by `id`) with the returned `AccountSummary`, and update `editingAccount` itself to that same fresh value (so a `'details'` save is immediately reflected as the new "last-confirmed" baseline for any subsequent password-only save in the same popup session, and vice versa). `'details'` success additionally closes the popup (`setEditingAccount(null)`); `'password'` success additionally collapses the password section (`handleCancelPassword`-equivalent) but leaves the popup open, matching `Account.jsx`'s own post-save behavior per section.
+    - On `status === 401`: `logout()` + navigate to `/login` with the same session-expired message every other authenticated page in this codebase already uses (`AdminPanel.jsx`'s own search flow, `Account.jsx`).
+    - On `status === 409` with `problem?.title === 'That email is already in use.'` (only reachable from the `'details'` branch): set `editFieldErrors.Email` to that message, keep the popup open with the identity fields as entered (AC #5's "email field is retained").
+    - On `status === 409` (any other title, i.e. the conflict case, reachable from either branch): set a shared `editError` to `problem.title` (falls back to the exact `EXPERIENCE.md` copy if the title is somehow missing) and keep the popup open — AC #8 requires the admin to be able to retry against current data, not lose their in-progress edit.
+    - On `status === 400` with `problem?.errors`: merge `Email`/`FirstName`/`LastName` entries into `editFieldErrors` for a `'details'` failure, or `NewPassword` entries into `passwordFieldErrors` for a `'password'` failure (same PascalCase shape `Account.jsx` already consumes from `UpdateMe`'s 400s).
+    - Any other failure: generic `editError` = "Something went wrong. Please try again." (matches every other page's fallback).
+  - [ ] **No Delete button in this popup.** `EXPERIENCE.md`'s Component Pattern table describes the *eventual* shape of this popup (Save + Delete, once Story 3.5 exists) but this story's own AC list has zero mention of deletion — Story 3.5 ("Admin Deletes an Account") explicitly owns that. Building a stub Delete button now would be the same scope creep Story 3.2 correctly avoided by leaving the row-click itself a no-op.
+  - [ ] Add `.admin-edit-popup` styles to `AdminPanel.css` following `DESIGN.md`'s `{components.admin-account-popup}` token: fields separated by `var(--spacing-4)` (field-gap), the identity-fields group and password-fields group separated by `var(--spacing-6)` (section-gap), `var(--spacing-3)` above each section's own Save/Cancel footer row (footer-gap) — same spacing variables already in use throughout `AdminPanel.css`/`Account.css`, no new tokens introduced.
+- [ ] **Task 5: `AdminPanel.test.jsx` additions** (AC: #1–#8)
+  - [ ] Clicking an account row opens the edit popup with Email/First Name/Last Name/permission dropdown pre-filled from that row's data, password section collapsed behind a "Change Password" button.
+  - [ ] The permission dropdown offers exactly "Customer" and "Barber" — never "Admin".
+  - [ ] Saving a valid identity-field edit (Save Changes → Confirm) calls `adminUpdateAccount` with `newPassword: null` and the edited email/first/last/role, closes the popup, and the row now shows the updated name/email/role.
+  - [ ] Clicking "Change Password" reveals the double-entry password fields; entering mismatched values and clicking that section's Save shows "Passwords do not match", clears both password fields, and does **not** open the confirm popup (`adminUpdateAccount` not called).
+  - [ ] Saving a valid password change (Save → Confirm, inside the password section) calls `adminUpdateAccount` with `newPassword` set and email/first/last/role equal to the account's *original* (last-confirmed) values — **not** whatever is currently sitting unsaved in the identity fields — and collapses the password section without closing the popup.
+  - [ ] Editing an identity field (e.g. typing a new email) *without* saving it, then completing a password-only save, still sends the original email in the password-save payload — proves the "don't carry an unconfirmed identity edit along on a password save" rule.
+  - [ ] Clicking the password section's own "Cancel" collapses it and clears both password fields without closing the popup or touching the identity fields.
+  - [ ] A `409` "That email is already in use." response (from an identity-field save) shows that message on the Email field and keeps the popup open with the entered values.
+  - [ ] A `409` conflict (non-duplicate-email) response, from either save, shows "This account was changed elsewhere. Refresh and try again." and keeps the popup open.
+  - [ ] A `401` response (from either save) logs out and navigates to `/login` with the session-expired message.
+  - [ ] Clicking the popup's own "Cancel" button closes it without calling `adminUpdateAccount`, discarding both any unsaved identity edits and any open password entry, leaving the row's original data unchanged.
+  - [ ] Stub `adminUpdateAccount` directly (`vi.fn()`, extending the existing `vi.mock('../api/AccountApi')` in this file) — no `fetch` mocking, no MSW, per AD-4.
+- [ ] **Task 6: Check `deferred-work.md`** (retro discipline, per the standing Epic 1 action item still in force)
+  - [ ] Re-read `deferred-work.md` in full at kickoff.
+  - [ ] Mark the "No null-guarding in `AdminCreateBarber`/`AdminUpdateAccount`" item's `AdminUpdateAccount` half **resolved** by this story's new `AdminUpdateAccountRequest` DTO (`[Required]` on Email/FirstName/LastName). Its `AdminCreateBarber` half stays open for Story 3.4, which builds that Controller/DTO.
+  - [ ] Mark "A blank/whitespace email in `AdminUpdateAccount`... slips past the duplicate-email check" **resolved** — `[Required]`+`[PlausibleEmail]` on the same DTO reject a blank/malformed email with a 400 before the Service method (and its duplicate-email check) ever runs.
+  - [ ] Confirm the other two currently-open items ("`AdminSoftDeleteAccount` on a customer doesn't cascade," "`EnsureNotCurrentlyAdmin` conflates missing-vs-non-admin") are **not applicable** to this story — the first is Story 3.5's (no delete here), the second remains unreachable here too (the Controller's `FindById`-driven `AccountNotFoundException` always fires before the repository's own guard would see an unverified id).
+- [ ] **Task 7: Verify CI green and branch/PR**
+  - [ ] Branch as `story/3.3-admin-edits-an-account` from `main`.
+  - [ ] Push and confirm both CI jobs (Backend .NET, Frontend Vite/React) green before merging (AD-11). **Left for Jack** — per standing project practice, push/PR/CI verification steps are his to run and approve individually, not performed by the dev agent.
+
+## Dev Notes
+
+### Architecture Compliance (must-follow, not optional)
+
+- **AD-1 (layering)** — this story adds one action + one DTO to the existing `AccountController`; no new `AdminController`/`AdminService`. There is one Account/Admin trio, and `AccountService.AdminUpdateAccount` (already built, Story 3.1) is exactly where the business logic belongs — this story only wires an HTTP surface and request-validation layer on top, same shape as Story 3.2 did for `Search`.
+- **AD-2 (role/session liveness)** — `[Authorize(Roles = "Admin")]` on the new action, same proven mechanism as `Search`'s. Every protected endpoint re-derives Role+SessionVersion from the DB per request; this story's password-change path is the first place in the codebase where that re-derivation is exercised for a *different* account than the caller's own (an admin bumping a target's `SessionVersion`) — `SessionLivenessMiddleware` needs no change, it already reads whichever account the bearer token names.
+- **AD-16 (Account optimistic concurrency)** — `AccountConflictException` (from a stale `RowVersion`) maps to 409, reusing the exact mechanism Story 3.1 built and Story 1.7 already proved works for the self-edit case; this story's new coverage is the *admin-edit racing a conflicting write* half of AC #8, not a new concurrency mechanism.
+- **AD-15 / AD-7** — no new work; `AccountSummary.Id` is the existing `int`, and `AdminUpdateAccount`/`AdminUpdate` never touch `DeletedAt`.
+- **project-context.md's fixed 401/403 split** — `[Authorize(Roles = "Admin")]` yields this for free, already proven by `RoleGatingTests` against this exact pipeline; the new action introduces no custom status-code branch for auth failures, only for the domain exceptions listed in Task 1.
+- **AD-4 (testing)** — backend: xUnit.v3 + `WebApplicationFactory` against real SQLite, no mocking. Frontend: Vitest + RTL + `user-event`, stub `adminUpdateAccount` directly, no MSW.
+
+### Design Decisions This Story Must Make (epics/architecture/UX leave these open)
+
+- **Route: `PUT /api/account/{id}`, gated `[Authorize(Roles = "Admin")]`.** Neither `epics.md` nor the architecture docs specify an endpoint shape for admin account edits — they stop at the FR/AC level, same gap Story 3.2 already navigated for `Search`. This mirrors `PUT /api/account/me`'s existing verb/resource semantics with an explicit target id instead of "me."
+- **Reuse `AccountSummary` as the response DTO** rather than inventing a new one — same shape, same "admin's view of an arbitrary account" contract Story 3.2 already established a distinct identity for.
+- **New `AdminUpdateAccountRequest` DTO, not a bare set of query params or a reuse of `UpdateAccountRequest`.** `UpdateAccountRequest` has no `Email`/`Role` fields (self-service editing never touches either, FR28) and no need for admin-only semantics — a new DTO is the correct, minimal addition, matching the "one DTO per endpoint context" precedent `AccountSummary` itself already set in Story 3.2.
+- **Double-entry password confirmation stays a frontend-only concern.** Every other password-collecting DTO in this codebase (`RegisterRequest`, `UpdateAccountRequest`) carries exactly one password field on the wire; the second field exists only to catch typos client-side before submission. `AdminUpdateAccountRequest.NewPassword` follows the identical pattern — do not add a `ConfirmNewPassword` field to the DTO.
+- **No new rate-limiting policy for this endpoint.** AD-5 scopes rate limiting to `/api/auth/login`; the existing `PasswordChangePolicy` is explicitly for the *self-service* `PUT /api/account/me` path (Story 1.7's own addition) and is attached via `[EnableRateLimiting]` on that specific action, not globally. Nothing in `epics.md`, the architecture docs, or `deferred-work.md` asks for an equivalent limiter on admin-driven edits — do not add one speculatively.
+- **No Delete button in this story's popup.** See Task 4 — Story 3.5 owns account deletion; this story only builds Save.
+- **Password change is a fully independent save from email/first/last/permission — explicit direction from Jack, not derivable from the epics/AC text alone.** The ACs don't literally forbid one combined Save button, but conflating them would make an accidental password rotation one click away from an unrelated typo fix, and it breaks the "blank = unchanged" password contract's spirit (a combined save either always sends *something* for password or has to silently special-case blank). `Account.jsx` already solved this exact problem for self-service edits with its `isEditingName`/`isChangingPassword` toggle-and-separate-Save split; Task 4 reuses that shape verbatim for the admin popup, plus its own explicit popup-level Cancel (also explicitly requested) distinct from either section's inner Cancel.
+- **Status-code choices for the four new domain exceptions**, since none of them had an HTTP mapping before this story (Story 3.1 was backend-only): `AccountNotFoundException` → 404 (no such resource); `AdminAccountProtectedException`/`InvalidRoleAssignmentException` → 400 (the request itself is disallowed by a fixed business rule, not a role/permission mismatch — reserving 403 for AD-2's role-check split per `project-context.md`); `DuplicateEmailException`/`AccountConflictException` → 409, matching `AuthController.Register`'s and `AccountController.UpdateMe`'s existing precedents for the same exception types respectively.
+
+### Testing Requirements
+
+- Backend: xUnit.v3 + `WebApplicationFactory`/`SqliteApiFactory`, real temp SQLite, no mocked `DbContext`. The password-change/permission-change session tests must exercise the *actual* `SessionLivenessMiddleware` pipeline (call `GET /api/auth/me` with the target's original token after the admin's edit) rather than asserting `SessionVersion` at the entity level — Story 3.1 already proved the entity-level behavior; this story's job is proving the HTTP-visible consequence FR35 actually promises.
+- Concurrency test (`AdminUpdate_on_stale_RowVersion_returns_409`) must use the two-independent-`DbContext` deterministic pattern — never a real concurrent-HTTP race (standing practice since Stories 1.2/1.7's flaky-test fixes, reused again in every Epic 3 story so far).
+- The demotion-cascade Controller test is intentionally a thin smoke test, not a re-derivation of Story 3.1's full cascade matrix (already exhaustively covered: second-barber isolation, already-cancelled tolerance, etc.) — re-testing all of that here would be redundant, not thorough.
+- Frontend: Vitest + `@testing-library/react` + `user-event`; stub `adminUpdateAccount` directly via the existing `vi.mock('../api/AccountApi')` block in `AdminPanel.test.jsx`, extending its `searchAccounts` stub rather than replacing the file's mocking approach.
+
+### Previous Story Intelligence (Story 3.2)
+
+- `AdminPanel.jsx`'s result rows currently have an **intentional no-op `onClick`** at the location marked in a comment as "Story 3.3 opens the edit popup here" — Task 4 replaces exactly that no-op, nothing else in the row's rendering changes.
+- Story 3.2's review added two patterns this story must keep following in the same file: an `isMountedRef` guard paired with any async state update (already present, reuse — don't add a second independent one), and `disabled={loading/isSubmitting}` on any button that stays mounted during an in-flight request (apply to this story's Save/Confirm buttons the same way).
+- Story 3.2's review also established the `result.status === 401` → `logout()` + navigate to `/login` branch as this file's standard 401 handling — Task 4's `handleConfirmEdit` must follow the identical branch, not reinvent one.
+- `Account.jsx`'s name/password split is the direct template for this story's identity/password split (per Jack's explicit direction): mutually-independent Save actions, a shared `ConfirmPopup` distinguished by `pendingAction`, and the "send the last-confirmed value, not local form state, for whichever fields aren't part of the current save" rule its own Dev Notes call out by name. The one deliberate divergence: `Account.jsx`'s name section is *also* behind a click-to-edit toggle (it starts read-only), whereas this story's identity fields are always editable the moment the popup opens — the popup itself is already the "entering edit mode" gesture, an extra toggle on top would be redundant. The password section keeps the toggle-and-reveal shape from `Account.jsx` unchanged.
+- `AccountSummary`'s frontend JSON shape is exactly `{ id, email, firstName, lastName, role }` (camelCase, role as a string like `"Customer"`/`"Barber"` thanks to `Program.cs`'s global `JsonStringEnumConverter`) — this is what both `searchAccounts`' existing rows and this story's new `adminUpdateAccount` response share; no shape translation needed between the two.
+
+### Git Intelligence Summary
+
+Recent commits: `d49d9a4` (Story 3.2 merge, current `main` tip) → `9b9b946` → `5882f61` (Story 3.1 merge) → `d84f877` → `442df9f` (Epic 2 retro). The established rhythm continues unchanged: create the story on `main`, implement on `story/3.3-admin-edits-an-account`, PR with an additions/fixes/test-count summary, merge once both CI jobs are green, delete the branch — push/PR/CI verification left for Jack. `d49d9a4` confirms `AccountController` currently has exactly two actions (`UpdateMe`, `Search`) and `AdminPanel.jsx`'s result rows have a no-op click handler — both directly extended, not replaced, by this story.
+
+### Project Structure Notes
+
+- **Backend — new:** `backend/BarbershopApi/Dtos/AdminUpdateAccountRequest.cs`.
+- **Backend — modified:** `backend/BarbershopApi/Controllers/AccountController.cs` (new `[HttpPut("{id:int}")]` action). No `Repositories/`/`Services/` changes — `AdminUpdateAccount` already exists and is already fully tested from Story 3.1.
+- **Frontend — modified:** `frontend/src/pages/AdminPanel.jsx` (edit popup, state, handlers), `frontend/src/pages/AdminPanel.css` (popup layout styles), `frontend/src/api/AccountApi.js` (new `adminUpdateAccount` export). No new frontend files — the popup lives inside the existing `AdminPanel.jsx`, matching Story 3.2's own explicit instruction that Stories 3.3–3.5 extend this one page rather than creating separate ones.
+- **Tests — modified:** `backend/BarbershopApi.Tests/AccountControllerTests.cs` (new cases only), `frontend/src/pages/AdminPanel.test.jsx` (new cases only). No other test file needs changes.
+- `_bmad-output/implementation-artifacts/deferred-work.md` — modified (two items marked resolved per Task 6).
+- `Program.cs` needs no new registrations — `IAccountService`/`AccountService` is already `Scoped` and unchanged by this story.
+
+### Established Codebase Patterns to Extend (current state, confirmed by reading the files directly)
+
+- `AccountController` today (post-3.2): `[ApiController] [Route("api/account")] [Authorize]` class-level, `PUT api/account/me` (self-service) and `GET api/account/search` (`[Authorize(Roles = "Admin")]`). This story adds the controller's third action and its second `[Authorize(Roles = "Admin")]`-gated one.
+- `AccountService.AdminUpdateAccount(int accountId, string email, string firstName, string lastName, Role role, string? newPassword, int actingAdminId)` (Story 3.1, `AccountService.cs:101-152`) already: loads by id (`AccountNotFoundException` if missing), rejects `Role.Admin` (`InvalidRoleAssignmentException`), checks duplicate email only when it actually changed, detects a Barber→Customer demotion, validates/hashes a non-null `newPassword` and bumps `SessionVersion` only then, calls `accountRepository.AdminUpdate` (which independently re-guards against editing the currently-admin row via a fresh DB read), maps `DbUpdateConcurrencyException` → `AccountConflictException`, and — only on a successful demotion — calls `bookingService.CancelAllFutureForBarber` after the account write commits. This story's Controller action is a direct, unmodified pass-through to this exact signature.
+- `AccountRepository.AdminUpdate` (`AccountRepository.cs:71-83`) independently re-checks both "is this currently the admin account" (`AdminAccountProtectedException`) and "is the incoming `Role` value `Admin`" (`InvalidRoleAssignmentException`) — the Service's own `role == Role.Admin` check (line 106-109) is intentionally redundant with this, per Story 3.1's documented defense-in-depth design; do not remove either.
+- `AccountApi.js`'s `updateAccount`/`searchAccounts` are the exact templates for `adminUpdateAccount`'s fetch/try-catch/envelope shape — mirror `updateAccount`'s PUT-with-JSON-body structure, targeting `/api/account/${accountId}` instead of `/api/account/me`.
+- `Account.jsx`'s `handleConfirm` is the closest existing frontend precedent for "PUT an account update, branch on 401/409/400 with field errors, else generic error" — `AdminPanel.jsx`'s new `handleConfirmEdit` should follow its exact branching order and copy conventions (down to reusing the literal "This account was changed elsewhere. Refresh and try again." text this story's Controller action returns).
+- `Modal`/`ConfirmPopup`/`SelectDropdown`/`Input` (all in `frontend/src/components/`) are already built and used by `Account.jsx` (`Modal`+`ConfirmPopup`) and `MySchedule.jsx` (`SelectDropdown`, admin-barber variant) — this story is pure composition of existing components, no new shared component needed.
+
+### References
+
+- [Source: _bmad-output/planning-artifacts/epics.md §Story 3.3 (line 655)] — story statement, eight acceptance criteria (verbatim), FR coverage (FR18, FR35, FR41)
+- [Source: _bmad-output/planning-artifacts/prds/prd-bmad-learning-project-2026-07-21/prd.md §FR1, §FR18, §FR35, §FR41] — exact FR wording: any-field edit incl. permission/password (FR18); admin password-change force-ends target sessions, permission-change doesn't (FR35); first-commit-wins concurrency on account edits (FR41)
+- [Source: _bmad-output/planning-artifacts/ux-designs/ux-bmad-learning-project-2026-07-23/DESIGN.md — `admin-account-popup`, `confirm-popup`, `select-dropdown` tokens; Colors §Error] — popup field/section/footer spacing; confirm-button color-by-consequence rule; `{colors.error}` validation-text convention
+- [Source: _bmad-output/planning-artifacts/ux-designs/ux-bmad-learning-project-2026-07-23/EXPERIENCE.md — Component Patterns (admin account-edit popup, line 68), State Patterns (duplicate email line 102, concurrent-edit conflict line 108, admin-driven password/permission-change effects lines 109-111), Key Flow 3 (lines 181-192)] — exact field list and behavior for the edit popup; exact copy for duplicate-email and concurrent-conflict states; session-termination-vs-not distinction for password vs. permission changes
+- [Source: _bmad-output/planning-artifacts/architecture/architecture-bmad-learning-project-2026-07-23/ARCHITECTURE-SPINE.md#AD-1, #AD-2, #AD-4, #AD-15, #AD-16] — layering, role/session liveness mechanism, testing strategy, soft-delete (n/a this story), optimistic concurrency
+- [Source: backend/BarbershopApi/Controllers/AccountController.cs, AuthController.cs; Services/AccountService.cs, IAccountService.cs; Repositories/AccountRepository.cs] — current controller/service/repository shape this story extends; existing `DuplicateEmailException`→409 and `AccountConflictException`→409 mapping precedents
+- [Source: backend/BarbershopApi/Dtos/RegisterRequest.cs, UpdateAccountRequest.cs, PlausibleEmailAttribute.cs, AccountSummary.cs] — exact validation-attribute and DTO-reuse precedents this story's new `AdminUpdateAccountRequest` follows
+- [Source: frontend/src/pages/AdminPanel.jsx, Account.jsx; components/Modal.jsx, ConfirmPopup.jsx, SelectDropdown.jsx, Input.jsx; api/AccountApi.js] — existing page/component/API patterns this story composes rather than reinvents
+- [Source: backend/BarbershopApi.Tests/AccountControllerTests.cs, RoleGatingTests.cs] — `UpdateMe_on_stale_RowVersion_returns_409`'s two-`DbContext` pattern (reused here); `RegisterAndLoginAs` helper; proven role-change-without-relogin behavior this story's permission-only-change test relies on
+- [Source: _bmad-output/implementation-artifacts/3-1-account-repository-admin-operations.md, 3-2-admin-account-search.md] — predecessor stories: exact `AdminUpdateAccount` contract and its already-complete test coverage (3.1); `AdminPanel.jsx`'s current state, the row-click no-op this story replaces, and the 401-handling/`isMountedRef`/`disabled`-during-loading conventions this story must keep following (3.2)
+- [Source: _bmad-output/implementation-artifacts/deferred-work.md §Deferred from code review of story-3.1] — the two items this story resolves (null-guarding, blank-email gap) and the two it confirms remain not-applicable (customer-delete-cascade → Story 3.5; `EnsureNotCurrentlyAdmin` missing-vs-non-admin conflation → still unreachable here)
+- [Source: project-context.md §Language-Specific Rules (C#, 401/403 split); §Testing Rules; §Naming; §Code organization]
+
+## Dev Agent Record
+
+### Agent Model Used
+
+### Debug Log References
+
+### Completion Notes List
+
+### File List
