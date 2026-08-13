@@ -11,6 +11,7 @@ using BarbershopApi.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace BarbershopApi.Tests;
@@ -54,6 +55,19 @@ public class AccountControllerTests : IDisposable
     private static HttpRequestMessage SearchRequest(string? query, string? accessToken = null)
     {
         var request = new HttpRequestMessage(HttpMethod.Get, $"/api/account/search?query={Uri.EscapeDataString(query ?? string.Empty)}");
+        if (accessToken is not null)
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        }
+        return request;
+    }
+
+    private static HttpRequestMessage AdminUpdateRequest(int id, object body, string? accessToken = null)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Put, $"/api/account/{id}")
+        {
+            Content = JsonContent.Create(body),
+        };
         if (accessToken is not null)
         {
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
@@ -477,6 +491,354 @@ public class AccountControllerTests : IDisposable
         using var client = _factory.CreateClient();
 
         var response = await client.SendAsync(SearchRequest("anything"), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    private async Task<int> AccountIdFor(string email)
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        var account = await repository.FindByEmail(email);
+        return account!.Id;
+    }
+
+    [Fact]
+    public async Task AdminUpdate_as_admin_updates_account_and_returns_summary()
+    {
+        using var client = _factory.CreateClient();
+        await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Customer, "target-update@example.com");
+        var targetId = await AccountIdFor("target-update@example.com");
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, "admin-update@example.com");
+
+        var response = await client.SendAsync(
+            AdminUpdateRequest(
+                targetId,
+                new { Email = "updated-target@example.com", FirstName = "Updated", LastName = "Target", Role = "Barber" },
+                adminToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<AccountSummary>(ResponseJsonOptions, TestContext.Current.CancellationToken);
+        Assert.NotNull(body);
+        Assert.Equal("updated-target@example.com", body.Email);
+        Assert.Equal("Updated", body.FirstName);
+        Assert.Equal("Target", body.LastName);
+        Assert.Equal(Role.Barber, body.Role);
+    }
+
+    [Fact]
+    public async Task AdminUpdate_password_change_terminates_target_accounts_existing_session()
+    {
+        using var client = _factory.CreateClient();
+        var targetToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Customer, "target-password@example.com");
+        var targetId = await AccountIdFor("target-password@example.com");
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, "admin-password@example.com");
+
+        var response = await client.SendAsync(
+            AdminUpdateRequest(
+                targetId,
+                new { Email = "target-password@example.com", FirstName = "John", LastName = "Smith", Role = "Customer", NewPassword = "new-correct-horse-battery" },
+                adminToken),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var meRequest = new HttpRequestMessage(HttpMethod.Get, "/api/auth/me");
+        meRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", targetToken);
+        var meResponse = await client.SendAsync(meRequest, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Unauthorized, meResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminUpdate_permission_only_change_does_not_terminate_target_accounts_session()
+    {
+        using var client = _factory.CreateClient();
+        var targetToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Customer, "target-permission@example.com");
+        var targetId = await AccountIdFor("target-permission@example.com");
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, "admin-permission@example.com");
+
+        var response = await client.SendAsync(
+            AdminUpdateRequest(
+                targetId,
+                new { Email = "target-permission@example.com", FirstName = "John", LastName = "Smith", Role = "Barber" },
+                adminToken),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var meRequest = new HttpRequestMessage(HttpMethod.Get, "/api/auth/me");
+        meRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", targetToken);
+        var meResponse = await client.SendAsync(meRequest, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, meResponse.StatusCode);
+        var meBody = await meResponse.Content.ReadFromJsonAsync<MeResponse>(ResponseJsonOptions, TestContext.Current.CancellationToken);
+        Assert.Equal(Role.Barber, meBody!.Role);
+    }
+
+    [Fact]
+    public async Task AdminUpdate_demoting_barber_to_customer_cancels_future_appointments_via_http()
+    {
+        using var client = _factory.CreateClient();
+        await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Barber, "demote-barber@example.com");
+        var barberId = await AccountIdFor("demote-barber@example.com");
+        await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Customer, "demote-customer@example.com");
+        var customerId = await AccountIdFor("demote-customer@example.com");
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, "admin-demote@example.com");
+
+        int futureId;
+        int pastId;
+        await using (var context = _factory.CreateDbContext())
+        {
+            var appointmentRepository = new AppointmentRepository(context);
+            var future = await appointmentRepository.Create(new Appointment
+            {
+                CustomerId = customerId,
+                BarberId = barberId,
+                Date = "2099-01-01",
+                StartTime = "09:00",
+            });
+            var past = await appointmentRepository.Create(new Appointment
+            {
+                CustomerId = customerId,
+                BarberId = barberId,
+                Date = "2020-01-01",
+                StartTime = "09:00",
+            });
+            futureId = future.Id;
+            pastId = past.Id;
+        }
+
+        var response = await client.SendAsync(
+            AdminUpdateRequest(
+                barberId,
+                new { Email = "demote-barber@example.com", FirstName = "John", LastName = "Smith", Role = "Customer" },
+                adminToken),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var verifyContext = _factory.CreateDbContext();
+        var futureReloaded = await verifyContext.Appointments.FirstOrDefaultAsync(a => a.Id == futureId, TestContext.Current.CancellationToken);
+        var pastReloaded = await verifyContext.Appointments.FirstOrDefaultAsync(a => a.Id == pastId, TestContext.Current.CancellationToken);
+        Assert.NotNull(futureReloaded);
+        Assert.NotNull(futureReloaded!.CancelledAt);
+        Assert.NotNull(pastReloaded);
+        Assert.Null(pastReloaded!.CancelledAt);
+
+        var accountRepository = new AccountRepository(verifyContext);
+        var barberReloaded = await accountRepository.FindById(barberId);
+        Assert.Equal(Role.Customer, barberReloaded!.Role);
+    }
+
+    [Fact]
+    public async Task AdminUpdate_with_duplicate_email_returns_409()
+    {
+        using var client = _factory.CreateClient();
+        await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Customer, "existing@example.com");
+        await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Customer, "duplicate-target@example.com");
+        var targetId = await AccountIdFor("duplicate-target@example.com");
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, "admin-duplicate@example.com");
+
+        var response = await client.SendAsync(
+            AdminUpdateRequest(
+                targetId,
+                new { Email = "existing@example.com", FirstName = "John", LastName = "Smith", Role = "Customer" },
+                adminToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Contains("That email is already in use.", body);
+    }
+
+    [Fact]
+    public async Task AdminUpdate_with_implausible_email_returns_400()
+    {
+        using var client = _factory.CreateClient();
+        await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Customer, "implausible-target@example.com");
+        var targetId = await AccountIdFor("implausible-target@example.com");
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, "admin-implausible@example.com");
+
+        var response = await client.SendAsync(
+            AdminUpdateRequest(
+                targetId,
+                new { Email = "testbademail", FirstName = "John", LastName = "Smith", Role = "Customer" },
+                adminToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminUpdate_with_blank_first_name_returns_400()
+    {
+        using var client = _factory.CreateClient();
+        await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Customer, "blank-name-target@example.com");
+        var targetId = await AccountIdFor("blank-name-target@example.com");
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, "admin-blankname@example.com");
+
+        var response = await client.SendAsync(
+            AdminUpdateRequest(
+                targetId,
+                new { Email = "blank-name-target@example.com", FirstName = "   ", LastName = "Smith", Role = "Customer" },
+                adminToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminUpdate_with_blank_last_name_returns_400()
+    {
+        using var client = _factory.CreateClient();
+        await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Customer, "blank-lastname-target@example.com");
+        var targetId = await AccountIdFor("blank-lastname-target@example.com");
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, "admin-blanklastname@example.com");
+
+        var response = await client.SendAsync(
+            AdminUpdateRequest(
+                targetId,
+                new { Email = "blank-lastname-target@example.com", FirstName = "John", LastName = "   ", Role = "Customer" },
+                adminToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminUpdate_on_missing_account_returns_404()
+    {
+        using var client = _factory.CreateClient();
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, "admin-missing@example.com");
+
+        var response = await client.SendAsync(
+            AdminUpdateRequest(
+                999999,
+                new { Email = "nobody@example.com", FirstName = "John", LastName = "Smith", Role = "Customer" },
+                adminToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminUpdate_on_the_admin_account_returns_400()
+    {
+        using var client = _factory.CreateClient();
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, "admin-self@example.com");
+        var adminId = await AccountIdFor("admin-self@example.com");
+
+        var response = await client.SendAsync(
+            AdminUpdateRequest(
+                adminId,
+                new { Email = "admin-self@example.com", FirstName = "John", LastName = "Smith", Role = "Customer" },
+                adminToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminUpdate_promoting_to_Role_Admin_returns_400()
+    {
+        using var client = _factory.CreateClient();
+        await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Customer, "promote-target@example.com");
+        var targetId = await AccountIdFor("promote-target@example.com");
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, "admin-promote@example.com");
+
+        var response = await client.SendAsync(
+            AdminUpdateRequest(
+                targetId,
+                new { Email = "promote-target@example.com", FirstName = "John", LastName = "Smith", Role = "Admin" },
+                adminToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminUpdate_on_stale_RowVersion_returns_409()
+    {
+        // Same deterministic two-DbContext pattern as UpdateMe_on_stale_RowVersion_returns_409
+        // above (standing practice since Stories 1.2/1.7's flaky-test fixes) -- never a real
+        // concurrent-HTTP race.
+        await using var contextA = _factory.CreateDbContext();
+        var repositoryA = new AccountRepository(contextA);
+        var passwordHasher = new PasswordHasher<Account>();
+        var target = new Account
+        {
+            Email = "stale-target@example.com",
+            FirstName = "John",
+            LastName = "Smith",
+            Role = Role.Customer,
+        };
+        target.PasswordHash = passwordHasher.HashPassword(target, "correct-horse-battery-staple");
+        var created = await repositoryA.Create(target);
+        var admin = new Account
+        {
+            Email = "stale-admin@example.com",
+            FirstName = "Admina",
+            LastName = "Adminson",
+            Role = Role.Admin,
+        };
+        admin.PasswordHash = passwordHasher.HashPassword(admin, "correct-horse-battery-staple");
+        var createdAdmin = await repositoryA.Create(admin);
+
+        await using var contextB = _factory.CreateDbContext();
+        var repositoryB = new AccountRepository(contextB);
+        var staleCopy = await repositoryB.FindById(created.Id);
+        Assert.NotNull(staleCopy);
+
+        created.FirstName = "First Edit";
+        await repositoryA.Update(created);
+
+        using var scope = _factory.Services.CreateScope();
+        var bookingService = new BookingService(new AppointmentRepository(contextB), repositoryB);
+        var controller = new AccountController(new AccountService(repositoryB, passwordHasher, bookingService))
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext { RequestServices = scope.ServiceProvider },
+            },
+        };
+        controller.HttpContext.Items["Account"] = new Account { Id = createdAdmin.Id, Role = Role.Admin };
+
+        var result = await controller.AdminUpdate(staleCopy!.Id, new AdminUpdateAccountRequest
+        {
+            Email = staleCopy.Email,
+            FirstName = "Second Edit",
+            LastName = staleCopy.LastName,
+            Role = staleCopy.Role,
+        });
+
+        var objectResult = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status409Conflict, objectResult.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(Role.Customer)]
+    [InlineData(Role.Barber)]
+    public async Task AdminUpdate_as_non_admin_returns_403(Role role)
+    {
+        using var client = _factory.CreateClient();
+        var accessToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, role, $"admin-update-{role}@example.com");
+        var targetId = await AccountIdFor($"admin-update-{role}@example.com");
+
+        var response = await client.SendAsync(
+            AdminUpdateRequest(
+                targetId,
+                new { Email = $"admin-update-{role}@example.com", FirstName = "John", LastName = "Smith", Role = "Customer" },
+                accessToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminUpdate_without_access_token_returns_401()
+    {
+        using var client = _factory.CreateClient();
+
+        var response = await client.SendAsync(
+            AdminUpdateRequest(1, new { Email = "nobody@example.com", FirstName = "John", LastName = "Smith", Role = "Customer" }),
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
