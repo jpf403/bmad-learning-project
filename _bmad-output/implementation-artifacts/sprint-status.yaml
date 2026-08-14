@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-27
-last_updated: 2026-08-13
+last_updated: 2026-08-14
 
 
 project: bmad-learning-project
@@ -73,7 +73,7 @@ development_status:
   3-1-account-repository-admin-operations: done
   3-2-admin-account-search: done
   3-3-admin-edits-an-account: done
-  3-4-admin-creates-a-barber-account: backlog
+  3-4-admin-creates-a-barber-account: ready-for-dev
   3-5-admin-deletes-an-account: backlog
   epic-3-retrospective: optional
 
