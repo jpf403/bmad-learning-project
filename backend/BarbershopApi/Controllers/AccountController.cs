@@ -47,4 +47,44 @@ public class AccountController(IAccountService accountService) : ControllerBase
         var accounts = await accountService.SearchAccounts(query ?? string.Empty);
         return Ok(accounts.Select(a => new AccountSummary(a.Id, a.Email, a.FirstName, a.LastName, a.Role)));
     }
+
+    [HttpPut("{id:int}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> AdminUpdate(int id, AdminUpdateAccountRequest request)
+    {
+        var admin = (Account)HttpContext.Items["Account"]!;
+        try
+        {
+            var updated = await accountService.AdminUpdateAccount(id, request.Email, request.FirstName, request.LastName, request.Role, request.NewPassword, admin.Id);
+            return Ok(new AccountSummary(updated.Id, updated.Email, updated.FirstName, updated.LastName, updated.Role));
+        }
+        catch (AccountNotFoundException)
+        {
+            return Problem(statusCode: StatusCodes.Status404NotFound, title: "Account not found.");
+        }
+        catch (AdminAccountProtectedException)
+        {
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "The admin account cannot be edited.");
+        }
+        catch (InvalidRoleAssignmentException)
+        {
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "An account cannot be promoted to admin.");
+        }
+        catch (InvalidPasswordException)
+        {
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Password must be at least 8 characters and cannot contain spaces.");
+        }
+        catch (DuplicateEmailException)
+        {
+            return Problem(statusCode: StatusCodes.Status409Conflict, title: "That email is already in use.");
+        }
+        catch (AccountConflictException)
+        {
+            return Problem(statusCode: StatusCodes.Status409Conflict, title: "This account was changed elsewhere. Refresh and try again.");
+        }
+        catch (Exception)
+        {
+            return Problem(statusCode: StatusCodes.Status500InternalServerError, title: "Something went wrong. Please try again.");
+        }
+    }
 }

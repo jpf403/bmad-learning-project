@@ -34,6 +34,42 @@ export async function updateAccount(
   return { ok: true, identity: body }
 }
 
+export async function adminUpdateAccount(
+  accessToken,
+  accountId,
+  { email, firstName, lastName, role, newPassword },
+) {
+  let response
+  try {
+    response = await fetch(`${API_BASE_URL}/api/account/${accountId}`, {
+      method: 'PUT',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        email,
+        firstName,
+        lastName,
+        role,
+        newPassword: newPassword || null,
+      }),
+    })
+  } catch {
+    return { ok: false, status: null }
+  }
+
+  const body = await response.json().catch(() => null)
+  if (!response.ok) {
+    return { ok: false, status: response.status, problem: body }
+  }
+  if (!body) {
+    return { ok: false, status: null }
+  }
+  return { ok: true, account: body }
+}
+
 export async function searchAccounts(accessToken, query) {
   const params = new URLSearchParams()
   if (query && query.trim()) {

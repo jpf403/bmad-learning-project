@@ -17,6 +17,7 @@ export default function SelectDropdown({
   emptyMessage,
   disabled = false,
   variant = 'default',
+  portalContainer,
 }) {
   const generatedId = useId()
   const wrapperClass =
@@ -51,7 +52,11 @@ export default function SelectDropdown({
           <Select.Value placeholder={placeholder} />
           <Select.Icon className="select-dropdown__icon">▾</Select.Icon>
         </Select.Trigger>
-        <Select.Portal>
+        {/* Defaults to document.body (Radix's own fallback) when no
+            container is given -- only callers rendering this inside a
+            hand-rolled dialog (whose own focus trap can't see into a
+            document.body-portaled listbox) need to pass one. */}
+        <Select.Portal container={portalContainer}>
           <Select.Content
             className="select-dropdown__content"
             position="popper"
