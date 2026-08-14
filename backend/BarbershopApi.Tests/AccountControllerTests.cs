@@ -842,4 +842,70 @@ public class AccountControllerTests : IDisposable
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
+
+    [Fact]
+    public async Task AdminUpdate_with_out_of_range_role_value_returns_400()
+    {
+        using var client = _factory.CreateClient();
+        await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Customer, "invalid-role-target@example.com");
+        var targetId = await AccountIdFor("invalid-role-target@example.com");
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, "admin-invalidrole@example.com");
+
+        // Role.Customer/Barber/Admin are 0-2; 99 is not a defined member. The
+        // global JsonStringEnumConverter allows raw numeric values through by
+        // default, so this exercises [EnumDataType] rather than JSON parsing.
+        var response = await client.SendAsync(
+            AdminUpdateRequest(
+                targetId,
+                new { Email = "invalid-role-target@example.com", FirstName = "John", LastName = "Smith", Role = 99 },
+                adminToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminUpdate_with_overlength_new_password_returns_400()
+    {
+        using var client = _factory.CreateClient();
+        await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Customer, "overlength-password-target@example.com");
+        var targetId = await AccountIdFor("overlength-password-target@example.com");
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, "admin-overlength@example.com");
+
+        var response = await client.SendAsync(
+            AdminUpdateRequest(
+                targetId,
+                new { Email = "overlength-password-target@example.com", FirstName = "John", LastName = "Smith", Role = "Customer", NewPassword = new string('a', 129) },
+                adminToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminUpdate_with_empty_string_new_password_leaves_password_unchanged()
+    {
+        using var client = _factory.CreateClient();
+        var targetToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Customer, "empty-password-target@example.com");
+        var targetId = await AccountIdFor("empty-password-target@example.com");
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, "admin-emptypassword@example.com");
+
+        var response = await client.SendAsync(
+            AdminUpdateRequest(
+                targetId,
+                new { Email = "empty-password-target@example.com", FirstName = "John", LastName = "Smith", Role = "Customer", NewPassword = "" },
+                adminToken),
+            TestContext.Current.CancellationToken);
+
+        // An explicit "" must be normalized to "no password change" (same as
+        // omitting the field), not rejected by [MinLength(8)] as too short.
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        // And it must not actually rotate the password / bump SessionVersion --
+        // the target's existing session should still be valid.
+        using var meRequest = new HttpRequestMessage(HttpMethod.Get, "/api/auth/me");
+        meRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", targetToken);
+        var meResponse = await client.SendAsync(meRequest, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, meResponse.StatusCode);
+    }
 }

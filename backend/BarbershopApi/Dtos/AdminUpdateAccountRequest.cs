@@ -14,11 +14,20 @@ public class AdminUpdateAccountRequest
     [Required] [StringLength(100)] [RegularExpression(@"(?s).*\S.*", ErrorMessage = "Last name is required.")]
     public string LastName { get; set; } = string.Empty;
 
-    [Required]
+    [Required] [EnumDataType(typeof(Role))]
     public Role Role { get; set; }
 
+    private string? _newPassword;
+
+    // Blank/omitted means "keep current password" (AC #1). An explicit empty
+    // string must be treated identically to a missing field -- normalize here,
+    // before [MinLength(8)] runs, rather than rejecting "" as a too-short password.
     [MinLength(8, ErrorMessage = "Password must be at least 8 characters.")]
     [StringLength(128)]
     [RegularExpression(@"^\S+$", ErrorMessage = "Password cannot contain spaces.")]
-    public string? NewPassword { get; set; }
+    public string? NewPassword
+    {
+        get => _newPassword;
+        set => _newPassword = string.IsNullOrEmpty(value) ? null : value;
+    }
 }

@@ -72,7 +72,7 @@ development_status:
   epic-3: in-progress
   3-1-account-repository-admin-operations: done
   3-2-admin-account-search: done
-  3-3-admin-edits-an-account: review
+  3-3-admin-edits-an-account: done
   3-4-admin-creates-a-barber-account: backlog
   3-5-admin-deletes-an-account: backlog
   epic-3-retrospective: optional

@@ -56,6 +56,14 @@ const TARGET_ACCOUNT = {
   role: 'Customer',
 }
 
+const ADMIN_ACCOUNT = {
+  id: 2,
+  email: 'admin-row@example.com',
+  firstName: 'Admin',
+  lastName: 'Row',
+  role: 'Admin',
+}
+
 async function searchAndOpenEditPopup(user) {
   searchAccounts.mockResolvedValue({ ok: true, accounts: [TARGET_ACCOUNT] })
   renderPage()
@@ -425,5 +433,191 @@ describe('AdminPanel', () => {
     expect(screen.queryByText('Edit Account')).toBeNull()
     expect(screen.getByText('target@example.com')).toBeInTheDocument()
     expect(adminUpdateAccount).not.toHaveBeenCalled()
+  })
+
+  it('opening the popup focuses the Email field first', async () => {
+    const user = userEvent.setup()
+    await searchAndOpenEditPopup(user)
+
+    expect(screen.getByLabelText('Email')).toHaveFocus()
+  })
+
+  it('closing the popup ("Cancel") returns focus to the row that opened it', async () => {
+    const user = userEvent.setup()
+    await searchAndOpenEditPopup(user)
+
+    await user.click(screen.getAllByRole('button', { name: 'Cancel' })[0])
+
+    expect(screen.getByRole('button', { name: /Target Person/ })).toHaveFocus()
+  })
+
+  it('pressing Escape closes the popup without calling adminUpdateAccount', async () => {
+    const user = userEvent.setup()
+    await searchAndOpenEditPopup(user)
+
+    await user.keyboard('{Escape}')
+
+    expect(screen.queryByText('Edit Account')).toBeNull()
+    expect(adminUpdateAccount).not.toHaveBeenCalled()
+  })
+
+  it('clicking outside the popup (on the overlay) closes it without calling adminUpdateAccount', async () => {
+    const user = userEvent.setup()
+    await searchAndOpenEditPopup(user)
+
+    // The overlay itself (not a labelled element) is what the outside-click
+    // handler targets.
+    const overlay = document.querySelector('.admin-edit-popup-overlay')
+    await user.click(overlay)
+
+    expect(screen.queryByText('Edit Account')).toBeNull()
+    expect(adminUpdateAccount).not.toHaveBeenCalled()
+  })
+
+  it('declining the confirm popup ("Go Back") leaves the edit unsaved and the popup open', async () => {
+    const user = userEvent.setup()
+    await searchAndOpenEditPopup(user)
+
+    await user.clear(screen.getByLabelText('Email'))
+    await user.type(screen.getByLabelText('Email'), 'unsaved-edit@example.com')
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }))
+    await user.click(await screen.findByRole('button', { name: 'Go Back' }))
+
+    expect(adminUpdateAccount).not.toHaveBeenCalled()
+    expect(screen.getByText('Edit Account')).toBeInTheDocument()
+    expect(screen.getByLabelText('Email')).toHaveValue(
+      'unsaved-edit@example.com',
+    )
+  })
+
+  it('clicking "Save" with both password fields blank shows "New password is required" without opening the confirm popup', async () => {
+    const user = userEvent.setup()
+    await searchAndOpenEditPopup(user)
+
+    await user.click(screen.getByRole('button', { name: 'Change Password' }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(
+      await screen.findByText('New password is required'),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText('Save the new password for this account?'),
+    ).toBeNull()
+    expect(adminUpdateAccount).not.toHaveBeenCalled()
+  })
+
+  it('a duplicate-email 409 during a password-only save shows a visible error instead of being silently swallowed', async () => {
+    adminUpdateAccount.mockResolvedValue({
+      ok: false,
+      status: 409,
+      problem: { title: 'That email is already in use.' },
+    })
+    const user = userEvent.setup()
+    await searchAndOpenEditPopup(user)
+
+    await user.click(screen.getByRole('button', { name: 'Change Password' }))
+    await user.type(screen.getByLabelText('New Password'), 'new-correct-horse')
+    await user.type(
+      screen.getByLabelText('Confirm New Password'),
+      'new-correct-horse',
+    )
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(await screen.findByRole('button', { name: 'Confirm' }))
+
+    expect(
+      await screen.findByText('That email is already in use.'),
+    ).toBeInTheDocument()
+  })
+
+  it('clicking an Admin-role row opens the popup read-only, with no Save/Change-Password affordances', async () => {
+    searchAccounts.mockResolvedValue({ ok: true, accounts: [ADMIN_ACCOUNT] })
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Search by name or email to find an account.')
+
+    await user.type(screen.getByLabelText('Search'), 'admin')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+    await user.click(await screen.findByRole('button', { name: /Admin Row/ }))
+
+    expect(
+      await screen.findByText('The admin account cannot be edited.'),
+    ).toBeInTheDocument()
+    expect(screen.getByLabelText('Email')).toBeDisabled()
+    expect(screen.getByLabelText('First Name')).toBeDisabled()
+    expect(screen.getByLabelText('Last Name')).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Save Changes' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Change Password' })).toBeNull()
+    expect(adminUpdateAccount).not.toHaveBeenCalled()
+  })
+
+  it('pressing Shift+Tab from the first field wraps focus to the last focusable element (Change Password)', async () => {
+    const user = userEvent.setup()
+    await searchAndOpenEditPopup(user)
+
+    expect(screen.getByLabelText('Email')).toHaveFocus()
+    await user.tab({ shift: true })
+
+    expect(
+      screen.getByRole('button', { name: 'Change Password' }),
+    ).toHaveFocus()
+  })
+
+  it('the Permission dropdown portals inside the dialog, not to document.body, so the Tab-trap can see it', async () => {
+    const user = userEvent.setup()
+    await searchAndOpenEditPopup(user)
+
+    await user.click(screen.getByRole('combobox', { name: 'Permission' }))
+    const listbox = await screen.findByRole('listbox')
+    const dialog = screen.getByRole('dialog')
+
+    expect(dialog).toContainElement(listbox)
+
+    // Close the still-open Select the same way the other Select-driving tests
+    // in this file do (selecting an item) rather than Escape/outside-click --
+    // jsdom + nested Dialog/Select focus-scopes recurse infinitely otherwise.
+    await user.click(screen.getByRole('option', { name: 'Barber' }))
+  })
+
+  it('marks the rest of the page inert while the popup is open, and clears it on close', async () => {
+    searchAccounts.mockResolvedValue({ ok: true, accounts: [TARGET_ACCOUNT] })
+    const user = userEvent.setup()
+    const { container } = renderPage()
+    await screen.findByText('Search by name or email to find an account.')
+
+    await user.type(screen.getByLabelText('Search'), 'target')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+    await user.click(
+      await screen.findByRole('button', { name: /Target Person/ }),
+    )
+    await screen.findByText('Edit Account')
+
+    expect(container).toHaveAttribute('inert')
+
+    await user.click(screen.getAllByRole('button', { name: 'Cancel' })[0])
+
+    expect(container).not.toHaveAttribute('inert')
+  })
+
+  it('a non-NewPassword 400 field error during a password save still shows a visible message', async () => {
+    adminUpdateAccount.mockResolvedValue({
+      ok: false,
+      status: 400,
+      problem: { errors: { Email: ['Email is invalid.'] } },
+    })
+    const user = userEvent.setup()
+    await searchAndOpenEditPopup(user)
+
+    await user.click(screen.getByRole('button', { name: 'Change Password' }))
+    await user.type(screen.getByLabelText('New Password'), 'new-correct-horse')
+    await user.type(
+      screen.getByLabelText('Confirm New Password'),
+      'new-correct-horse',
+    )
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(await screen.findByRole('button', { name: 'Confirm' }))
+
+    expect(
+      await screen.findByText('Something went wrong. Please try again.'),
+    ).toBeInTheDocument()
   })
 })
