@@ -88,6 +88,16 @@ public class AccountControllerTests : IDisposable
         return request;
     }
 
+    private static HttpRequestMessage AdminDeleteRequest(int id, string? accessToken = null)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Delete, $"/api/account/{id}");
+        if (accessToken is not null)
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        }
+        return request;
+    }
+
     private async Task<string> RegisterAndLogin(HttpClient client, string email = "john@example.com", string password = "correct-horse-battery-staple")
     {
         await client.PostAsJsonAsync("/api/auth/register", NewRegisterRequest(email: email, password: password), TestContext.Current.CancellationToken);
@@ -1061,6 +1071,255 @@ public class AccountControllerTests : IDisposable
         var response = await client.SendAsync(
             AdminCreateRequest(new { Email = "no-token@example.com", FirstName = "John", LastName = "Smith", Password = "correct-horse-battery-staple" }),
             TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminDelete_as_admin_soft_deletes_account_and_returns_204()
+    {
+        using var client = _factory.CreateClient();
+        await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Customer, "target-delete@example.com");
+        var targetId = await AccountIdFor("target-delete@example.com");
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, "admin-delete@example.com");
+
+        var response = await client.SendAsync(AdminDeleteRequest(targetId, adminToken), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        Assert.Null(await repository.FindById(targetId));
+
+        var rawRow = await context.Accounts.FirstOrDefaultAsync(a => a.Id == targetId, TestContext.Current.CancellationToken);
+        Assert.NotNull(rawRow);
+        Assert.NotNull(rawRow!.DeletedAt);
+    }
+
+    [Fact]
+    public async Task AdminDelete_makes_the_deleted_accounts_email_registerable_again()
+    {
+        using var client = _factory.CreateClient();
+        await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Customer, "reregister@example.com");
+        var targetId = await AccountIdFor("reregister@example.com");
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, "admin-reregister@example.com");
+
+        var deleteResponse = await client.SendAsync(AdminDeleteRequest(targetId, adminToken), TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
+
+        var registerResponse = await client.PostAsJsonAsync(
+            "/api/auth/register",
+            NewRegisterRequest(email: "reregister@example.com"),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Created, registerResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminDelete_a_deleted_account_cannot_sign_in()
+    {
+        using var client = _factory.CreateClient();
+        await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Customer, "cannot-signin@example.com");
+        var targetId = await AccountIdFor("cannot-signin@example.com");
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, "admin-cannot-signin@example.com");
+
+        var deleteResponse = await client.SendAsync(AdminDeleteRequest(targetId, adminToken), TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
+
+        var loginResponse = await client.PostAsJsonAsync(
+            "/api/auth/login",
+            new LoginRequest { Email = "cannot-signin@example.com", Password = "correct-horse-battery-staple" },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, loginResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminDelete_on_missing_account_returns_404()
+    {
+        using var client = _factory.CreateClient();
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, "admin-delete-missing@example.com");
+
+        var response = await client.SendAsync(AdminDeleteRequest(999999, adminToken), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminDelete_on_the_admin_account_returns_400()
+    {
+        using var client = _factory.CreateClient();
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, "admin-delete-self@example.com");
+        var adminId = await AccountIdFor("admin-delete-self@example.com");
+
+        var response = await client.SendAsync(AdminDeleteRequest(adminId, adminToken), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminDelete_on_stale_RowVersion_returns_409()
+    {
+        // Same deterministic two-DbContext pattern as AdminUpdate_on_stale_RowVersion_returns_409
+        // above (standing practice since Stories 1.2/1.7's flaky-test fixes) -- never a real
+        // concurrent-HTTP race.
+        await using var contextA = _factory.CreateDbContext();
+        var repositoryA = new AccountRepository(contextA);
+        var passwordHasher = new PasswordHasher<Account>();
+        var target = new Account
+        {
+            Email = "stale-delete-target@example.com",
+            FirstName = "John",
+            LastName = "Smith",
+            Role = Role.Customer,
+        };
+        target.PasswordHash = passwordHasher.HashPassword(target, "correct-horse-battery-staple");
+        var created = await repositoryA.Create(target);
+        var admin = new Account
+        {
+            Email = "stale-delete-admin@example.com",
+            FirstName = "Admina",
+            LastName = "Adminson",
+            Role = Role.Admin,
+        };
+        admin.PasswordHash = passwordHasher.HashPassword(admin, "correct-horse-battery-staple");
+        var createdAdmin = await repositoryA.Create(admin);
+
+        await using var contextB = _factory.CreateDbContext();
+        var repositoryB = new AccountRepository(contextB);
+        var staleCopy = await repositoryB.FindById(created.Id);
+        Assert.NotNull(staleCopy);
+
+        created.FirstName = "First Edit";
+        await repositoryA.Update(created);
+
+        using var scope = _factory.Services.CreateScope();
+        var bookingService = new BookingService(new AppointmentRepository(contextB), repositoryB);
+        var controller = new AccountController(new AccountService(repositoryB, passwordHasher, bookingService))
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext { RequestServices = scope.ServiceProvider },
+            },
+        };
+        controller.HttpContext.Items["Account"] = new Account { Id = createdAdmin.Id, Role = Role.Admin };
+
+        var result = await controller.AdminDelete(staleCopy!.Id);
+
+        var objectResult = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status409Conflict, objectResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminDelete_demoting_a_barber_cancels_future_appointments_via_http()
+    {
+        using var client = _factory.CreateClient();
+        await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Barber, "delete-barber@example.com");
+        var barberId = await AccountIdFor("delete-barber@example.com");
+        await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Customer, "delete-barber-customer@example.com");
+        var customerId = await AccountIdFor("delete-barber-customer@example.com");
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, "admin-delete-barber@example.com");
+
+        int futureId;
+        int pastId;
+        await using (var context = _factory.CreateDbContext())
+        {
+            var appointmentRepository = new AppointmentRepository(context);
+            var future = await appointmentRepository.Create(new Appointment
+            {
+                CustomerId = customerId,
+                BarberId = barberId,
+                Date = "2099-01-01",
+                StartTime = "09:00",
+            });
+            var past = await appointmentRepository.Create(new Appointment
+            {
+                CustomerId = customerId,
+                BarberId = barberId,
+                Date = "2020-01-01",
+                StartTime = "09:00",
+            });
+            futureId = future.Id;
+            pastId = past.Id;
+        }
+
+        var response = await client.SendAsync(AdminDeleteRequest(barberId, adminToken), TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        await using var verifyContext = _factory.CreateDbContext();
+        var futureReloaded = await verifyContext.Appointments.FirstOrDefaultAsync(a => a.Id == futureId, TestContext.Current.CancellationToken);
+        var pastReloaded = await verifyContext.Appointments.FirstOrDefaultAsync(a => a.Id == pastId, TestContext.Current.CancellationToken);
+        Assert.NotNull(futureReloaded);
+        Assert.NotNull(futureReloaded!.CancelledAt);
+        Assert.NotNull(pastReloaded);
+        Assert.Null(pastReloaded!.CancelledAt);
+    }
+
+    [Fact]
+    public async Task AdminDelete_deleting_a_customer_cancels_their_future_appointments_via_http()
+    {
+        using var client = _factory.CreateClient();
+        await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Customer, "delete-customer@example.com");
+        var customerId = await AccountIdFor("delete-customer@example.com");
+        await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Barber, "delete-customer-barber@example.com");
+        var barberId = await AccountIdFor("delete-customer-barber@example.com");
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, "admin-delete-customer@example.com");
+
+        int futureId;
+        int pastId;
+        await using (var context = _factory.CreateDbContext())
+        {
+            var appointmentRepository = new AppointmentRepository(context);
+            var future = await appointmentRepository.Create(new Appointment
+            {
+                CustomerId = customerId,
+                BarberId = barberId,
+                Date = "2099-01-01",
+                StartTime = "09:00",
+            });
+            var past = await appointmentRepository.Create(new Appointment
+            {
+                CustomerId = customerId,
+                BarberId = barberId,
+                Date = "2020-01-01",
+                StartTime = "09:00",
+            });
+            futureId = future.Id;
+            pastId = past.Id;
+        }
+
+        var response = await client.SendAsync(AdminDeleteRequest(customerId, adminToken), TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        await using var verifyContext = _factory.CreateDbContext();
+        var futureReloaded = await verifyContext.Appointments.FirstOrDefaultAsync(a => a.Id == futureId, TestContext.Current.CancellationToken);
+        var pastReloaded = await verifyContext.Appointments.FirstOrDefaultAsync(a => a.Id == pastId, TestContext.Current.CancellationToken);
+        Assert.NotNull(futureReloaded);
+        Assert.NotNull(futureReloaded!.CancelledAt);
+        Assert.NotNull(pastReloaded);
+        Assert.Null(pastReloaded!.CancelledAt);
+    }
+
+    [Theory]
+    [InlineData(Role.Customer)]
+    [InlineData(Role.Barber)]
+    public async Task AdminDelete_as_non_admin_returns_403(Role role)
+    {
+        using var client = _factory.CreateClient();
+        var accessToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, role, $"delete-nonadmin-{role}@example.com");
+        var targetId = await AccountIdFor($"delete-nonadmin-{role}@example.com");
+
+        var response = await client.SendAsync(AdminDeleteRequest(targetId, accessToken), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminDelete_without_access_token_returns_401()
+    {
+        using var client = _factory.CreateClient();
+
+        var response = await client.SendAsync(AdminDeleteRequest(1), TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }

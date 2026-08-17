@@ -397,6 +397,44 @@ public class AccountServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task AdminSoftDeleteAccount_on_customer_cancels_future_appointments_but_retains_past()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        var appointmentRepository = new AppointmentRepository(context);
+        var bookingService = NewBookingService(context, repository);
+        var service = new AccountService(repository, _passwordHasher, bookingService);
+        var barber = await repository.Create(NewAccount(email: "barber@example.com", role: Role.Barber));
+        var customer = await repository.Create(NewAccount(email: "customer@example.com"));
+        var admin = await repository.Create(NewAccount(email: "admin@example.com", role: Role.Admin));
+        var future = await appointmentRepository.Create(new Appointment
+        {
+            CustomerId = customer.Id,
+            BarberId = barber.Id,
+            Date = "2099-01-01",
+            StartTime = "09:00",
+        });
+        var past = await appointmentRepository.Create(new Appointment
+        {
+            CustomerId = customer.Id,
+            BarberId = barber.Id,
+            Date = "2020-01-01",
+            StartTime = "09:00",
+        });
+
+        await service.AdminSoftDeleteAccount(customer.Id, admin.Id);
+
+        await using var verifyContext = _factory.CreateDbContext();
+        var futureReloaded = await verifyContext.Appointments.FirstOrDefaultAsync(a => a.Id == future.Id, TestContext.Current.CancellationToken);
+        var pastReloaded = await verifyContext.Appointments.FirstOrDefaultAsync(a => a.Id == past.Id, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(futureReloaded);
+        Assert.NotNull(futureReloaded!.CancelledAt);
+        Assert.NotNull(pastReloaded);
+        Assert.Null(pastReloaded!.CancelledAt);
+    }
+
+    [Fact]
     public async Task AdminSoftDeleteAccount_on_admin_account_throws_AdminAccountProtectedException()
     {
         await using var context = _factory.CreateDbContext();

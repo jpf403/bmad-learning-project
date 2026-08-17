@@ -104,6 +104,27 @@ export async function createBarberAccount(
   return { ok: true, account: body }
 }
 
+export async function deleteAccount(accessToken, accountId) {
+  let response
+  try {
+    response = await fetch(`${API_BASE_URL}/api/account/${accountId}`, {
+      method: 'DELETE',
+      credentials: 'include',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+  } catch {
+    return { ok: false, status: null }
+  }
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => null)
+    return { ok: false, status: response.status, problem: body }
+  }
+  return { ok: true }
+}
+
 export async function searchAccounts(accessToken, query) {
   const params = new URLSearchParams()
   if (query && query.trim()) {

@@ -110,4 +110,32 @@ public class AccountController(IAccountService accountService) : ControllerBase
             return Problem(statusCode: StatusCodes.Status500InternalServerError, title: "Something went wrong. Please try again.");
         }
     }
+
+    [HttpDelete("{id:int}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> AdminDelete(int id)
+    {
+        var admin = (Account)HttpContext.Items["Account"]!;
+        try
+        {
+            await accountService.AdminSoftDeleteAccount(id, admin.Id);
+            return NoContent();
+        }
+        catch (AccountNotFoundException)
+        {
+            return Problem(statusCode: StatusCodes.Status404NotFound, title: "Account not found.");
+        }
+        catch (AdminAccountProtectedException)
+        {
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "The admin account cannot be deleted.");
+        }
+        catch (AccountConflictException)
+        {
+            return Problem(statusCode: StatusCodes.Status409Conflict, title: "This account was changed elsewhere. Refresh and try again.");
+        }
+        catch (Exception)
+        {
+            return Problem(statusCode: StatusCodes.Status500InternalServerError, title: "Something went wrong. Please try again.");
+        }
+    }
 }

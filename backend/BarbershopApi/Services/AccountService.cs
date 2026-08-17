@@ -165,9 +165,15 @@ public class AccountService(IAccountRepository accountRepository, IPasswordHashe
             throw new AccountConflictException();
         }
 
+        // Role.Admin never reaches here: SoftDelete's EnsureNotCurrentlyAdmin already
+        // threw AdminAccountProtectedException above for that role.
         if (account.Role == Role.Barber)
         {
             await bookingService.CancelAllFutureForBarber(accountId, actingAdminId, Role.Admin);
+        }
+        else if (account.Role == Role.Customer)
+        {
+            await bookingService.CancelAllFutureForCustomer(accountId, actingAdminId, Role.Admin);
         }
     }
 }

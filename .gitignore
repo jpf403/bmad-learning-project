@@ -11,6 +11,11 @@ backend/**/obj/
 backend/BarbershopApi/App_Data/*.db
 backend/BarbershopApi/App_Data/*.db-*
 
+# Local-only launch config (JWT signing key, admin bootstrap credentials) --
+# never pushed to git. See Properties/launchSettings.example.json for the
+# shape to copy from.
+backend/BarbershopApi/Properties/launchSettings.json
+
 # Node
 frontend/node_modules/
 frontend/dist/

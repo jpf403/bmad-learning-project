@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from '../context/AuthContext'
 import {
   adminUpdateAccount,
   createBarberAccount,
+  deleteAccount,
   searchAccounts,
 } from '../api/AccountApi'
 import AdminPanel from './AdminPanel'
@@ -15,6 +16,7 @@ vi.mock('../api/AccountApi', () => ({
   searchAccounts: vi.fn(),
   adminUpdateAccount: vi.fn(),
   createBarberAccount: vi.fn(),
+  deleteAccount: vi.fn(),
 }))
 
 const SIGNED_IN_ADMIN = {
@@ -86,6 +88,7 @@ describe('AdminPanel', () => {
     searchAccounts.mockReset()
     adminUpdateAccount.mockReset()
     createBarberAccount.mockReset()
+    deleteAccount.mockReset()
     // AuthProvider bootstraps a session via /api/auth/refresh on mount; default
     // this to "no session" so it never interferes with the direct login() call.
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: false, status: 401 })
@@ -553,6 +556,7 @@ describe('AdminPanel', () => {
     expect(screen.getByLabelText('Last Name')).toBeDisabled()
     expect(screen.queryByRole('button', { name: 'Save Changes' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Change Password' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull()
     expect(adminUpdateAccount).not.toHaveBeenCalled()
   })
 
@@ -625,6 +629,94 @@ describe('AdminPanel', () => {
     expect(
       await screen.findByText('Something went wrong. Please try again.'),
     ).toBeInTheDocument()
+  })
+
+  describe('Delete Account', () => {
+    it('shows a "Delete" button in the identity view, alongside "Save Changes" and "Cancel"', async () => {
+      const user = userEvent.setup()
+      await searchAndOpenEditPopup(user)
+
+      expect(
+        screen.getByRole('button', { name: 'Save Changes' }),
+      ).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument()
+      expect(
+        screen.getAllByRole('button', { name: 'Cancel' })[0],
+      ).toBeInTheDocument()
+    })
+
+    it('clicking "Delete" opens the shared confirm popup with the destructive-styled Confirm button and the delete-specific message', async () => {
+      const user = userEvent.setup()
+      await searchAndOpenEditPopup(user)
+
+      await user.click(screen.getByRole('button', { name: 'Delete' }))
+
+      expect(await screen.findByText('Delete Account?')).toBeInTheDocument()
+      expect(
+        screen.getByText('Delete this account? This cannot be undone.'),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: 'Confirm' }),
+      ).toBeInTheDocument()
+    })
+
+    it("confirming a delete calls deleteAccount with the target account's id, closes the edit popup, and removes that account's row from the currently displayed search results", async () => {
+      deleteAccount.mockResolvedValue({ ok: true })
+      const user = userEvent.setup()
+      await searchAndOpenEditPopup(user)
+
+      await user.click(screen.getByRole('button', { name: 'Delete' }))
+      await user.click(await screen.findByRole('button', { name: 'Confirm' }))
+
+      expect(deleteAccount).toHaveBeenCalledWith('token-abc', 1)
+      expect(screen.queryByText('Edit Account')).toBeNull()
+      expect(screen.queryByText('Target Person')).toBeNull()
+    })
+
+    it('declining the delete confirm ("Go Back") leaves the account undeleted, the row unchanged, and deleteAccount not called', async () => {
+      const user = userEvent.setup()
+      await searchAndOpenEditPopup(user)
+
+      await user.click(screen.getByRole('button', { name: 'Delete' }))
+      await user.click(await screen.findByRole('button', { name: 'Go Back' }))
+
+      expect(deleteAccount).not.toHaveBeenCalled()
+      expect(screen.getByText('Edit Account')).toBeInTheDocument()
+      expect(screen.getByText('target@example.com')).toBeInTheDocument()
+    })
+
+    it('a 409 conflict response from deleteAccount shows the existing refresh-and-retry message and keeps the popup open', async () => {
+      deleteAccount.mockResolvedValue({
+        ok: false,
+        status: 409,
+        problem: {
+          title: 'This account was changed elsewhere. Refresh and try again.',
+        },
+      })
+      const user = userEvent.setup()
+      await searchAndOpenEditPopup(user)
+
+      await user.click(screen.getByRole('button', { name: 'Delete' }))
+      await user.click(await screen.findByRole('button', { name: 'Confirm' }))
+
+      expect(
+        await screen.findByText(
+          'This account was changed elsewhere. Refresh and try again.',
+        ),
+      ).toBeInTheDocument()
+      expect(screen.getByText('Edit Account')).toBeInTheDocument()
+    })
+
+    it('a 401 response from deleteAccount logs out and navigates to /login with the session-expired message', async () => {
+      deleteAccount.mockResolvedValue({ ok: false, status: 401 })
+      const user = userEvent.setup()
+      await searchAndOpenEditPopup(user)
+
+      await user.click(screen.getByRole('button', { name: 'Delete' }))
+      await user.click(await screen.findByRole('button', { name: 'Confirm' }))
+
+      expect(await screen.findByText('Login Stub')).toBeInTheDocument()
+    })
   })
 
   describe('Create Barber', () => {
