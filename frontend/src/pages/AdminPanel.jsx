@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import {
   adminUpdateAccount,
   createBarberAccount,
+  deleteAccount,
   searchAccounts,
 } from '../api/AccountApi'
 import Input from '../components/Input'
@@ -57,7 +58,7 @@ export default function AdminPanel() {
   const [passwordFieldErrors, setPasswordFieldErrors] = useState({})
 
   const [confirmOpen, setConfirmOpen] = useState(false)
-  const [pendingAction, setPendingAction] = useState(null) // 'details' | 'password'
+  const [pendingAction, setPendingAction] = useState(null) // 'details' | 'password' | 'delete'
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const [createOpen, setCreateOpen] = useState(false)
@@ -204,6 +205,12 @@ export default function AdminPanel() {
     setConfirmOpen(true)
   }
 
+  function handleDeleteClick() {
+    setEditError('')
+    setPendingAction('delete')
+    setConfirmOpen(true)
+  }
+
   function handleSavePasswordClick() {
     setPasswordError('')
     setEditError('')
@@ -224,25 +231,33 @@ export default function AdminPanel() {
   async function handleConfirmEdit() {
     setIsSubmitting(true)
     const isPasswordAction = pendingAction === 'password'
-    const result = await adminUpdateAccount(
-      user.accessToken,
-      editingAccount.id,
-      {
-        // A password save must never carry an unsaved, unconfirmed identity
-        // edit -- send the last-confirmed identity fields, not local form state.
-        email: isPasswordAction ? editingAccount.email : editEmail,
-        firstName: isPasswordAction ? editingAccount.firstName : editFirstName,
-        lastName: isPasswordAction ? editingAccount.lastName : editLastName,
-        role: isPasswordAction ? editingAccount.role : editRole,
-        newPassword: isPasswordAction ? editNewPassword : null,
-      },
-    )
+    const isDeleteAction = pendingAction === 'delete'
+    const result = isDeleteAction
+      ? await deleteAccount(user.accessToken, editingAccount.id)
+      : await adminUpdateAccount(user.accessToken, editingAccount.id, {
+          // A password save must never carry an unsaved, unconfirmed identity
+          // edit -- send the last-confirmed identity fields, not local form state.
+          email: isPasswordAction ? editingAccount.email : editEmail,
+          firstName: isPasswordAction
+            ? editingAccount.firstName
+            : editFirstName,
+          lastName: isPasswordAction ? editingAccount.lastName : editLastName,
+          role: isPasswordAction ? editingAccount.role : editRole,
+          newPassword: isPasswordAction ? editNewPassword : null,
+        })
     if (!isMountedRef.current) {
       return
     }
     setIsSubmitting(false)
 
     if (result.ok) {
+      if (isDeleteAction) {
+        setAccounts((current) =>
+          current.filter((account) => account.id !== editingAccount.id),
+        )
+        setEditingAccount(null)
+        return
+      }
       setAccounts((current) =>
         current.map((account) =>
           account.id === result.account.id ? result.account : account,
@@ -268,7 +283,7 @@ export default function AdminPanel() {
     if (
       result.status === 409 &&
       result.problem?.title === DUPLICATE_EMAIL_TITLE &&
-      !isPasswordAction
+      pendingAction === 'details'
     ) {
       setEditFieldErrors({ Email: [result.problem.title] })
       return
@@ -578,6 +593,15 @@ export default function AdminPanel() {
                           Save Changes
                         </Button>
                       )}
+                      {!isAdminAccount && (
+                        <Button
+                          variant="destructive"
+                          onClick={handleDeleteClick}
+                          disabled={isSubmitting}
+                        >
+                          Delete
+                        </Button>
+                      )}
                       <Button
                         variant="secondary"
                         onClick={handleCancelPopup}
@@ -647,12 +671,15 @@ export default function AdminPanel() {
       <ConfirmPopup
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title="Save changes?"
+        title={pendingAction === 'delete' ? 'Delete Account?' : 'Save changes?'}
         message={
-          pendingAction === 'password'
-            ? 'Save the new password for this account?'
-            : 'Save changes to this account?'
+          pendingAction === 'delete'
+            ? 'Delete this account? This cannot be undone.'
+            : pendingAction === 'password'
+              ? 'Save the new password for this account?'
+              : 'Save changes to this account?'
         }
+        destructive={pendingAction === 'delete'}
         onConfirm={handleConfirmEdit}
       />
 

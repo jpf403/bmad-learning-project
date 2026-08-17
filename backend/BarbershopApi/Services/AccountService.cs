@@ -169,5 +169,9 @@ public class AccountService(IAccountRepository accountRepository, IPasswordHashe
         {
             await bookingService.CancelAllFutureForBarber(accountId, actingAdminId, Role.Admin);
         }
+        else if (account.Role == Role.Customer)
+        {
+            await bookingService.CancelAllFutureForCustomer(accountId, actingAdminId, Role.Admin);
+        }
     }
 }

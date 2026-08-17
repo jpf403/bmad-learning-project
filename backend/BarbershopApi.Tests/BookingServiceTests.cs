@@ -635,4 +635,75 @@ public class BookingServiceTests : IDisposable
         Assert.NotNull(reloaded);
         Assert.NotNull(reloaded!.CancelledAt);
     }
+
+    [Fact]
+    public async Task CancelAllFutureForCustomer_cancels_all_future_appointments_for_that_customer_only()
+    {
+        await using var context = _factory.CreateDbContext();
+        var customer = await SeedAccount(context, "customer@example.com", Role.Customer);
+        var otherCustomer = await SeedAccount(context, "other-customer@example.com", Role.Customer);
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var admin = await SeedAccount(context, "admin@example.com", Role.Admin);
+        var appointmentRepository = new AppointmentRepository(context);
+        var service = NewService(context);
+        var future = await appointmentRepository.Create(new Appointment
+        {
+            CustomerId = customer.Id,
+            BarberId = barber.Id,
+            Date = "2099-01-01",
+            StartTime = "09:00",
+        });
+        var otherCustomerFuture = await appointmentRepository.Create(new Appointment
+        {
+            CustomerId = otherCustomer.Id,
+            BarberId = barber.Id,
+            Date = "2099-01-01",
+            StartTime = "10:00",
+        });
+
+        await service.CancelAllFutureForCustomer(customer.Id, admin.Id, Role.Admin, FixedNow);
+
+        await using var verifyContext = _factory.CreateDbContext();
+        var cancelled = await verifyContext.Appointments.FirstOrDefaultAsync(a => a.Id == future.Id, TestContext.Current.CancellationToken);
+        var untouched = await verifyContext.Appointments.FirstOrDefaultAsync(a => a.Id == otherCustomerFuture.Id, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(cancelled);
+        Assert.NotNull(cancelled!.CancelledAt);
+        Assert.NotNull(untouched);
+        Assert.Null(untouched!.CancelledAt);
+    }
+
+    [Fact]
+    public async Task CancelAllFutureForCustomer_tolerates_an_already_cancelled_appointment_without_aborting_the_rest()
+    {
+        await using var context = _factory.CreateDbContext();
+        var customer = await SeedAccount(context, "customer@example.com", Role.Customer);
+        var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
+        var admin = await SeedAccount(context, "admin@example.com", Role.Admin);
+        var appointmentRepository = new AppointmentRepository(context);
+        var service = NewService(context);
+        var alreadyCancelled = await appointmentRepository.Create(new Appointment
+        {
+            CustomerId = customer.Id,
+            BarberId = barber.Id,
+            Date = "2099-01-01",
+            StartTime = "09:00",
+        });
+        await appointmentRepository.TryCancel(alreadyCancelled.Id, DateTime.UtcNow);
+        var stillPending = await appointmentRepository.Create(new Appointment
+        {
+            CustomerId = customer.Id,
+            BarberId = barber.Id,
+            Date = "2099-01-01",
+            StartTime = "10:00",
+        });
+
+        await service.CancelAllFutureForCustomer(customer.Id, admin.Id, Role.Admin, FixedNow);
+
+        await using var verifyContext = _factory.CreateDbContext();
+        var reloaded = await verifyContext.Appointments.FirstOrDefaultAsync(a => a.Id == stillPending.Id, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(reloaded);
+        Assert.NotNull(reloaded!.CancelledAt);
+    }
 }
