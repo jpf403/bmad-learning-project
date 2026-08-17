@@ -73,7 +73,7 @@ development_status:
   3-1-account-repository-admin-operations: done
   3-2-admin-account-search: done
   3-3-admin-edits-an-account: done
-  3-4-admin-creates-a-barber-account: ready-for-dev
+  3-4-admin-creates-a-barber-account: review
   3-5-admin-deletes-an-account: backlog
   epic-3-retrospective: optional
 
@@ -97,7 +97,7 @@ action_items:
   - epic: 2
     action: "Delete BarberSeedService (and its Program.cs registration) once Story 3.4 ships a real barber-creation path"
     owner: "Amelia (Dev)"
-    status: open
+    status: done
   - epic: 2
     action: "Corrected stale bookkeeping: Epic 1's NavBar-overflow action item was marked open despite being resolved in Story 2.2 - now marked done"
     owner: "Amelia (Dev)"

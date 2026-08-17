@@ -16,6 +16,19 @@
   margin: 0;
 }
 
+.admin-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-4);
+}
+
+.admin-panel__created-message {
+  font-family: var(--font-family-base);
+  font-size: var(--typography-body-size);
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
 .admin-panel__search-form {
   display: flex;
   align-items: flex-end;
@@ -144,6 +157,23 @@
 }
 
 .admin-edit-popup__footer {
+  display: flex;
+  gap: var(--spacing-3);
+}
+
+.admin-create-popup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-6);
+}
+
+.admin-create-popup__fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+}
+
+.admin-create-popup__footer {
   display: flex;
   gap: var(--spacing-3);
 }

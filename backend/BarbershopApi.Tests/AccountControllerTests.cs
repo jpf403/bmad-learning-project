@@ -75,6 +75,19 @@ public class AccountControllerTests : IDisposable
         return request;
     }
 
+    private static HttpRequestMessage AdminCreateRequest(object body, string? accessToken = null)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/account")
+        {
+            Content = JsonContent.Create(body),
+        };
+        if (accessToken is not null)
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        }
+        return request;
+    }
+
     private async Task<string> RegisterAndLogin(HttpClient client, string email = "john@example.com", string password = "correct-horse-battery-staple")
     {
         await client.PostAsJsonAsync("/api/auth/register", NewRegisterRequest(email: email, password: password), TestContext.Current.CancellationToken);
@@ -907,5 +920,148 @@ public class AccountControllerTests : IDisposable
         meRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", targetToken);
         var meResponse = await client.SendAsync(meRequest, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, meResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminCreateBarber_as_admin_creates_account_and_returns_summary()
+    {
+        using var client = _factory.CreateClient();
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, "admin-create@example.com");
+
+        var response = await client.SendAsync(
+            AdminCreateRequest(
+                new { Email = "new-barber@example.com", FirstName = "John", LastName = "Smith", Password = "correct-horse-battery-staple" },
+                adminToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<AccountSummary>(ResponseJsonOptions, TestContext.Current.CancellationToken);
+        Assert.NotNull(body);
+        Assert.Equal("new-barber@example.com", body.Email);
+        Assert.Equal("John", body.FirstName);
+        Assert.Equal("Smith", body.LastName);
+        Assert.Equal(Role.Barber, body.Role);
+    }
+
+    [Fact]
+    public async Task AdminCreateBarber_with_duplicate_email_returns_409()
+    {
+        using var client = _factory.CreateClient();
+        await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Customer, "existing-create@example.com");
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, "admin-create-duplicate@example.com");
+
+        var response = await client.SendAsync(
+            AdminCreateRequest(
+                new { Email = "existing-create@example.com", FirstName = "John", LastName = "Smith", Password = "correct-horse-battery-staple" },
+                adminToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Contains("That email is already in use.", body);
+    }
+
+    [Fact]
+    public async Task AdminCreateBarber_with_implausible_email_returns_400()
+    {
+        using var client = _factory.CreateClient();
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, "admin-create-implausible@example.com");
+
+        var response = await client.SendAsync(
+            AdminCreateRequest(
+                new { Email = "testbademail", FirstName = "John", LastName = "Smith", Password = "correct-horse-battery-staple" },
+                adminToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminCreateBarber_with_blank_first_name_returns_400()
+    {
+        using var client = _factory.CreateClient();
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, "admin-create-blankfirst@example.com");
+
+        var response = await client.SendAsync(
+            AdminCreateRequest(
+                new { Email = "blank-first@example.com", FirstName = "   ", LastName = "Smith", Password = "correct-horse-battery-staple" },
+                adminToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminCreateBarber_with_blank_last_name_returns_400()
+    {
+        using var client = _factory.CreateClient();
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, "admin-create-blanklast@example.com");
+
+        var response = await client.SendAsync(
+            AdminCreateRequest(
+                new { Email = "blank-last@example.com", FirstName = "John", LastName = "   ", Password = "correct-horse-battery-staple" },
+                adminToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminCreateBarber_with_short_password_returns_400()
+    {
+        using var client = _factory.CreateClient();
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, "admin-create-shortpassword@example.com");
+
+        var response = await client.SendAsync(
+            AdminCreateRequest(
+                new { Email = "short-password@example.com", FirstName = "John", LastName = "Smith", Password = "short1" },
+                adminToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminCreateBarber_with_password_containing_spaces_returns_400()
+    {
+        using var client = _factory.CreateClient();
+        var adminToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, Role.Admin, "admin-create-spacedpassword@example.com");
+
+        var response = await client.SendAsync(
+            AdminCreateRequest(
+                new { Email = "spaced-password@example.com", FirstName = "John", LastName = "Smith", Password = "has a space" },
+                adminToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(Role.Customer)]
+    [InlineData(Role.Barber)]
+    public async Task AdminCreateBarber_as_non_admin_returns_403(Role role)
+    {
+        using var client = _factory.CreateClient();
+        var accessToken = await RoleGatingTests.RegisterAndLoginAs(_factory, client, role, $"create-barber-{role}@example.com");
+
+        var response = await client.SendAsync(
+            AdminCreateRequest(
+                new { Email = "attempted-barber@example.com", FirstName = "John", LastName = "Smith", Password = "correct-horse-battery-staple" },
+                accessToken),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminCreateBarber_without_access_token_returns_401()
+    {
+        using var client = _factory.CreateClient();
+
+        var response = await client.SendAsync(
+            AdminCreateRequest(new { Email = "no-token@example.com", FirstName = "John", LastName = "Smith", Password = "correct-horse-battery-staple" }),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 }

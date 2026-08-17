@@ -4,12 +4,17 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router'
 import { AuthProvider, useAuth } from '../context/AuthContext'
-import { adminUpdateAccount, searchAccounts } from '../api/AccountApi'
+import {
+  adminUpdateAccount,
+  createBarberAccount,
+  searchAccounts,
+} from '../api/AccountApi'
 import AdminPanel from './AdminPanel'
 
 vi.mock('../api/AccountApi', () => ({
   searchAccounts: vi.fn(),
   adminUpdateAccount: vi.fn(),
+  createBarberAccount: vi.fn(),
 }))
 
 const SIGNED_IN_ADMIN = {
@@ -80,6 +85,7 @@ describe('AdminPanel', () => {
   beforeEach(() => {
     searchAccounts.mockReset()
     adminUpdateAccount.mockReset()
+    createBarberAccount.mockReset()
     // AuthProvider bootstraps a session via /api/auth/refresh on mount; default
     // this to "no session" so it never interferes with the direct login() call.
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: false, status: 401 })
@@ -619,5 +625,236 @@ describe('AdminPanel', () => {
     expect(
       await screen.findByText('Something went wrong. Please try again.'),
     ).toBeInTheDocument()
+  })
+
+  describe('Create Barber', () => {
+    async function openCreatePopup(user) {
+      renderPage()
+      await screen.findByText('Search by name or email to find an account.')
+      await user.click(screen.getByRole('button', { name: 'Create Barber' }))
+      await screen.findByRole('heading', { name: 'Create Barber' })
+    }
+
+    it('is visible on page load and opens the create popup with empty fields', async () => {
+      const user = userEvent.setup()
+      await openCreatePopup(user)
+
+      expect(screen.getByLabelText('Email')).toHaveValue('')
+      expect(screen.getByLabelText('First Name')).toHaveValue('')
+      expect(screen.getByLabelText('Last Name')).toHaveValue('')
+      expect(screen.getByLabelText('Password')).toHaveValue('')
+      expect(screen.getByLabelText('Confirm Password')).toHaveValue('')
+    })
+
+    it('mismatched passwords show "Passwords do not match", clear both password fields, and do not open the confirm popup', async () => {
+      const user = userEvent.setup()
+      await openCreatePopup(user)
+
+      await user.type(screen.getByLabelText('Email'), 'new-barber@example.com')
+      await user.type(screen.getByLabelText('First Name'), 'John')
+      await user.type(screen.getByLabelText('Last Name'), 'Smith')
+      await user.type(
+        screen.getByLabelText('Password'),
+        'correct-horse-battery',
+      )
+      await user.type(
+        screen.getByLabelText('Confirm Password'),
+        'different-password',
+      )
+      await user.click(screen.getByRole('button', { name: 'Create' }))
+
+      expect(
+        await screen.findAllByText('Passwords do not match'),
+      ).not.toHaveLength(0)
+      expect(screen.getByLabelText('Password')).toHaveValue('')
+      expect(screen.getByLabelText('Confirm Password')).toHaveValue('')
+      expect(screen.queryByText('Create this barber account?')).toBeNull()
+      expect(createBarberAccount).not.toHaveBeenCalled()
+    })
+
+    it('submitting valid, matching input calls createBarberAccount, closes the popup, and shows a confirmation message', async () => {
+      createBarberAccount.mockResolvedValue({
+        ok: true,
+        account: {
+          id: 3,
+          email: 'new-barber@example.com',
+          firstName: 'John',
+          lastName: 'Smith',
+          role: 'Barber',
+        },
+      })
+      const user = userEvent.setup()
+      await openCreatePopup(user)
+
+      await user.type(screen.getByLabelText('Email'), 'new-barber@example.com')
+      await user.type(screen.getByLabelText('First Name'), 'John')
+      await user.type(screen.getByLabelText('Last Name'), 'Smith')
+      await user.type(
+        screen.getByLabelText('Password'),
+        'correct-horse-battery',
+      )
+      await user.type(
+        screen.getByLabelText('Confirm Password'),
+        'correct-horse-battery',
+      )
+      await user.click(screen.getByRole('button', { name: 'Create' }))
+      await user.click(await screen.findByRole('button', { name: 'Confirm' }))
+
+      expect(createBarberAccount).toHaveBeenCalledWith('token-abc', {
+        email: 'new-barber@example.com',
+        firstName: 'John',
+        lastName: 'Smith',
+        password: 'correct-horse-battery',
+      })
+      expect(
+        screen.queryByRole('heading', { name: 'Create Barber' }),
+      ).toBeNull()
+      expect(
+        await screen.findByText('Barber account created.'),
+      ).toBeInTheDocument()
+    })
+
+    it('a 409 "That email is already in use." response shows that message on the Email field and keeps the popup open with entered values', async () => {
+      createBarberAccount.mockResolvedValue({
+        ok: false,
+        status: 409,
+        problem: { title: 'That email is already in use.' },
+      })
+      const user = userEvent.setup()
+      await openCreatePopup(user)
+
+      await user.type(screen.getByLabelText('Email'), 'duplicate@example.com')
+      await user.type(screen.getByLabelText('First Name'), 'John')
+      await user.type(screen.getByLabelText('Last Name'), 'Smith')
+      await user.type(
+        screen.getByLabelText('Password'),
+        'correct-horse-battery',
+      )
+      await user.type(
+        screen.getByLabelText('Confirm Password'),
+        'correct-horse-battery',
+      )
+      await user.click(screen.getByRole('button', { name: 'Create' }))
+      await user.click(await screen.findByRole('button', { name: 'Confirm' }))
+
+      expect(
+        await screen.findByText('That email is already in use.'),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByRole('heading', { name: 'Create Barber' }),
+      ).toBeInTheDocument()
+      expect(screen.getByLabelText('Email')).toHaveValue(
+        'duplicate@example.com',
+      )
+    })
+
+    it('a 400 response with problem.errors surfaces the corresponding field error and keeps the popup open', async () => {
+      createBarberAccount.mockResolvedValue({
+        ok: false,
+        status: 400,
+        problem: { errors: { FirstName: ['This field cannot be blank.'] } },
+      })
+      const user = userEvent.setup()
+      await openCreatePopup(user)
+
+      await user.type(screen.getByLabelText('Email'), 'new-barber@example.com')
+      await user.type(screen.getByLabelText('Last Name'), 'Smith')
+      await user.type(
+        screen.getByLabelText('Password'),
+        'correct-horse-battery',
+      )
+      await user.type(
+        screen.getByLabelText('Confirm Password'),
+        'correct-horse-battery',
+      )
+      await user.click(screen.getByRole('button', { name: 'Create' }))
+      await user.click(await screen.findByRole('button', { name: 'Confirm' }))
+
+      expect(
+        await screen.findByText('This field cannot be blank.'),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByRole('heading', { name: 'Create Barber' }),
+      ).toBeInTheDocument()
+    })
+
+    it('a 401 response logs out and navigates to /login with the session-expired message', async () => {
+      createBarberAccount.mockResolvedValue({ ok: false, status: 401 })
+      const user = userEvent.setup()
+      await openCreatePopup(user)
+
+      await user.type(screen.getByLabelText('Email'), 'new-barber@example.com')
+      await user.type(screen.getByLabelText('First Name'), 'John')
+      await user.type(screen.getByLabelText('Last Name'), 'Smith')
+      await user.type(
+        screen.getByLabelText('Password'),
+        'correct-horse-battery',
+      )
+      await user.type(
+        screen.getByLabelText('Confirm Password'),
+        'correct-horse-battery',
+      )
+      await user.click(screen.getByRole('button', { name: 'Create' }))
+      await user.click(await screen.findByRole('button', { name: 'Confirm' }))
+
+      expect(await screen.findByText('Login Stub')).toBeInTheDocument()
+    })
+
+    it('clicking "Cancel" closes the popup without calling createBarberAccount, and reopening shows empty fields again', async () => {
+      const user = userEvent.setup()
+      await openCreatePopup(user)
+
+      await user.type(screen.getByLabelText('Email'), 'unsaved@example.com')
+      await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+      expect(
+        screen.queryByRole('heading', { name: 'Create Barber' }),
+      ).toBeNull()
+      expect(createBarberAccount).not.toHaveBeenCalled()
+
+      await user.click(screen.getByRole('button', { name: 'Create Barber' }))
+      await screen.findByRole('heading', { name: 'Create Barber' })
+      expect(screen.getByLabelText('Email')).toHaveValue('')
+    })
+
+    it('creating a barber does not add a row to the currently displayed search results', async () => {
+      searchAccounts.mockResolvedValue({ ok: true, accounts: [TARGET_ACCOUNT] })
+      createBarberAccount.mockResolvedValue({
+        ok: true,
+        account: {
+          id: 3,
+          email: 'new-barber@example.com',
+          firstName: 'John',
+          lastName: 'Smith',
+          role: 'Barber',
+        },
+      })
+      const user = userEvent.setup()
+      renderPage()
+      await screen.findByText('Search by name or email to find an account.')
+      await user.type(screen.getByLabelText('Search'), 'target')
+      await user.click(screen.getByRole('button', { name: 'Search' }))
+      await screen.findByText('Target Person')
+
+      await user.click(screen.getByRole('button', { name: 'Create Barber' }))
+      await screen.findByRole('heading', { name: 'Create Barber' })
+      await user.type(screen.getByLabelText('Email'), 'new-barber@example.com')
+      await user.type(screen.getByLabelText('First Name'), 'John')
+      await user.type(screen.getByLabelText('Last Name'), 'Smith')
+      await user.type(
+        screen.getByLabelText('Password'),
+        'correct-horse-battery',
+      )
+      await user.type(
+        screen.getByLabelText('Confirm Password'),
+        'correct-horse-battery',
+      )
+      await user.click(screen.getByRole('button', { name: 'Create' }))
+      await user.click(await screen.findByRole('button', { name: 'Confirm' }))
+      await screen.findByText('Barber account created.')
+
+      expect(screen.getByText('Target Person')).toBeInTheDocument()
+      expect(screen.queryByText('new-barber@example.com')).toBeNull()
+    })
   })
 })
