@@ -170,6 +170,18 @@ public class AccountServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task AdminCreateBarber_trims_email()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        var service = new AccountService(repository, _passwordHasher, NewBookingService(context, repository));
+
+        var created = await service.AdminCreateBarber("  barber-trim@example.com  ", "Bob", "Barbington", ExistingPassword);
+
+        Assert.Equal("barber-trim@example.com", created.Email);
+    }
+
+    [Fact]
     public async Task AdminUpdateAccount_password_change_increments_SessionVersion()
     {
         await using var context = _factory.CreateDbContext();

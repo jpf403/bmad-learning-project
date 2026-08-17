@@ -167,6 +167,13 @@
   gap: var(--spacing-6);
 }
 
+.admin-create-popup__error {
+  color: var(--color-error);
+  font-family: var(--font-family-base);
+  font-size: var(--typography-caption-size);
+  margin: 0;
+}
+
 .admin-create-popup__fields {
   display: flex;
   flex-direction: column;

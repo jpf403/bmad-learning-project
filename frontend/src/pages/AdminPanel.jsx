@@ -311,6 +311,8 @@ export default function AdminPanel() {
     setCreatePasswordError('')
     setCreateError('')
     setIsCreating(false)
+    setCreateConfirmOpen(false)
+    setCreatedMessage('')
     setCreateOpen(true)
   }
 
@@ -665,7 +667,7 @@ export default function AdminPanel() {
       >
         <div className="admin-create-popup">
           {createError && (
-            <p className="admin-edit-popup__error">{createError}</p>
+            <p className="admin-create-popup__error">{createError}</p>
           )}
           <div className="admin-create-popup__fields">
             <Input
@@ -724,7 +726,7 @@ export default function AdminPanel() {
       <ConfirmPopup
         open={createConfirmOpen}
         onOpenChange={setCreateConfirmOpen}
-        title="Create this barber account?"
+        title="Create Barber?"
         message="Create this barber account?"
         onConfirm={handleConfirmCreate}
       />

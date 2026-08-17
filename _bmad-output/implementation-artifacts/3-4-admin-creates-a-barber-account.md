@@ -4,7 +4,7 @@ baseline_commit: 7c2bb6f67867f49db2d019243f8be92d6c12ff87
 
 # Story 3.4: Admin Creates a Barber Account
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -122,6 +122,16 @@ so that I can add staff without a self-registration flow.
   - [x] Branch as `story/3.4-admin-creates-a-barber-account` from `main`.
   - [ ] Push and confirm both CI jobs (Backend .NET, Frontend Vite/React) green before merging (AD-11).
   - [ ] Open PR and merge to `main` — left for Jack per standing project practice.
+
+### Review Findings
+
+- [x] [Review][Patch] Success message never clears — `createdMessage` isn't reset by `handleOpenCreate`/`handleCancelCreate`, so "Barber account created." persists indefinitely across later popup opens/cancels for the rest of the session [frontend/src/pages/AdminPanel.jsx:304-315,388-401] — fixed: `handleOpenCreate` now resets `createdMessage`
+- [x] [Review][Patch] Create-popup error text borrows the edit popup's `.admin-edit-popup__error` CSS class instead of a scoped `.admin-create-popup__error` — no such class exists in AdminPanel.css despite Task 4's styling being scoped to `.admin-create-popup` [frontend/src/pages/AdminPanel.jsx:668] — fixed: added `.admin-create-popup__error` to AdminPanel.css, updated the className
+- [x] [Review][Patch] Create-flow `ConfirmPopup`'s `title` and `message` are the identical string ("Create this barber account?"), unlike the sibling edit-flow `ConfirmPopup` which uses a distinct title/message pair [frontend/src/pages/AdminPanel.jsx:727-728] — fixed: `title` changed to "Create Barber?"
+- [x] [Review][Patch] `handleOpenCreate` doesn't reset `createConfirmOpen` to `false` — currently unreachable since `ConfirmPopup` always closes itself synchronously on confirm/cancel/escape, but the defensive reset is missing [frontend/src/pages/AdminPanel.jsx:304-315] — fixed: `handleOpenCreate` now resets `createConfirmOpen`
+- [x] [Review][Defer] ~~`AccountService.AdminCreateBarber` assigns `Email = email` with no `.Trim()`~~ [backend/BarbershopApi/Services/AccountService.cs:84] — **false positive**, `AccountRepository.Create` already trims+lowercases the email before persisting for every caller; regression test added (`AccountServiceTests.AdminCreateBarber_trims_email`), no fix needed
+- [x] [Review][Defer] `POST /api/account` (AdminCreate) has no rate-limiting policy despite setting a new account's password hash [backend/BarbershopApi/Controllers/AccountController.cs] — deferred, mirrors `AuthController.Register`'s existing gap; a codebase-wide policy decision, not a regression from this diff
+- [x] [Review][Defer] The create popup's `Modal`-in-`Modal` nesting (create popup + its own `ConfirmPopup`) is confirmed working only under jsdom in `AdminPanel.test.jsx` [frontend/src/pages/AdminPanel.jsx, AdminPanel.test.jsx] — deferred, recommend manual verification in a real browser (focus return, overlay stacking) since jsdom doesn't reproduce Radix's real focus-scope behavior
 
 ## Dev Notes
 

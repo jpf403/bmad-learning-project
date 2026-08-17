@@ -1,5 +1,11 @@
 # Deferred Work
 
+## Deferred from: code review of story-3.4-admin-creates-a-barber-account (2026-08-17)
+
+- ~~`AccountService.AdminCreateBarber` assigns `Email = email` with no `.Trim()`, unlike `FirstName`/`LastName` which are trimmed — pre-existing from Story 3.1, untouched by this story's diff.~~ **False positive** (2026-08-17) — `AccountRepository.Create` already does `account.Email = account.Email.Trim().ToLowerInvariant()` before persisting, for every caller including `AdminCreateBarber`. Original triage read only `AccountService.cs` and missed the repository-layer normalization. Regression test added: `AccountServiceTests.AdminCreateBarber_trims_email`. [backend/BarbershopApi/Repositories/AccountRepository.cs:12]
+- `POST /api/account` (`AccountController.AdminCreate`) has no rate-limiting policy despite setting a new account's password hash — mirrors `AuthController.Register`'s existing gap. A codebase-wide policy decision for authenticated admin-only mutation endpoints, not a regression introduced by this story. [backend/BarbershopApi/Controllers/AccountController.cs]
+- The create-barber popup's `Modal`-in-`Modal` nesting (create popup + its own `ConfirmPopup`) is confirmed working only under jsdom in `AdminPanel.test.jsx` — recommend a manual check in a real browser (focus return, overlay stacking, no click-through) before relying on this as validated, since jsdom doesn't reproduce Radix's real focus-scope/overlay behavior. [frontend/src/pages/AdminPanel.jsx, frontend/src/pages/AdminPanel.test.jsx]
+
 ## Checked during story-3.4-admin-creates-a-barber-account (2026-08-14)
 
 - The admin-edit popup's Tab-trap `isSubmitting` gap (logged below, round 2 of story-3.3's review) is scoped to `AdminPanel.jsx`'s edit popup specifically — this story's create popup uses native `disabled` the same way during `isCreating`, so the same narrow gap technically exists there too, but fixing it project-wide (native `disabled` → `aria-disabled` + click-guard) is still the same broader `Button`/`Input` pattern change flagged below, out of this story's scope. Not applicable as a *new* item; the existing entry already covers it.
