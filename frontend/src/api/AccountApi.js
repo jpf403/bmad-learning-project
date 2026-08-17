@@ -70,6 +70,40 @@ export async function adminUpdateAccount(
   return { ok: true, account: body }
 }
 
+export async function createBarberAccount(
+  accessToken,
+  { email, firstName, lastName, password },
+) {
+  let response
+  try {
+    response = await fetch(`${API_BASE_URL}/api/account`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        email,
+        firstName,
+        lastName,
+        password,
+      }),
+    })
+  } catch {
+    return { ok: false, status: null }
+  }
+
+  const body = await response.json().catch(() => null)
+  if (!response.ok) {
+    return { ok: false, status: response.status, problem: body }
+  }
+  if (!body) {
+    return { ok: false, status: null }
+  }
+  return { ok: true, account: body }
+}
+
 export async function searchAccounts(accessToken, query) {
   const params = new URLSearchParams()
   if (query && query.trim()) {

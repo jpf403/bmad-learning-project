@@ -2,9 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router'
 import { useAuth } from '../context/AuthContext'
-import { adminUpdateAccount, searchAccounts } from '../api/AccountApi'
+import {
+  adminUpdateAccount,
+  createBarberAccount,
+  searchAccounts,
+} from '../api/AccountApi'
 import Input from '../components/Input'
 import Button from '../components/Button'
+import Modal from '../components/Modal'
 import ConfirmPopup from '../components/ConfirmPopup'
 import SelectDropdown from '../components/SelectDropdown'
 import './AdminPanel.css'
@@ -54,6 +59,19 @@ export default function AdminPanel() {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [pendingAction, setPendingAction] = useState(null) // 'details' | 'password'
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const [createOpen, setCreateOpen] = useState(false)
+  const [createEmail, setCreateEmail] = useState('')
+  const [createFirstName, setCreateFirstName] = useState('')
+  const [createLastName, setCreateLastName] = useState('')
+  const [createPassword, setCreatePassword] = useState('')
+  const [createConfirmPassword, setCreateConfirmPassword] = useState('')
+  const [createFieldErrors, setCreateFieldErrors] = useState({})
+  const [createPasswordError, setCreatePasswordError] = useState('')
+  const [createError, setCreateError] = useState('')
+  const [isCreating, setIsCreating] = useState(false)
+  const [createConfirmOpen, setCreateConfirmOpen] = useState(false)
+  const [createdMessage, setCreatedMessage] = useState('')
   // Bumped at the start of every submitted search. If a newer search starts
   // before an older one's fetch resolves, the older call's captured id no
   // longer matches by the time it resolves, so its result is discarded.
@@ -281,12 +299,122 @@ export default function AdminPanel() {
     setEditError('Something went wrong. Please try again.')
   }
 
+  const stripWhitespace = (value) => value.replace(/\s/g, '')
+
+  function handleOpenCreate() {
+    setCreateEmail('')
+    setCreateFirstName('')
+    setCreateLastName('')
+    setCreatePassword('')
+    setCreateConfirmPassword('')
+    setCreateFieldErrors({})
+    setCreatePasswordError('')
+    setCreateError('')
+    setIsCreating(false)
+    setCreateConfirmOpen(false)
+    setCreatedMessage('')
+    setCreateOpen(true)
+  }
+
+  function handleCreatePasswordChange(event) {
+    setCreatePassword(stripWhitespace(event.target.value))
+  }
+
+  function handleCreateConfirmPasswordChange(event) {
+    setCreateConfirmPassword(stripWhitespace(event.target.value))
+  }
+
+  function handleSaveCreateClick() {
+    setCreateError('')
+    setCreateFieldErrors({})
+    setCreatePasswordError('')
+    if (createPassword !== createConfirmPassword) {
+      setCreatePasswordError('Passwords do not match')
+      setCreatePassword('')
+      setCreateConfirmPassword('')
+      return
+    }
+    setCreateConfirmOpen(true)
+  }
+
+  async function handleConfirmCreate() {
+    setIsCreating(true)
+    const result = await createBarberAccount(user.accessToken, {
+      email: createEmail,
+      firstName: createFirstName,
+      lastName: createLastName,
+      password: createPassword,
+    })
+    if (!isMountedRef.current) {
+      return
+    }
+    setIsCreating(false)
+
+    if (result.ok) {
+      setCreateOpen(false)
+      setCreateEmail('')
+      setCreateFirstName('')
+      setCreateLastName('')
+      setCreatePassword('')
+      setCreateConfirmPassword('')
+      setCreateFieldErrors({})
+      setCreatePasswordError('')
+      setCreateError('')
+      setCreatedMessage('Barber account created.')
+      return
+    }
+
+    if (result.status === 401) {
+      logout()
+      navigate('/login', {
+        state: { message: 'Your session has expired. Please sign in again.' },
+      })
+      return
+    }
+
+    if (result.status === 409) {
+      setCreateFieldErrors({
+        Email: [result.problem?.title ?? DUPLICATE_EMAIL_TITLE],
+      })
+      return
+    }
+
+    if (result.status === 400 && result.problem?.errors) {
+      setCreateFieldErrors(result.problem.errors)
+      return
+    }
+
+    setCreateError('Something went wrong. Please try again.')
+  }
+
+  function handleCancelCreate() {
+    if (isCreating) {
+      return
+    }
+    setCreateOpen(false)
+    setCreateEmail('')
+    setCreateFirstName('')
+    setCreateLastName('')
+    setCreatePassword('')
+    setCreateConfirmPassword('')
+    setCreateFieldErrors({})
+    setCreatePasswordError('')
+    setCreateError('')
+  }
+
   const isAdminAccount = editingAccount?.role === 'Admin'
   const identityDisabled = isSubmitting || isAdminAccount
 
   return (
     <div className="admin-panel">
       <h1 className="admin-panel__title">Admin Panel</h1>
+
+      <div className="admin-panel__actions">
+        <Button onClick={handleOpenCreate}>Create Barber</Button>
+        {createdMessage && (
+          <p className="admin-panel__created-message">{createdMessage}</p>
+        )}
+      </div>
 
       <form className="admin-panel__search-form" onSubmit={handleSubmit}>
         <Input
@@ -526,6 +654,81 @@ export default function AdminPanel() {
             : 'Save changes to this account?'
         }
         onConfirm={handleConfirmEdit}
+      />
+
+      <Modal
+        open={createOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            handleCancelCreate()
+          }
+        }}
+        title="Create Barber"
+      >
+        <div className="admin-create-popup">
+          {createError && (
+            <p className="admin-create-popup__error">{createError}</p>
+          )}
+          <div className="admin-create-popup__fields">
+            <Input
+              label="Email"
+              value={createEmail}
+              onChange={(event) => setCreateEmail(event.target.value)}
+              error={createFieldErrors.Email?.[0]}
+              disabled={isCreating}
+            />
+            <Input
+              label="First Name"
+              value={createFirstName}
+              onChange={(event) => setCreateFirstName(event.target.value)}
+              error={createFieldErrors.FirstName?.[0]}
+              disabled={isCreating}
+            />
+            <Input
+              label="Last Name"
+              value={createLastName}
+              onChange={(event) => setCreateLastName(event.target.value)}
+              error={createFieldErrors.LastName?.[0]}
+              disabled={isCreating}
+            />
+            <Input
+              label="Password"
+              type="password"
+              value={createPassword}
+              onChange={handleCreatePasswordChange}
+              error={createPasswordError || createFieldErrors.Password?.[0]}
+              disabled={isCreating}
+            />
+            <Input
+              label="Confirm Password"
+              type="password"
+              value={createConfirmPassword}
+              onChange={handleCreateConfirmPasswordChange}
+              error={createPasswordError || createFieldErrors.Password?.[0]}
+              disabled={isCreating}
+            />
+          </div>
+          <div className="admin-create-popup__footer">
+            <Button onClick={handleSaveCreateClick} disabled={isCreating}>
+              Create
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={handleCancelCreate}
+              disabled={isCreating}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <ConfirmPopup
+        open={createConfirmOpen}
+        onOpenChange={setCreateConfirmOpen}
+        title="Create Barber?"
+        message="Create this barber account?"
+        onConfirm={handleConfirmCreate}
       />
     </div>
   )

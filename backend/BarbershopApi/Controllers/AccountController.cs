@@ -87,4 +87,27 @@ public class AccountController(IAccountService accountService) : ControllerBase
             return Problem(statusCode: StatusCodes.Status500InternalServerError, title: "Something went wrong. Please try again.");
         }
     }
+
+    [HttpPost]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> AdminCreate(AdminCreateBarberRequest request)
+    {
+        try
+        {
+            var created = await accountService.AdminCreateBarber(request.Email, request.FirstName, request.LastName, request.Password);
+            return StatusCode(201, new AccountSummary(created.Id, created.Email, created.FirstName, created.LastName, created.Role));
+        }
+        catch (InvalidPasswordException)
+        {
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Password must be at least 8 characters and cannot contain spaces.");
+        }
+        catch (DuplicateEmailException)
+        {
+            return Problem(statusCode: StatusCodes.Status409Conflict, title: "That email is already in use.");
+        }
+        catch (Exception)
+        {
+            return Problem(statusCode: StatusCodes.Status500InternalServerError, title: "Something went wrong. Please try again.");
+        }
+    }
 }
