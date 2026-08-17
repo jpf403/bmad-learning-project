@@ -4,7 +4,7 @@ baseline_commit: 5e227c525601f4e6939615fa3ed722677774e4ba
 
 # Story 3.5: Admin Deletes an Account
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -105,6 +105,15 @@ so that I can remove accounts that are no longer needed.
   - [x] Branch as `story/3.5-admin-deletes-an-account` from `main`.
   - [ ] Push and confirm both CI jobs (Backend .NET, Frontend Vite/React) green before merging (AD-11).
   - [ ] Open PR and merge to `main` — left for Jack per standing project practice.
+
+### Review Findings
+
+- [x] [Review][Patch] Add a one-line comment in `AdminSoftDeleteAccount`'s role branch noting `Role.Admin` is unreachable there (SoftDelete already throws `AdminAccountProtectedException` for that role first) [backend/BarbershopApi/Services/AccountService.cs:168] — applied
+- [x] [Review][Defer] `CancelAllFutureForCustomer`/`FindFutureByCustomer` are byte-for-byte copies of the barber versions with no shared helper extracted [backend/BarbershopApi/Services/BookingService.cs:169-219, backend/BarbershopApi/Repositories/AppointmentRepository.cs] — deferred, pre-existing pattern (story explicitly directed the exact-copy shape)
+- [x] [Review][Defer] Soft-delete commits before the appointment cascade runs; a cascade-query failure before the per-appointment loop starts surfaces as a generic 500 even though the account is already deleted [backend/BarbershopApi/Services/AccountService.cs:154-176, backend/BarbershopApi/Controllers/AccountController.cs:114-140] — deferred, pre-existing since Story 3.1's barber cascade, now also applies to the customer path
+- [x] [Review][Defer] Cascade cancellation is O(2N) round-trips per deleted account rather than a bulk operation [backend/BarbershopApi/Services/BookingService.cs:169-219] — deferred, pre-existing pattern; performance explicitly out of scope per project-context.md
+- [x] [Review][Defer] A delete against the admin account (400, no `errors` object) falls through to the generic "Something went wrong" message in the UI instead of the actual title [frontend/src/pages/AdminPanel.jsx:300-314] — deferred, pre-existing gap shared with `AdminUpdate`'s identical case; unreachable via normal UI since Delete is already hidden for admin rows
+- [x] [Review][Defer] Deleting an already-deleted account (404, two-admin race) isn't given a specific UI branch — generic error shown, popup stays open on the now-gone account [frontend/src/pages/AdminPanel.jsx:275-314] — deferred, pre-existing pattern in this file's generic-fallback handling
 
 ## Dev Notes
 

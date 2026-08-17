@@ -437,6 +437,7 @@ export default function AdminPanel() {
           placeholder="Name or email"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
+          autoComplete="off"
         />
         <Button type="submit" disabled={loading}>
           Search
@@ -556,6 +557,7 @@ export default function AdminPanel() {
                         onChange={(event) => setEditEmail(event.target.value)}
                         error={editFieldErrors.Email?.[0]}
                         disabled={identityDisabled}
+                        autoComplete="off"
                       />
                       <Input
                         label="First Name"
@@ -565,6 +567,7 @@ export default function AdminPanel() {
                         }
                         error={editFieldErrors.FirstName?.[0]}
                         disabled={identityDisabled}
+                        autoComplete="off"
                       />
                       <Input
                         label="Last Name"
@@ -574,6 +577,7 @@ export default function AdminPanel() {
                         }
                         error={editFieldErrors.LastName?.[0]}
                         disabled={identityDisabled}
+                        autoComplete="off"
                       />
                       <SelectDropdown
                         label="Permission"
@@ -635,6 +639,7 @@ export default function AdminPanel() {
                         passwordError || passwordFieldErrors.NewPassword?.[0]
                       }
                       disabled={isSubmitting}
+                      autoComplete="new-password"
                     />
                     <Input
                       label="Confirm New Password"
@@ -644,6 +649,7 @@ export default function AdminPanel() {
                         setEditConfirmPassword(event.target.value)
                       }
                       disabled={isSubmitting}
+                      autoComplete="new-password"
                     />
                   </div>
                   <div className="admin-edit-popup__footer">
@@ -703,6 +709,7 @@ export default function AdminPanel() {
               onChange={(event) => setCreateEmail(event.target.value)}
               error={createFieldErrors.Email?.[0]}
               disabled={isCreating}
+              autoComplete="off"
             />
             <Input
               label="First Name"
@@ -710,6 +717,7 @@ export default function AdminPanel() {
               onChange={(event) => setCreateFirstName(event.target.value)}
               error={createFieldErrors.FirstName?.[0]}
               disabled={isCreating}
+              autoComplete="off"
             />
             <Input
               label="Last Name"
@@ -717,6 +725,7 @@ export default function AdminPanel() {
               onChange={(event) => setCreateLastName(event.target.value)}
               error={createFieldErrors.LastName?.[0]}
               disabled={isCreating}
+              autoComplete="off"
             />
             <Input
               label="Password"
@@ -725,6 +734,7 @@ export default function AdminPanel() {
               onChange={handleCreatePasswordChange}
               error={createPasswordError || createFieldErrors.Password?.[0]}
               disabled={isCreating}
+              autoComplete="new-password"
             />
             <Input
               label="Confirm Password"
@@ -733,6 +743,7 @@ export default function AdminPanel() {
               onChange={handleCreateConfirmPasswordChange}
               error={createPasswordError || createFieldErrors.Password?.[0]}
               disabled={isCreating}
+              autoComplete="new-password"
             />
           </div>
           <div className="admin-create-popup__footer">

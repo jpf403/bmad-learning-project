@@ -93,17 +93,20 @@ export default function Register() {
             label="First name"
             value={firstName}
             onChange={(event) => setFirstName(event.target.value)}
+            autoComplete="off"
           />
           <Input
             label="Last name"
             value={lastName}
             onChange={(event) => setLastName(event.target.value)}
+            autoComplete="off"
           />
           <Input
             label="Email"
             value={email}
             error={emailError}
             onChange={(event) => setEmail(event.target.value)}
+            autoComplete="off"
           />
           <Input
             label="Password"
@@ -113,6 +116,7 @@ export default function Register() {
             onChange={(event) =>
               setPassword(stripWhitespace(event.target.value))
             }
+            autoComplete="new-password"
           />
           <Input
             label="Confirm password"
@@ -122,6 +126,7 @@ export default function Register() {
             onChange={(event) =>
               setConfirmPassword(stripWhitespace(event.target.value))
             }
+            autoComplete="new-password"
           />
           {formError && <p className="register__form-error">{formError}</p>}
           <Button variant="primary" type="submit" disabled={isSubmitting}>

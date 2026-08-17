@@ -74,7 +74,7 @@ development_status:
   3-2-admin-account-search: done
   3-3-admin-edits-an-account: done
   3-4-admin-creates-a-barber-account: done
-  3-5-admin-deletes-an-account: review
+  3-5-admin-deletes-an-account: done
   epic-3-retrospective: optional
 
 action_items:
