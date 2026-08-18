@@ -19,3 +19,6 @@ backend/BarbershopApi/Properties/launchSettings.json
 # Node
 frontend/node_modules/
 frontend/dist/
+
+# Personal Notes
+CLARIFY.md
