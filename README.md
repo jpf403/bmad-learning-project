@@ -11,7 +11,7 @@ bmad-learning-project/backend/BarbershopApi/ \
 dotnet run --launch-profile https
 
 ### Frontend
-bmad-learning-project/frontend/
+bmad-learning-project/frontend/ \
 npm run dev
 
 ### Create launchSettings.json
@@ -29,7 +29,7 @@ dotnet test
 
 ### Frontend
 
-bmad-learning-project/frontend/
+bmad-learning-project/frontend/ \
 npm test \
 npm run lint \
 npm run format:check
