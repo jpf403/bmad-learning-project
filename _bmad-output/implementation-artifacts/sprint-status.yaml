@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-27
-last_updated: 2026-08-17
+last_updated: 2026-08-18
 
 
 project: bmad-learning-project
@@ -69,13 +69,13 @@ development_status:
   2-6-admin-schedule-oversight: done
   epic-2-retrospective: done
 
-  epic-3: in-progress
+  epic-3: done
   3-1-account-repository-admin-operations: done
   3-2-admin-account-search: done
   3-3-admin-edits-an-account: done
   3-4-admin-creates-a-barber-account: done
   3-5-admin-deletes-an-account: done
-  epic-3-retrospective: optional
+  epic-3-retrospective: done
 
 action_items:
   - epic: 1
@@ -101,4 +101,8 @@ action_items:
   - epic: 2
     action: "Corrected stale bookkeeping: Epic 1's NavBar-overflow action item was marked open despite being resolved in Story 2.2 - now marked done"
     owner: "Amelia (Dev)"
+    status: done
+  - epic: 3
+    action: "Reviewed all open deferred-work.md items at Epic 3 close; Jack confirmed they are genuinely low-priority and not important for this project - accepted as documented known limitations, not tracked as action items"
+    owner: "Jack (Project Lead)"
     status: done
