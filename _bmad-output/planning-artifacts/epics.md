@@ -112,8 +112,8 @@ This document provides the complete epic and story breakdown for the Barbershop 
 - Credentials come only from environment variables (`AdminSeed__Email`/`AdminSeed__Password`) — never `dotnet user-secrets`; `appsettings.json` keeps only empty placeholder keys.
 
 **z-pax SSO integration (AD-19):**
-- Folded into the existing Auth trio — no new domain concept. `GET /api/auth/sso/login` redirects to z-pax's authorize endpoint (`https://sapi.auth.myzpax.com/connect/authorize`) with `client_id`, `scope=offline_access`, `response_type=code`, `redirect_uri=https://localhost:7113/api/auth/sso/callback`.
-- `GET /api/auth/sso/callback` exchanges the returned `code` at z-pax's token endpoint (`https://sapi.auth.myzpax.com/connect/token`) using `client_id`/`client_secret` from environment variables `ZPaxSso__ClientId`/`ZPaxSso__ClientSecret` (never committed, same convention as AD-6); the endpoint URLs themselves are non-secret config (`ZPaxSso__AuthorizationEndpoint`/`ZPaxSso__TokenEndpoint` in `appsettings.json`).
+- Folded into the existing Auth trio — no new domain concept. `GET /api/auth/sso/login` generates a random `state` value (stored in a short-lived cookie) and redirects to z-pax's authorize endpoint (`https://sapi.auth.myzpax.com/connect/authorize`) with `client_id`, `scope=offline_access`, `response_type=code`, `redirect_uri=https://localhost:7113/api/auth/sso/callback`, and `state`.
+- `GET /api/auth/sso/callback` validates the returned `state` matches the stored value (per RFC 6749 §4.1.2, a spec-compliant provider always echoes it back — a mismatch or missing value means the callback didn't originate from a flow this app initiated, and fails the same way as a missing/invalid `code`) before exchanging `code` at z-pax's token endpoint (`https://sapi.auth.myzpax.com/connect/token`) using `client_id`/`client_secret` from environment variables `ZPaxSso__ClientId`/`ZPaxSso__ClientSecret` (never committed, same convention as AD-6); the endpoint URLs themselves are non-secret config (`ZPaxSso__AuthorizationEndpoint`/`ZPaxSso__TokenEndpoint` in `appsettings.json`).
 - The resulting z-pax access token is used exactly once, to fetch identity (email/first/last name), then discarded — z-pax's own token/refresh lifecycle is never persisted. The app mints its own access/refresh tokens exactly as normal login does (AD-3).
 - No account created or linked via SSO can ever be `Role=Admin`. Automated tests use a fake `ISsoClient` double, never the live z-pax service (mirrors AD-4).
 
@@ -814,11 +814,11 @@ So that I can access my account without creating a separate password.
 
 **Given** the Login page
 **When** a user clicks "Sign in with z-pax"
-**Then** the browser is redirected to z-pax's authorization endpoint (`https://sapi.auth.myzpax.com/connect/authorize`) with `client_id`, `scope=offline_access`, `response_type=code`, and the registered `redirect_uri` (AD-19, FR42)
+**Then** the backend generates a random `state` value, stores it in a short-lived cookie, and redirects the browser to z-pax's authorization endpoint (`https://sapi.auth.myzpax.com/connect/authorize`) with `client_id`, `scope=offline_access`, `response_type=code`, `redirect_uri`, and `state` (AD-19, FR42)
 
 **Given** a successful authorization
-**When** z-pax redirects back to `/api/auth/sso/callback` with a `code`
-**Then** the backend exchanges it at `https://sapi.auth.myzpax.com/connect/token` for a z-pax access token, fetches the user's email/first/last name, and resolves the local account via `CreateOrLinkSsoAccount` from Story 4.1 (FR43, FR44)
+**When** z-pax redirects back to `/api/auth/sso/callback` with a `code` and `state`
+**Then** the backend first validates `state` matches the stored value — rejecting the callback (redirect to Login with an error, no account created or session issued) on a missing or mismatched `state` — then exchanges `code` at `https://sapi.auth.myzpax.com/connect/token` for a z-pax access token, fetches the user's email/first/last name, and resolves the local account via `CreateOrLinkSsoAccount` from Story 4.1 (FR43, FR44, AD-19)
 
 **Given** the resolved account
 **When** the SSO flow completes
