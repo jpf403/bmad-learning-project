@@ -2,7 +2,7 @@
 title: Barbershop Appointment Scheduler — PRD
 status: final
 created: 2026-07-21
-updated: 2026-07-29
+updated: 2026-08-19
 ---
 
 # Barbershop Appointment Scheduler — PRD
@@ -52,6 +52,11 @@ Any signed-in user — customer, barber, or admin — can sign out, ending their
 - FR29: Top-right nav area: signed-out users see Login and Register buttons; signed-in users see a profile icon that opens a dropdown with Account (link to the Account page) and Logout.
 - FR31: On first application startup, if no admin account exists yet, the system creates exactly one from server-side configuration (not through the normal registration UI). This is the only admin account that will ever exist in the system (see FR34) — it acts as the shop's owner.
 - FR35: When an admin changes another account's password (FR18), every active session for that account is immediately terminated, forcing re-sign-in. This is distinct from FR28's self-service password change, which does not end the user's own session. When an admin changes another account's permission level, the affected session is not force-ended — a page refresh on the user's end is enough to pick up the new permission level and enforce it going forward; no full re-login is required.
+- FR42: Any visitor can sign in via z-pax SSO from the Login page, using a dedicated "Sign in with z-pax" option displayed alongside the standard email/password fields.
+- FR43: On first successful z-pax sign-in, if no account exists with a matching email, a new account is created automatically with Role=Customer, using the first name, last name, and email returned by z-pax — no password is set for this account. Attempting to sign in to an SSO-only account via the standard email/password form always fails with the same generic "Invalid email or password" message used for any other failed login (FR2) — never a distinct "use z-pax" message.
+- FR44: On any z-pax sign-in where a local account already exists with a matching email, the user is signed into that existing account (whatever role and password it currently holds) rather than creating a duplicate account — linking does not disable or replace that account's existing password; the user may continue to sign in via either method afterward.
+- FR45: An account created or linked via z-pax SSO is subject to the same single-admin invariant as any other account (FR34) — it can never be or become the system's Admin account; an admin may still promote it to Barber like any other Customer/Barber account (FR18).
+- FR46: Once signed in via z-pax, a user's session, role gating, and access to every existing feature (booking, self-service Account editing, etc.) behave identically to a standard email/password session — SSO is an alternate entry point to the same account model, not a separate one.
 
 ### Booking (shared by all roles)
 - FR5: Any signed-in user can access the Schedule Appointment page. A signed-out user clicking a Schedule/booking CTA (e.g., on the home page) is redirected to the Login page instead.
@@ -89,7 +94,7 @@ Any signed-in user — customer, barber, or admin — can sign out, ending their
 
 ## Non-Functional Requirements & Quality/DORA Practices
 
-- **NFR1 (Security)**: Passwords stored via industry-standard salted hashing (never plaintext); role checks enforced server-side, not just hidden in the UI; authenticated sessions maintained securely (mechanism deferred to Architecture — see addendum). Login attempts are rate-limited to mitigate brute-force guessing (specific threshold deferred to Architecture). All dates/times are interpreted and compared in a fixed EST timezone (server-authoritative, not the client's local clock) — this governs "today," "past dates," and the 30-minute booking cutoff alike.
+- **NFR1 (Security)**: Passwords stored via industry-standard salted hashing (never plaintext); role checks enforced server-side, not just hidden in the UI; authenticated sessions maintained securely (mechanism deferred to Architecture — see addendum). Login attempts are rate-limited to mitigate brute-force guessing (specific threshold deferred to Architecture). All dates/times are interpreted and compared in a fixed EST timezone (server-authoritative, not the client's local clock) — this governs "today," "past dates," and the 30-minute booking cutoff alike. z-pax OAuth Client ID/Secret are stored via environment variables only, never committed to source control (same convention as admin-bootstrap credentials, AD-6).
 - **NFR2 (Data integrity)**: Booking writes are transactional enough that two near-simultaneous submissions for the same slot can't both succeed. The same guarantee extends to cancellations (cancel-vs-cancel and cancel-vs-book races) and to account edits/deletes (edit-vs-edit, edit-vs-delete races) — the first action to commit wins, the second gets an error message, never silent corruption or double effect.
 - **NFR3 (Responsiveness)**: Layout adapts cleanly across mobile and desktop widths; no hover-dependent action lacks a working single-tap touch equivalent.
 - **NFR4 (Automated testing)**: Test suite covers DB CRUD, auth, and role permissions against a real (not mocked) SQLite instance.

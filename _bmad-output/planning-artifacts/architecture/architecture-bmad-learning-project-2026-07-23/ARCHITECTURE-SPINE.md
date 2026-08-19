@@ -7,7 +7,7 @@ paradigm: 'Layered Architecture (Controller-Service-Repository)'
 scope: 'Backend layering, auth/session mechanics, data model, testing/CI approach, and cross-cutting conventions for the Barbershop Appointment Scheduler (.NET/React/SQLite) — precedes epics/stories; no parent spine to inherit from.'
 status: final
 created: '2026-07-23'
-updated: '2026-07-24'
+updated: '2026-08-19'
 binds: []
 sources:
   - '{planning_artifacts}/prds/prd-bmad-learning-project-2026-07-21/prd.md'
@@ -137,6 +137,12 @@ graph LR
 - **Prevents:** a route guard that only hides a nav link (client-side-only gating is not access control — the same principle AD-2 enforces server-side)
 - **Rule:** client-side routing uses React Router (current major, v7+ — confirm the exact package, `react-router` vs. `react-router-dom`, against current docs at scaffold time given recent packaging changes across v6→v7→v8). Route guards call `GET /api/auth/me` to determine identity/role and redirect unauthenticated or wrong-role access; hiding a nav item (FR3) is a UX nicety layered on top, never the enforcement itself.
 
+### AD-19 — z-pax SSO (OAuth2 Authorization Code)
+
+- **Binds:** FR42–FR46; Auth domain (AuthController/AuthService/AccountRepository)
+- **Prevents:** committing Client ID/Secret to source control; z-pax's token lifecycle leaking into this app's own session model; a duplicate account being created for an email that already exists
+- **Rule:** SSO is folded into the existing Auth trio, not a new domain concept. `GET /api/auth/sso/login` redirects to z-pax's authorize endpoint (`https://sapi.auth.myzpax.com/connect/authorize`) with `client_id`, `scope=offline_access`, `response_type=code`, `redirect_uri=https://localhost:7113/api/auth/sso/callback` (fixed, since NFR7 is local-only). `GET /api/auth/sso/callback` receives `code`, exchanges it at z-pax's token endpoint (`https://sapi.auth.myzpax.com/connect/token`) using `client_id`/`client_secret` from environment variables `ZPaxSso__ClientId`/`ZPaxSso__ClientSecret` (never `appsettings.json`, never committed, same convention as AD-6) — the two endpoint URLs themselves aren't secret and are stored as regular config (`ZPaxSso__AuthorizationEndpoint`/`ZPaxSso__TokenEndpoint` in `appsettings.json`) rather than environment variables. The resulting z-pax access token is used exactly once to fetch identity (email, first name, last name) before being discarded — z-pax's own token/refresh lifecycle is never persisted or relied on afterward. If no `Account` row matches by email, one is created (`Role=Customer`, `PasswordHash=null`, `SsoProvider="zpax"`, `SsoSubjectId=<z-pax subject id>`); if a row already matches by email, that identity is attached to the existing row without touching its `PasswordHash` — both login methods remain valid afterward. Once identity is resolved, the app mints its own access/refresh tokens exactly as `POST /api/auth/login` does (AD-3) — SSO and password sign-in converge on the same session mechanism from that point on. An account with `PasswordHash=null` always fails password-login attempts with the same generic invalid-credentials message as FR2/AD-5 — no distinct "use SSO" message. No account created or linked via SSO can ever be `Role=Admin` (FR34/FR45). Automated tests use a fake `ISsoClient` double rather than the live z-pax service, mirroring AD-4's existing DB-isolation principle.
+
 ## Consistency Conventions
 
 | Concern | Convention |
@@ -165,6 +171,7 @@ graph LR
 | @radix-ui/react-select | 2.3.4 — dropdowns (barber-select, time-slot, admin permission-select) |
 | @radix-ui/react-popover | 1.1.16 — calendar trigger/panel container |
 | react-day-picker | 10.0.1 — calendar grid logic, paired with Popover (Radix has no native calendar primitive; this is Radix's own recommended pairing) |
+| z-pax SSO integration | plain `HttpClient` (no OAuth client NuGet package) | Two-endpoint integration (AD-19) doesn't justify a dependency, consistent with this project's existing bias against adding one for a small surface (see no-MSW, no-React-Query reasoning) |
 | xUnit.v3 (+ WebApplicationFactory) | 3.2.2 |
 | Vitest | 4.1.10 |
 | @testing-library/react | 16.3.2 |
@@ -206,13 +213,15 @@ erDiagram
     ACCOUNT {
         int Id PK
         string Email UK
-        string PasswordHash
+        string PasswordHash "nullable — null for SSO-only accounts"
         string FirstName
         string LastName
         string Role
         int SessionVersion
         datetime DeletedAt
         int RowVersion
+        string SsoProvider "nullable"
+        string SsoSubjectId "nullable"
     }
     APPOINTMENT {
         int Id PK
@@ -232,3 +241,4 @@ erDiagram
 - **Guest (unauthenticated) booking** — PRD non-goal, called out as a possible same-day addition that never landed; revisit architecture if it's added later.
 - **Dev database seeding with sample data** — explicitly declined; dev DB starts empty via `Database.Migrate()` (AD-10).
 - **UX open items touching implementation** — DESIGN.md flags no error/warning color exists yet for form-validation states (e.g., password-mismatch messages), and the exact tablet breakpoint pixel value is undefined (only named, not sized); both need a decision before the components that depend on them are built, but neither is an architecture-level call. Owner: UX (Sally) — revisit before the ScheduleAppointment/Register/Account components are built.
+- **z-pax's own refresh token / `offline_access` scope** — deliberately unused (AD-19). We take a one-time identity handshake and mint our own session; revisit only if a future need requires re-querying z-pax after initial login.

@@ -29,6 +29,11 @@ This document provides the complete epic and story breakdown for the Barbershop 
 - FR29: Nav top-right: signed-out shows Login/Register; signed-in shows a profile icon dropdown (Account, Logout).
 - FR31: On first startup, if no admin account exists, one is created from server-side configuration (not the registration UI) — the only admin account that will ever exist (see FR34).
 - FR35: Admin-driven password change on another account immediately terminates all that account's active sessions. Admin-driven permission-level change does not force-end sessions — a page refresh is enough to pick up the new role.
+- FR42: Any visitor can sign in via z-pax SSO from the Login page, using a dedicated "Sign in with z-pax" option alongside the standard email/password fields.
+- FR43: On first successful z-pax sign-in, if no account exists with a matching email, a new account is created automatically (Role=Customer) using z-pax's first name/last name/email — no password is set. Attempting password login on an SSO-only account fails with the same generic "Invalid email or password" message as any other failed login (FR2) — never a distinct "use z-pax" message.
+- FR44: A z-pax sign-in with an email matching an existing account signs the user into that account (whatever role/password it holds) rather than creating a duplicate — linking never disables the existing password; both methods remain valid afterward.
+- FR45: An SSO-created/linked account is subject to the same single-admin invariant as any other account (FR34) — never Admin; may still be promoted to Barber (FR18).
+- FR46: Once signed in via z-pax, session/role-gating/feature access behave identically to a standard email/password session — SSO is an alternate entry point to the same account model.
 
 **Booking (shared by all roles)**
 - FR5: Any signed-in user can access Schedule Appointment. A signed-out user clicking a booking CTA is redirected to Login.
@@ -105,6 +110,12 @@ This document provides the complete epic and story breakdown for the Barbershop 
 **First-admin bootstrap (AD-6):**
 - A single `IHostedService` runs after `Database.Migrate()`, seeding exactly one admin account via `PasswordHasher<T>` if none exists.
 - Credentials come only from environment variables (`AdminSeed__Email`/`AdminSeed__Password`) — never `dotnet user-secrets`; `appsettings.json` keeps only empty placeholder keys.
+
+**z-pax SSO integration (AD-19):**
+- Folded into the existing Auth trio — no new domain concept. `GET /api/auth/sso/login` redirects to z-pax's authorize endpoint (`https://sapi.auth.myzpax.com/connect/authorize`) with `client_id`, `scope=offline_access`, `response_type=code`, `redirect_uri=https://localhost:7113/api/auth/sso/callback`.
+- `GET /api/auth/sso/callback` exchanges the returned `code` at z-pax's token endpoint (`https://sapi.auth.myzpax.com/connect/token`) using `client_id`/`client_secret` from environment variables `ZPaxSso__ClientId`/`ZPaxSso__ClientSecret` (never committed, same convention as AD-6); the endpoint URLs themselves are non-secret config (`ZPaxSso__AuthorizationEndpoint`/`ZPaxSso__TokenEndpoint` in `appsettings.json`).
+- The resulting z-pax access token is used exactly once, to fetch identity (email/first/last name), then discarded — z-pax's own token/refresh lifecycle is never persisted. The app mints its own access/refresh tokens exactly as normal login does (AD-3).
+- No account created or linked via SSO can ever be `Role=Admin`. Automated tests use a fake `ISsoClient` double, never the live z-pax service (mirrors AD-4).
 
 **Data model & integrity (AD-7 through AD-9, AD-15–AD-17):**
 - All entity primary keys are `int` auto-increment — never GUID/UUID.
@@ -201,6 +212,11 @@ FR34: Epic 3 - Exactly one admin account, never promotable/demotable/deletable
 FR40: Epic 3 - Admin deletes customer/barber account; deletion cascade
 FR41: Epic 3 - Concurrent account edit/delete conflict handling
 FR35: Epic 3 - Admin password change force-ends target sessions; permission change does not
+FR42: Epic 4 - z-pax SSO login option on Login page
+FR43: Epic 4 - New account creation from SSO identity
+FR44: Epic 4 - Existing-account linking by email
+FR45: Epic 4 - SSO accounts subject to single-admin invariant
+FR46: Epic 4 - SSO session behaves identically to password session
 
 ## Epic List
 
@@ -216,6 +232,10 @@ A signed-in customer can book, view, and cancel their own appointments against r
 ### Epic 3: Admin Account Management
 The admin can search, create, edit, and delete customer/barber accounts from a dedicated panel — including safely demoting/removing barbers with their future appointments cascade-cancelled — without ever touching the database directly.
 **FRs covered:** FR16, FR17, FR18, FR19, FR34, FR35, FR40, FR41
+
+### Epic 4: Single Sign-On (z-pax)
+A visitor can sign in using their z-pax account as an alternative to email/password — first-time SSO sign-in creates a Customer account automatically from z-pax's identity, a matching email links to an existing account without disturbing its password, and the resulting session behaves identically to a standard login in every other respect.
+**FRs covered:** FR42, FR43, FR44, FR45, FR46
 
 ## Epic 1: Account Access & Site Foundation
 
@@ -747,3 +767,91 @@ So that I can remove accounts that are no longer needed.
 **Given** a deleted account
 **When** it attempts to sign in afterward
 **Then** auth treats it identically to "account does not exist" (AD-15)
+
+## Epic 4: Single Sign-On (z-pax)
+
+A visitor can sign in using their z-pax account as an alternative to email/password — first-time SSO sign-in creates a Customer account automatically from z-pax's identity, a matching email links to an existing account without disturbing its password, and the resulting session behaves identically to a standard login in every other respect.
+
+### Story 4.1: Account Schema & SSO-Aware Repository
+
+As a developer,
+I want the `Account` entity extended for SSO identities and the repository/service layer updated to handle a nullable password,
+So that SSO login, linking, and creation can be built as pure business logic on top of a working, tested data layer.
+
+**Acceptance Criteria:**
+
+**Given** no SSO support exists yet
+**When** this story is implemented
+**Then** `Account.PasswordHash` becomes nullable, and `SsoProvider`/`SsoSubjectId` (nullable strings) are added via migration, with a partial unique index `UNIQUE(SsoProvider, SsoSubjectId) WHERE SsoProvider IS NOT NULL` (AD-19)
+
+**Given** the existing `AuthService.Login` path
+**When** a login attempt targets an account with `PasswordHash = null`
+**Then** it fails with the same generic "Invalid email or password" message as any other failed attempt (FR43, FR2) — no distinct SSO-only messaging, and no null-reference error
+
+**Given** the `AccountRepository`
+**When** extended for SSO
+**Then** it exposes `FindBySsoIdentity(provider, subjectId)` and `CreateOrLinkSsoAccount(email, firstName, lastName, provider, subjectId)` — the latter creates a new `Role=Customer` account if no email match exists, or attaches the SSO identity to the existing matching account without altering its `PasswordHash` (FR43, FR44)
+
+**Given** FR34's admin invariant
+**When** `CreateOrLinkSsoAccount` runs
+**Then** it can never create or link to the single admin account, nor ever assign `Role=Admin` (FR45)
+
+**Given** every existing code path that assumed `PasswordHash` is always non-null (registration, login, Epic 3's admin account edit/create)
+**When** this story is complete
+**Then** those paths and their existing tests are reviewed and updated as needed for a nullable `PasswordHash`, with no regression to prior behavior
+
+**Given** the repository
+**When** tested
+**Then** every new method — including account-linking and admin-invariant rejection — is covered by xUnit + `WebApplicationFactory` against a real SQLite instance (NFR4, AD-4)
+
+### Story 4.2: z-pax OAuth Login Flow
+
+As a visitor or existing user,
+I want to sign in via z-pax SSO,
+So that I can access my account without creating a separate password.
+
+**Acceptance Criteria:**
+
+**Given** the Login page
+**When** a user clicks "Sign in with z-pax"
+**Then** the browser is redirected to z-pax's authorization endpoint (`https://sapi.auth.myzpax.com/connect/authorize`) with `client_id`, `scope=offline_access`, `response_type=code`, and the registered `redirect_uri` (AD-19, FR42)
+
+**Given** a successful authorization
+**When** z-pax redirects back to `/api/auth/sso/callback` with a `code`
+**Then** the backend exchanges it at `https://sapi.auth.myzpax.com/connect/token` for a z-pax access token, fetches the user's email/first/last name, and resolves the local account via `CreateOrLinkSsoAccount` from Story 4.1 (FR43, FR44)
+
+**Given** the resolved account
+**When** the SSO flow completes
+**Then** the app mints its own access token (in-memory) and refresh token (HttpOnly cookie) exactly as `POST /api/auth/login` does, and routes the user per FR4 (AD-3, AD-19)
+
+**Given** automated tests should never depend on a live external service (mirrors AD-4)
+**When** this story is implemented
+**Then** the OAuth calls are built against an injected `ISsoClient` abstraction with a fake test double for xUnit coverage, while the real `ISsoClient` implementation targets z-pax's actual endpoints (AD-19) using the real Client ID/Secret expected to be available by implementation time
+
+**Given** z-pax returns an error or the callback is missing/invalid `code`
+**When** this happens
+**Then** the user is redirected to Login with an on-screen error, and no account is created or session issued
+
+### Story 4.3: "Sign in with z-pax" Login Page UI
+
+As a visitor,
+I want a clearly visible SSO option on the Login page,
+So that I can choose either sign-in method.
+
+**Acceptance Criteria:**
+
+**Given** the Login page
+**When** rendered
+**Then** it shows the existing email/password fields plus a "Sign in with z-pax" button, visually separated (e.g., a divider), following the existing Button component styling (UX-DR2)
+
+**Given** a user clicks "Sign in with z-pax"
+**When** the flow starts
+**Then** the browser navigates away to z-pax (full redirect, not a popup)
+
+**Given** the OAuth flow completes with an error (see Story 4.2)
+**When** redirected back to Login
+**Then** the error message renders using the existing login-error display pattern
+
+**Given** any viewport width
+**When** the Login page renders with the new SSO option
+**Then** the layout remains responsive with no broken/overflowing elements (FR22)
