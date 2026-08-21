@@ -49,7 +49,7 @@ public class AuthService(
     public async Task<(Account Account, string AccessToken, string RefreshToken)> Login(LoginRequest request)
     {
         var account = await accountRepository.FindByEmail(request.Email);
-        if (account is null)
+        if (account is null || account.PasswordHash is null)
         {
             throw new InvalidCredentialsException();
         }

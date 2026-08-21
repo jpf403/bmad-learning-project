@@ -58,7 +58,7 @@ public class AccountServiceTests : IDisposable
         var updated = await service.UpdateOwnProfile(created.Id, "John", "Smith", "new-correct-horse-battery", ExistingPassword);
 
         Assert.Equal(initialSessionVersion, updated.SessionVersion);
-        var result = _passwordHasher.VerifyHashedPassword(updated, updated.PasswordHash, "new-correct-horse-battery");
+        var result = _passwordHasher.VerifyHashedPassword(updated, updated.PasswordHash!, "new-correct-horse-battery");
         Assert.Equal(PasswordVerificationResult.Success, result);
     }
 
@@ -122,6 +122,26 @@ public class AccountServiceTests : IDisposable
         await using var verifyContext = _factory.CreateDbContext();
         var reloaded = await new AccountRepository(verifyContext).FindById(created.Id);
         Assert.Equal("John", reloaded!.FirstName);
+    }
+
+    [Fact]
+    public async Task UpdateOwnProfile_on_account_with_null_PasswordHash_and_newPassword_throws_InvalidCurrentPasswordException()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        var service = new AccountService(repository, _passwordHasher, NewBookingService(context, repository));
+        var ssoAccount = new Account
+        {
+            Email = "sso-only@example.com",
+            PasswordHash = null,
+            FirstName = "Sso",
+            LastName = "Only",
+            Role = Role.Customer,
+        };
+        var created = await repository.Create(ssoAccount);
+
+        await Assert.ThrowsAsync<InvalidCurrentPasswordException>(
+            () => service.UpdateOwnProfile(created.Id, "Sso", "Only", "new-correct-horse-battery", "anything"));
     }
 
     [Fact]
@@ -194,7 +214,7 @@ public class AccountServiceTests : IDisposable
         var updated = await service.AdminUpdateAccount(created.Id, created.Email, created.FirstName, created.LastName, created.Role, "new-correct-horse-battery", admin.Id);
 
         Assert.Equal(initialSessionVersion + 1, updated.SessionVersion);
-        var result = _passwordHasher.VerifyHashedPassword(updated, updated.PasswordHash, "new-correct-horse-battery");
+        var result = _passwordHasher.VerifyHashedPassword(updated, updated.PasswordHash!, "new-correct-horse-battery");
         Assert.Equal(PasswordVerificationResult.Success, result);
     }
 

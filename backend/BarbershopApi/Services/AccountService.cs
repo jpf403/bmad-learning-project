@@ -34,7 +34,7 @@ public class AccountService(IAccountRepository accountRepository, IPasswordHashe
         string? newPasswordHash = null;
         if (!string.IsNullOrEmpty(newPassword))
         {
-            if (string.IsNullOrEmpty(currentPassword) ||
+            if (string.IsNullOrEmpty(currentPassword) || account.PasswordHash is null ||
                 passwordHasher.VerifyHashedPassword(account, account.PasswordHash, currentPassword) == PasswordVerificationResult.Failed)
             {
                 throw new InvalidCurrentPasswordException();

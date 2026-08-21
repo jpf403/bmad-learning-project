@@ -78,7 +78,7 @@ development_status:
   epic-3-retrospective: done
 
   epic-4: in-progress
-  4-1-account-schema-and-sso-aware-repository: ready-for-dev
+  4-1-account-schema-and-sso-aware-repository: review
   4-2-zpax-oauth-login-flow: backlog
   4-3-sign-in-with-zpax-login-page-ui: backlog
 

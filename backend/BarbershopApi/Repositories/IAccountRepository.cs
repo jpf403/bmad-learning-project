@@ -13,4 +13,6 @@ public interface IAccountRepository
     Task<List<Account>> Search(string query);
     Task AdminUpdate(Account account);
     Task SoftDelete(Account account);
+    Task<Account?> FindBySsoIdentity(string provider, string subjectId);
+    Task<Account> CreateOrLinkSsoAccount(string email, string firstName, string lastName, string provider, string subjectId);
 }
