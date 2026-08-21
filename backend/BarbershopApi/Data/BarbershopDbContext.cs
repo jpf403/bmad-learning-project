@@ -20,7 +20,7 @@ public class BarbershopDbContext(DbContextOptions<BarbershopDbContext> options) 
 
             entity.HasIndex(a => new { a.SsoProvider, a.SsoSubjectId })
                 .IsUnique()
-                .HasFilter("SsoProvider IS NOT NULL");
+                .HasFilter("SsoProvider IS NOT NULL AND DeletedAt IS NULL");
 
             entity.Property(a => a.RowVersion)
                 .IsConcurrencyToken()

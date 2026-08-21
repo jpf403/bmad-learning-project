@@ -1,5 +1,13 @@
 # Deferred Work
 
+## Deferred from: code review of story-4.1-account-schema-and-sso-aware-repository (2026-08-21)
+
+- Re-linking an already-SSO-linked account silently rebinds it to a new identity with no conflict check — pre-existing design gap not reachable by any current caller (single provider, stable per-user `subjectId`); relevant only if a second SSO provider is added later. [backend/BarbershopApi/Repositories/AccountRepository.cs:123-124]
+- `context.Update(existing)` on link bumps `RowVersion` via the trigger, so a concurrent unrelated profile edit on the same account can get a false `409` — this is AD-16's optimistic-concurrency mechanism working as designed (first commit wins) for two writes racing the same row, not a defect; window is narrow (only an account's first-ever SSO link). [backend/BarbershopApi/Repositories/AccountRepository.cs:123-127]
+- `provider`/`subjectId` aren't trimmed/normalized like `email` is — `provider` is an internal constant we control, and OIDC `sub` claims must be compared as an exact opaque string per spec, so case-normalizing would be spec-incorrect. Revisit only if story 4.2's OAuth client shows real whitespace/casing drift. [backend/BarbershopApi/Repositories/AccountRepository.cs:94-98,123-124]
+- Admin-invariant check in `CreateOrLinkSsoAccount` reads `existing.Role` directly instead of the `AsNoTracking` `EnsureNotCurrentlyAdmin` convention used by `AdminUpdate`/`SoftDelete` — currently correct since `existing` is loaded fresh within the same call (no staleness window today), a style/consistency nit rather than a bug. [backend/BarbershopApi/Repositories/AccountRepository.cs:118-121]
+- The trigger-preservation fix (`AddSsoFieldsToAccount` + `AddSsoFieldsToAccount_RestoreRowVersionTrigger`) relies on an empirically observed, undocumented EF Core SQLite operation-batching order, fragile to a future EF Core upgrade — already mitigated by a regression test (`Update_increments_RowVersion`) and an explicit code comment for future maintainers; no better alternative exists in EF's public SQLite migration API today. [backend/BarbershopApi/Migrations/20260820201236_AddSsoFieldsToAccount.cs]
+
 ## Checked during story-3.5-admin-deletes-an-account (2026-08-17)
 
 - The admin-edit popup's Tab-trap `isSubmitting` gap (round 2 of story-3.3's review, logged below) is unaffected by this story — the new "Delete" button uses the same native `disabled={isSubmitting}` pattern already in place for every other button in this popup, not a new instance of the gap.

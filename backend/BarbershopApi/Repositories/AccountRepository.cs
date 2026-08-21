@@ -1,12 +1,15 @@
 using BarbershopApi.Data;
 using BarbershopApi.Entities;
 using BarbershopApi.Services;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
 namespace BarbershopApi.Repositories;
 
 public class AccountRepository(BarbershopDbContext context) : IAccountRepository
 {
+    private const int SqliteConstraintViolation = 19;
+
     public async Task<Account> Create(Account account)
     {
         account.Email = account.Email.Trim().ToLowerInvariant();
@@ -87,6 +90,8 @@ public class AccountRepository(BarbershopDbContext context) : IAccountRepository
         await EnsureNotCurrentlyAdmin(account.Id);
 
         account.DeletedAt = DateTime.UtcNow;
+        account.SsoProvider = null;
+        account.SsoSubjectId = null;
         context.Update(account);
         await context.SaveChangesAsync();
     }
@@ -112,7 +117,14 @@ public class AccountRepository(BarbershopDbContext context) : IAccountRepository
                 SsoProvider = provider,
                 SsoSubjectId = subjectId,
             };
-            return await Create(account);
+            try
+            {
+                return await Create(account);
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqliteException { SqliteErrorCode: SqliteConstraintViolation })
+            {
+                throw new SsoIdentityConflictException();
+            }
         }
 
         if (existing.Role == Role.Admin)
