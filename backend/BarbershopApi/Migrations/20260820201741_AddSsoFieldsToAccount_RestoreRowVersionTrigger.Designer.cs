@@ -3,6 +3,7 @@ using System;
 using BarbershopApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace BarbershopApi.Migrations
 {
     [DbContext(typeof(BarbershopDbContext))]
-    partial class BarbershopDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260820201741_AddSsoFieldsToAccount_RestoreRowVersionTrigger")]
+    partial class AddSsoFieldsToAccount_RestoreRowVersionTrigger
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.10");
@@ -68,7 +71,7 @@ namespace BarbershopApi.Migrations
 
                     b.HasIndex("SsoProvider", "SsoSubjectId")
                         .IsUnique()
-                        .HasFilter("SsoProvider IS NOT NULL AND DeletedAt IS NULL");
+                        .HasFilter("SsoProvider IS NOT NULL");
 
                     b.ToTable("Accounts");
                 });

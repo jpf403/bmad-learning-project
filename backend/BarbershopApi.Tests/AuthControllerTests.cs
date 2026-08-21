@@ -80,7 +80,7 @@ public class AuthControllerTests : IDisposable
         Assert.NotEqual("the-plaintext-password", account.PasswordHash);
 
         var result = new PasswordHasher<Account>()
-            .VerifyHashedPassword(account, account.PasswordHash, "the-plaintext-password");
+            .VerifyHashedPassword(account, account.PasswordHash!, "the-plaintext-password");
         Assert.Equal(PasswordVerificationResult.Success, result);
     }
 
@@ -398,6 +398,31 @@ public class AuthControllerTests : IDisposable
         var account = await repository.FindByEmail("john@example.com");
         Assert.NotNull(account);
         Assert.Equal(1, account.SessionVersion);
+    }
+
+    [Fact]
+    public async Task Login_against_account_with_null_PasswordHash_returns_401_generic_message()
+    {
+        using var client = _factory.CreateClient();
+        await using (var context = _factory.CreateDbContext())
+        {
+            context.Accounts.Add(new Account
+            {
+                Email = "sso-only@example.com",
+                PasswordHash = null,
+                FirstName = "Sso",
+                LastName = "Only",
+                Role = Role.Customer,
+            });
+            await context.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var response = await client.PostAsJsonAsync(
+            "/api/auth/login", NewLoginRequest(email: "sso-only@example.com"), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Contains("Invalid email or password.", body);
     }
 
     [Fact]

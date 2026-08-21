@@ -1,12 +1,15 @@
 using BarbershopApi.Data;
 using BarbershopApi.Entities;
 using BarbershopApi.Services;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
 namespace BarbershopApi.Repositories;
 
 public class AccountRepository(BarbershopDbContext context) : IAccountRepository
 {
+    private const int SqliteConstraintViolation = 19;
+
     public async Task<Account> Create(Account account)
     {
         account.Email = account.Email.Trim().ToLowerInvariant();
@@ -87,8 +90,54 @@ public class AccountRepository(BarbershopDbContext context) : IAccountRepository
         await EnsureNotCurrentlyAdmin(account.Id);
 
         account.DeletedAt = DateTime.UtcNow;
+        account.SsoProvider = null;
+        account.SsoSubjectId = null;
         context.Update(account);
         await context.SaveChangesAsync();
+    }
+
+    public async Task<Account?> FindBySsoIdentity(string provider, string subjectId)
+    {
+        return await context.Accounts
+            .FirstOrDefaultAsync(a => a.SsoProvider == provider && a.SsoSubjectId == subjectId && a.DeletedAt == null);
+    }
+
+    public async Task<Account> CreateOrLinkSsoAccount(string email, string firstName, string lastName, string provider, string subjectId)
+    {
+        var existing = await FindByEmail(email);
+        if (existing is null)
+        {
+            var account = new Account
+            {
+                Email = email,
+                FirstName = firstName.Trim(),
+                LastName = lastName.Trim(),
+                Role = Role.Customer,
+                PasswordHash = null,
+                SsoProvider = provider,
+                SsoSubjectId = subjectId,
+            };
+            try
+            {
+                return await Create(account);
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqliteException { SqliteErrorCode: SqliteConstraintViolation })
+            {
+                throw new SsoIdentityConflictException();
+            }
+        }
+
+        if (existing.Role == Role.Admin)
+        {
+            throw new AdminAccountProtectedException();
+        }
+
+        existing.SsoProvider = provider;
+        existing.SsoSubjectId = subjectId;
+        context.Update(existing);
+        await context.SaveChangesAsync();
+        await context.Entry(existing).ReloadAsync();
+        return existing;
     }
 
     private async Task EnsureNotCurrentlyAdmin(int accountId)

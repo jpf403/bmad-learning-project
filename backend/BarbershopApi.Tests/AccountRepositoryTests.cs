@@ -492,4 +492,176 @@ public class AccountRepositoryTests : IDisposable
 
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => repositoryB.SoftDelete(staleCopy));
     }
+
+    [Fact]
+    public async Task FindBySsoIdentity_matches_provider_and_subject_id()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        var created = await repository.CreateOrLinkSsoAccount("jane@example.com", "Jane", "Doe", "z-pax", "subject-123");
+
+        var found = await repository.FindBySsoIdentity("z-pax", "subject-123");
+
+        Assert.NotNull(found);
+        Assert.Equal(created.Id, found.Id);
+    }
+
+    [Fact]
+    public async Task FindBySsoIdentity_returns_null_when_no_match()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+
+        var found = await repository.FindBySsoIdentity("z-pax", "nonexistent-subject");
+
+        Assert.Null(found);
+    }
+
+    [Fact]
+    public async Task FindBySsoIdentity_excludes_soft_deleted_accounts()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        var created = await repository.CreateOrLinkSsoAccount("jane@example.com", "Jane", "Doe", "z-pax", "subject-123");
+        await repository.SoftDelete(created);
+
+        var found = await repository.FindBySsoIdentity("z-pax", "subject-123");
+
+        Assert.Null(found);
+    }
+
+    [Fact]
+    public async Task CreateOrLinkSsoAccount_creates_new_account_with_Role_Customer_and_null_PasswordHash_when_no_email_match()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+
+        var created = await repository.CreateOrLinkSsoAccount("jane@example.com", "Jane", "Doe", "z-pax", "subject-123");
+
+        Assert.True(created.Id > 0);
+        Assert.Equal(Role.Customer, created.Role);
+        Assert.Null(created.PasswordHash);
+        Assert.Equal("jane@example.com", created.Email);
+        Assert.Equal("z-pax", created.SsoProvider);
+        Assert.Equal("subject-123", created.SsoSubjectId);
+    }
+
+    [Fact]
+    public async Task CreateOrLinkSsoAccount_links_to_existing_account_by_email_without_altering_PasswordHash()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        var existing = await repository.Create(NewAccount(email: "jane@example.com"));
+        var originalPasswordHash = existing.PasswordHash;
+
+        var linked = await repository.CreateOrLinkSsoAccount("jane@example.com", "Jane", "Doe", "z-pax", "subject-123");
+
+        Assert.Equal(existing.Id, linked.Id);
+        Assert.Equal(originalPasswordHash, linked.PasswordHash);
+        Assert.Equal("z-pax", linked.SsoProvider);
+        Assert.Equal("subject-123", linked.SsoSubjectId);
+    }
+
+    [Fact]
+    public async Task CreateOrLinkSsoAccount_linking_preserves_the_existing_account_Role()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        await repository.Create(NewAccount(email: "barber@example.com", role: Role.Barber));
+
+        var linked = await repository.CreateOrLinkSsoAccount("barber@example.com", "Jane", "Doe", "z-pax", "subject-123");
+
+        Assert.Equal(Role.Barber, linked.Role);
+    }
+
+    [Fact]
+    public async Task CreateOrLinkSsoAccount_on_existing_admin_account_throws_AdminAccountProtectedException()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        await repository.Create(NewAccount(email: "admin@example.com", role: Role.Admin));
+
+        await Assert.ThrowsAsync<AdminAccountProtectedException>(
+            () => repository.CreateOrLinkSsoAccount("admin@example.com", "Jane", "Doe", "z-pax", "subject-123"));
+    }
+
+    [Fact]
+    public async Task CreateOrLinkSsoAccount_after_soft_delete_of_previous_owner_creates_a_fresh_account_with_the_same_identity()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        var original = await repository.CreateOrLinkSsoAccount("jane@example.com", "Jane", "Doe", "z-pax", "subject-123");
+        await repository.SoftDelete(original);
+
+        var recreated = await repository.CreateOrLinkSsoAccount("jane@example.com", "Jane", "Doe", "z-pax", "subject-123");
+
+        Assert.NotEqual(original.Id, recreated.Id);
+        Assert.Equal("z-pax", recreated.SsoProvider);
+        Assert.Equal("subject-123", recreated.SsoSubjectId);
+    }
+
+    [Fact]
+    public async Task SoftDelete_clears_SsoProvider_and_SsoSubjectId()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        var created = await repository.CreateOrLinkSsoAccount("jane@example.com", "Jane", "Doe", "z-pax", "subject-123");
+
+        await repository.SoftDelete(created);
+
+        await using var verifyContext = _factory.CreateDbContext();
+        var reloaded = await verifyContext.Accounts.FirstAsync(a => a.Id == created.Id, TestContext.Current.CancellationToken);
+        Assert.Null(reloaded.SsoProvider);
+        Assert.Null(reloaded.SsoSubjectId);
+    }
+
+    [Fact]
+    public async Task Unique_index_rejects_two_active_accounts_sharing_the_same_SsoProvider_and_SsoSubjectId()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        await repository.CreateOrLinkSsoAccount("jane@example.com", "Jane", "Doe", "z-pax", "subject-123");
+
+        var duplicate = NewAccount(email: "other@example.com");
+        duplicate.SsoProvider = "z-pax";
+        duplicate.SsoSubjectId = "subject-123";
+
+        await Assert.ThrowsAsync<DbUpdateException>(() => repository.Create(duplicate));
+    }
+
+    [Fact]
+    public async Task CreateOrLinkSsoAccount_creating_new_account_with_identity_already_claimed_by_another_active_account_throws_SsoIdentityConflictException()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        await repository.CreateOrLinkSsoAccount("jane@example.com", "Jane", "Doe", "z-pax", "subject-123");
+
+        await Assert.ThrowsAsync<SsoIdentityConflictException>(
+            () => repository.CreateOrLinkSsoAccount("other@example.com", "Other", "Person", "z-pax", "subject-123"));
+    }
+
+    [Fact]
+    public async Task CreateOrLinkSsoAccount_linking_preserves_the_existing_account_Name()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        var existing = await repository.Create(NewAccount(email: "jane@example.com", firstName: "John", lastName: "Smith"));
+
+        var linked = await repository.CreateOrLinkSsoAccount("jane@example.com", "Jane", "Doe", "z-pax", "subject-123");
+
+        Assert.Equal(existing.Id, linked.Id);
+        Assert.Equal("John", linked.FirstName);
+        Assert.Equal("Smith", linked.LastName);
+    }
+
+    [Fact]
+    public async Task FindBySsoIdentity_does_not_match_on_partial_provider_or_subject_match()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        await repository.CreateOrLinkSsoAccount("jane@example.com", "Jane", "Doe", "z-pax", "subject-123");
+
+        Assert.Null(await repository.FindBySsoIdentity("z-pax", "different-subject"));
+        Assert.Null(await repository.FindBySsoIdentity("different-provider", "subject-123"));
+    }
 }
