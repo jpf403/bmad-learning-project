@@ -43,9 +43,11 @@ builder.Services.AddScoped<IPasswordHasher<Account>, PasswordHasher<Account>>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<IBookingService, BookingService>();
+builder.Services.AddHttpClient<ISsoClient, ZPaxSsoClient>();
 builder.Services.AddHostedService<AdminBootstrapService>();
 
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
+builder.Services.Configure<ZPaxSsoOptions>(builder.Configuration.GetSection("ZPaxSso"));
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer();

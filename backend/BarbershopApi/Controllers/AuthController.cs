@@ -1,8 +1,10 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using BarbershopApi.Dtos;
 using BarbershopApi.Entities;
 using BarbershopApi.Services;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -11,8 +13,9 @@ namespace BarbershopApi.Controllers;
 
 [ApiController]
 [Route("api/auth")]
-public class AuthController(IAuthService authService) : ControllerBase
+public class AuthController(IAuthService authService, ISsoClient ssoClient) : ControllerBase
 {
+    private const string SsoFailureRedirect = "https://localhost:5173/login?error=sso_failed";
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterRequest request)
     {
@@ -98,5 +101,76 @@ public class AuthController(IAuthService authService) : ControllerBase
         {
             return Problem(statusCode: StatusCodes.Status500InternalServerError, title: "Something went wrong. Please try again.");
         }
+    }
+
+    [HttpGet("sso/login")]
+    public IActionResult SsoLogin()
+    {
+        var state = Base64UrlTextEncoder.Encode(RandomNumberGenerator.GetBytes(32));
+
+        Response.Cookies.Append("ssoState", state, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true,
+            SameSite = SameSiteMode.Lax,
+            Expires = DateTimeOffset.UtcNow.AddMinutes(10),
+        });
+
+        return Redirect(ssoClient.BuildAuthorizationUrl(state));
+    }
+
+    [HttpGet("sso/callback")]
+    public async Task<IActionResult> SsoCallback(string? code, string? state)
+    {
+        var cookieState = Request.Cookies["ssoState"];
+        Response.Cookies.Delete("ssoState");
+
+        if (string.IsNullOrEmpty(cookieState) || string.IsNullOrEmpty(state) || cookieState != state)
+        {
+            return Redirect(SsoFailureRedirect);
+        }
+
+        if (string.IsNullOrEmpty(code))
+        {
+            return Redirect(SsoFailureRedirect);
+        }
+
+        SsoIdentity identity;
+        try
+        {
+            identity = await ssoClient.ExchangeCodeForIdentity(code);
+        }
+        catch (Exception)
+        {
+            return Redirect(SsoFailureRedirect);
+        }
+
+        Account account;
+        string accessToken;
+        string refreshToken;
+        try
+        {
+            (account, accessToken, refreshToken) = await authService.LoginViaSso(
+                identity.Email, identity.FirstName, identity.LastName, identity.SubjectId);
+        }
+        catch (AdminAccountProtectedException)
+        {
+            return Redirect(SsoFailureRedirect);
+        }
+        catch (SsoIdentityConflictException)
+        {
+            return Redirect(SsoFailureRedirect);
+        }
+
+        Response.Cookies.Append("refreshToken", refreshToken, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true,
+            SameSite = SameSiteMode.Strict,
+            Expires = DateTimeOffset.UtcNow.AddDays(15),
+        });
+
+        var landingRoute = account.Role == Role.Customer ? "schedule-appointment" : "my-schedule";
+        return Redirect($"https://localhost:5173/{landingRoute}");
     }
 }
