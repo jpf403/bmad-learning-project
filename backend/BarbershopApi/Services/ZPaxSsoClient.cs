@@ -4,10 +4,9 @@ using Microsoft.Extensions.Options;
 
 namespace BarbershopApi.Services;
 
-public class ZPaxSsoClient(HttpClient httpClient, IOptions<ZPaxSsoOptions> ssoOptions) : ISsoClient
+public class ZPaxSsoClient(HttpClient httpClient, IOptions<ZPaxSsoOptions> ssoOptions, ILogger<ZPaxSsoClient> logger) : ISsoClient
 {
     private const string Scope = "api";
-    private const string FallbackUri = "https://localhost:5173/login?error=sso_failed";
 
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
@@ -20,7 +19,7 @@ public class ZPaxSsoClient(HttpClient httpClient, IOptions<ZPaxSsoOptions> ssoOp
             ["scope"] = Scope,
             ["response_type"] = "code",
             ["redirect_uri"] = options.RedirectUri,
-            ["fallback_uri"] = FallbackUri,
+            ["fallback_uri"] = SsoRedirects.Failure,
             ["state"] = state,
         });
     }
@@ -40,6 +39,10 @@ public class ZPaxSsoClient(HttpClient httpClient, IOptions<ZPaxSsoOptions> ssoOp
         });
 
         var tokenResponse = await httpClient.PostAsync(options.TokenEndpoint, tokenRequest);
+        if (!tokenResponse.IsSuccessStatusCode)
+        {
+            logger.LogWarning("z-pax token endpoint returned {StatusCode}.", (int)tokenResponse.StatusCode);
+        }
         tokenResponse.EnsureSuccessStatusCode();
         var token = await tokenResponse.Content.ReadFromJsonAsync<ZPaxTokenResponse>(JsonOptions)
             ?? throw new InvalidOperationException("z-pax token endpoint returned an empty response.");
@@ -49,16 +52,36 @@ public class ZPaxSsoClient(HttpClient httpClient, IOptions<ZPaxSsoOptions> ssoOp
         userInfoRequest.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
 
         var userInfoResponse = await httpClient.SendAsync(userInfoRequest);
+        if (!userInfoResponse.IsSuccessStatusCode)
+        {
+            logger.LogWarning("z-pax userinfo endpoint returned {StatusCode}.", (int)userInfoResponse.StatusCode);
+        }
         userInfoResponse.EnsureSuccessStatusCode();
         var userInfo = await userInfoResponse.Content.ReadFromJsonAsync<ZPaxUserInfoResponse>(JsonOptions)
             ?? throw new InvalidOperationException("z-pax userinfo endpoint returned an empty response.");
 
-        if (userInfo.Email is null || userInfo.FirstName is null || userInfo.LastName is null)
+        if (userInfo.Id is null ||
+            string.IsNullOrWhiteSpace(userInfo.Email) ||
+            string.IsNullOrWhiteSpace(userInfo.FirstName) ||
+            string.IsNullOrWhiteSpace(userInfo.LastName))
         {
+            logger.LogWarning("z-pax userinfo response is missing a required field.");
             throw new InvalidOperationException("z-pax userinfo response is missing a required field.");
         }
 
-        return new SsoIdentity(userInfo.Email, userInfo.FirstName, userInfo.LastName, userInfo.Id.ToString());
+        if (!userInfo.EmailVerified)
+        {
+            logger.LogWarning("z-pax account email is not verified for subject id {SubjectId}.", userInfo.Id);
+            throw new InvalidOperationException("z-pax account email is not verified.");
+        }
+
+        if (userInfo.IsLocked)
+        {
+            logger.LogWarning("z-pax account is locked for subject id {SubjectId}.", userInfo.Id);
+            throw new InvalidOperationException("z-pax account is locked.");
+        }
+
+        return new SsoIdentity(userInfo.Email, userInfo.FirstName, userInfo.LastName, userInfo.Id.Value.ToString());
     }
 
     private class ZPaxTokenResponse
@@ -68,9 +91,11 @@ public class ZPaxSsoClient(HttpClient httpClient, IOptions<ZPaxSsoOptions> ssoOp
 
     private class ZPaxUserInfoResponse
     {
-        public int Id { get; set; }
+        public int? Id { get; set; }
         public string? Email { get; set; }
         public string? FirstName { get; set; }
         public string? LastName { get; set; }
+        public bool EmailVerified { get; set; }
+        public bool IsLocked { get; set; }
     }
 }

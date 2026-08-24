@@ -43,11 +43,24 @@ builder.Services.AddScoped<IPasswordHasher<Account>, PasswordHasher<Account>>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<IBookingService, BookingService>();
-builder.Services.AddHttpClient<ISsoClient, ZPaxSsoClient>();
+builder.Services.AddHttpClient<ISsoClient, ZPaxSsoClient>(client => client.Timeout = TimeSpan.FromSeconds(10));
+builder.Services.AddSingleton<ISsoStateStore, InMemorySsoStateStore>();
 builder.Services.AddHostedService<AdminBootstrapService>();
 
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
-builder.Services.Configure<ZPaxSsoOptions>(builder.Configuration.GetSection("ZPaxSso"));
+
+// ClientId/ClientSecret are env-var-only secrets (never in appsettings.json, same convention
+// as AdminSeed) and are legitimately blank in dev/test/CI where FakeSsoClient stands in for
+// ZPaxSsoClient -- so they're checked with a non-fatal startup warning (AdminBootstrapService's
+// pattern) below, not ValidateOnStart. The other four fields always ship a real value in
+// appsettings.json across every environment, so failing fast on a blank one is safe.
+builder.Services.AddOptions<ZPaxSsoOptions>()
+    .Bind(builder.Configuration.GetSection("ZPaxSso"))
+    .Validate(o => Uri.TryCreate(o.AuthorizationEndpoint, UriKind.Absolute, out _), "ZPaxSso:AuthorizationEndpoint is not a valid absolute URL.")
+    .Validate(o => Uri.TryCreate(o.TokenEndpoint, UriKind.Absolute, out _), "ZPaxSso:TokenEndpoint is not a valid absolute URL.")
+    .Validate(o => Uri.TryCreate(o.UserInfoEndpoint, UriKind.Absolute, out _), "ZPaxSso:UserInfoEndpoint is not a valid absolute URL.")
+    .Validate(o => Uri.TryCreate(o.RedirectUri, UriKind.Absolute, out _), "ZPaxSso:RedirectUri is not a valid absolute URL.")
+    .ValidateOnStart();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer();
@@ -184,6 +197,12 @@ if (string.IsNullOrWhiteSpace(jwtKey))
 if (jwtKey.Length < 32)
 {
     throw new InvalidOperationException("Jwt:Key must be at least 32 characters.");
+}
+
+var zPaxSsoOptions = app.Services.GetRequiredService<IOptions<ZPaxSsoOptions>>().Value;
+if (string.IsNullOrWhiteSpace(zPaxSsoOptions.ClientId) || string.IsNullOrWhiteSpace(zPaxSsoOptions.ClientSecret))
+{
+    app.Logger.LogWarning("ZPaxSso:ClientId/ZPaxSso:ClientSecret not configured — z-pax SSO login will fail until these are set.");
 }
 
 using (var scope = app.Services.CreateScope())

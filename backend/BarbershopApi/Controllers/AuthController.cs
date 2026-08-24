@@ -13,9 +13,15 @@ namespace BarbershopApi.Controllers;
 
 [ApiController]
 [Route("api/auth")]
-public class AuthController(IAuthService authService, ISsoClient ssoClient) : ControllerBase
+public class AuthController(
+    IAuthService authService,
+    ISsoClient ssoClient,
+    ISsoStateStore ssoStateStore,
+    ILogger<AuthController> logger) : ControllerBase
 {
-    private const string SsoFailureRedirect = "https://localhost:5173/login?error=sso_failed";
+    private const string SsoStateCookiePath = "/api/auth/sso";
+    private static readonly CookieOptions SsoStateCookieDeleteOptions = new() { Path = SsoStateCookiePath };
+
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterRequest request)
     {
@@ -108,31 +114,51 @@ public class AuthController(IAuthService authService, ISsoClient ssoClient) : Co
     {
         var state = Base64UrlTextEncoder.Encode(RandomNumberGenerator.GetBytes(32));
 
+        string authorizationUrl;
+        try
+        {
+            authorizationUrl = ssoClient.BuildAuthorizationUrl(state);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "SSO login failed while building the authorization URL.");
+            return Redirect(SsoRedirects.Failure);
+        }
+
         Response.Cookies.Append("ssoState", state, new CookieOptions
         {
             HttpOnly = true,
             Secure = true,
             SameSite = SameSiteMode.Lax,
+            Path = SsoStateCookiePath,
             Expires = DateTimeOffset.UtcNow.AddMinutes(10),
         });
 
-        return Redirect(ssoClient.BuildAuthorizationUrl(state));
+        return Redirect(authorizationUrl);
     }
 
     [HttpGet("sso/callback")]
     public async Task<IActionResult> SsoCallback(string? code, string? state)
     {
         var cookieState = Request.Cookies["ssoState"];
-        Response.Cookies.Delete("ssoState");
+        Response.Cookies.Delete("ssoState", SsoStateCookieDeleteOptions);
 
         if (string.IsNullOrEmpty(cookieState) || string.IsNullOrEmpty(state) || cookieState != state)
         {
-            return Redirect(SsoFailureRedirect);
+            logger.LogWarning("SSO callback rejected: missing or mismatched state.");
+            return Redirect(SsoRedirects.Failure);
         }
 
         if (string.IsNullOrEmpty(code))
         {
-            return Redirect(SsoFailureRedirect);
+            logger.LogWarning("SSO callback rejected: missing authorization code.");
+            return Redirect(SsoRedirects.Failure);
+        }
+
+        if (!ssoStateStore.TryConsume(state))
+        {
+            logger.LogWarning("SSO callback rejected: state already consumed.");
+            return Redirect(SsoRedirects.Failure);
         }
 
         SsoIdentity identity;
@@ -140,9 +166,10 @@ public class AuthController(IAuthService authService, ISsoClient ssoClient) : Co
         {
             identity = await ssoClient.ExchangeCodeForIdentity(code);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            return Redirect(SsoFailureRedirect);
+            logger.LogWarning(ex, "SSO callback failed while exchanging code for identity.");
+            return Redirect(SsoRedirects.Failure);
         }
 
         Account account;
@@ -155,11 +182,18 @@ public class AuthController(IAuthService authService, ISsoClient ssoClient) : Co
         }
         catch (AdminAccountProtectedException)
         {
-            return Redirect(SsoFailureRedirect);
+            logger.LogWarning("SSO callback rejected: matched account is admin-protected.");
+            return Redirect(SsoRedirects.Failure);
         }
         catch (SsoIdentityConflictException)
         {
-            return Redirect(SsoFailureRedirect);
+            logger.LogWarning("SSO callback rejected: SSO identity conflict.");
+            return Redirect(SsoRedirects.Failure);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "SSO callback failed while resolving the local account.");
+            return Redirect(SsoRedirects.Failure);
         }
 
         Response.Cookies.Append("refreshToken", refreshToken, new CookieOptions

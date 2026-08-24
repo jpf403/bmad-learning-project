@@ -463,7 +463,11 @@ public class AuthControllerTests : IDisposable
         Assert.False(string.IsNullOrEmpty(ExtractState(response)));
 
         Assert.True(response.Headers.TryGetValues("Set-Cookie", out var cookies));
-        Assert.Contains(cookies!, c => c.StartsWith("ssoState=") && c.Contains("httponly", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(cookies!, c => c.StartsWith("ssoState=") &&
+            c.Contains("httponly", StringComparison.OrdinalIgnoreCase) &&
+            c.Contains("samesite=lax", StringComparison.OrdinalIgnoreCase) &&
+            c.Contains("secure", StringComparison.OrdinalIgnoreCase) &&
+            c.Contains("path=/api/auth/sso", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -567,6 +571,32 @@ public class AuthControllerTests : IDisposable
 
         Assert.Equal(HttpStatusCode.Found, response.StatusCode);
         Assert.Equal("https://localhost:5173/login?error=sso_failed", response.Headers.Location!.ToString());
+
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        Assert.Null(await repository.FindByEmail(FakeSsoClient.NextIdentity.Email));
+    }
+
+    [Fact]
+    public async Task SsoCallback_state_already_consumed_by_a_concurrent_request_redirects_to_login_with_error()
+    {
+        using var client = NewSsoClient();
+        var loginResponse = await client.GetAsync("/api/auth/sso/login", TestContext.Current.CancellationToken);
+        var state = ExtractState(loginResponse);
+
+        // Simulate a concurrent request that already consumed this state server-side,
+        // ahead of this attempt's cookie-deletion response ever reaching the browser.
+        var stateStore = _factory.Services.GetRequiredService<ISsoStateStore>();
+        Assert.True(stateStore.TryConsume(state));
+
+        var response = await client.GetAsync($"/api/auth/sso/callback?code=anything&state={state}", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Found, response.StatusCode);
+        Assert.Equal("https://localhost:5173/login?error=sso_failed", response.Headers.Location!.ToString());
+
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        Assert.Null(await repository.FindByEmail(FakeSsoClient.NextIdentity.Email));
     }
 
     [Fact]

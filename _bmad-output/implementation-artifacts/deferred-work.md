@@ -1,5 +1,9 @@
 # Deferred Work
 
+## Deferred from: code review of story-4.2-zpax-oauth-login-flow (2026-08-24)
+
+- `Secure=true` cookies are incompatible with the `http` launchSettings profile — pre-existing pattern from the original `Login` endpoint's `refreshToken` cookie (Story 1.5); this diff only extends the same convention to the new `ZPaxSso` env vars, so a dev running the `http` launch profile would silently get `sso_failed` on every SSO attempt, same as they already would on password login's refresh cookie. [backend/BarbershopApi/Properties/launchSettings.example.json, backend/BarbershopApi/Controllers/AuthController.cs:114]
+
 ## Deferred from: code review of story-4.1-account-schema-and-sso-aware-repository (2026-08-21)
 
 - Re-linking an already-SSO-linked account silently rebinds it to a new identity with no conflict check — pre-existing design gap not reachable by any current caller (single provider, stable per-user `subjectId`); relevant only if a second SSO provider is added later. [backend/BarbershopApi/Repositories/AccountRepository.cs:123-124]
