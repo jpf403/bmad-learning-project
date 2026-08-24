@@ -66,6 +66,17 @@ public class AuthService(
         return (account, accessToken, refreshToken);
     }
 
+    public async Task<(Account Account, string AccessToken, string RefreshToken)> LoginViaSso(
+        string email, string firstName, string lastName, string subjectId)
+    {
+        var account = await accountRepository.CreateOrLinkSsoAccount(email, firstName, lastName, SsoProviders.ZPax, subjectId);
+
+        var accessToken = GenerateAccessToken(account);
+        var refreshToken = GenerateRefreshToken(account);
+
+        return (account, accessToken, refreshToken);
+    }
+
     public async Task Logout(int accountId)
     {
         var account = await accountRepository.FindById(accountId);

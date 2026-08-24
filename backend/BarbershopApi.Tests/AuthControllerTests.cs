@@ -6,7 +6,12 @@ using System.Text.Json.Serialization;
 using BarbershopApi.Dtos;
 using BarbershopApi.Entities;
 using BarbershopApi.Repositories;
+using BarbershopApi.Services;
+using BarbershopApi.Tests.TestOnly;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BarbershopApi.Tests;
 
@@ -433,5 +438,204 @@ public class AuthControllerTests : IDisposable
         var response = await client.PostAsync("/api/auth/logout", null, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    private HttpClient NewSsoClient() => _factory.CreateClient(new WebApplicationFactoryClientOptions
+    {
+        AllowAutoRedirect = false,
+        BaseAddress = new Uri("https://localhost"),
+    });
+
+    private FakeSsoClient FakeSsoClient => _factory.Services.GetRequiredService<FakeSsoClient>();
+
+    private static string ExtractState(HttpResponseMessage ssoLoginResponse) =>
+        QueryHelpers.ParseQuery(ssoLoginResponse.Headers.Location!.Query)["state"].ToString();
+
+    [Fact]
+    public async Task SsoLogin_redirects_to_authorize_endpoint_with_state_cookie()
+    {
+        using var client = NewSsoClient();
+
+        var response = await client.GetAsync("/api/auth/sso/login", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Found, response.StatusCode);
+        Assert.StartsWith("https://fake-zpax.test/authorize?state=", response.Headers.Location!.ToString());
+        Assert.False(string.IsNullOrEmpty(ExtractState(response)));
+
+        Assert.True(response.Headers.TryGetValues("Set-Cookie", out var cookies));
+        Assert.Contains(cookies!, c => c.StartsWith("ssoState=") &&
+            c.Contains("httponly", StringComparison.OrdinalIgnoreCase) &&
+            c.Contains("samesite=lax", StringComparison.OrdinalIgnoreCase) &&
+            c.Contains("secure", StringComparison.OrdinalIgnoreCase) &&
+            c.Contains("path=/api/auth/sso", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task SsoCallback_with_valid_code_and_state_creates_new_customer_account_and_redirects_to_schedule_appointment()
+    {
+        using var client = NewSsoClient();
+        var loginResponse = await client.GetAsync("/api/auth/sso/login", TestContext.Current.CancellationToken);
+        var state = ExtractState(loginResponse);
+
+        var response = await client.GetAsync($"/api/auth/sso/callback?code=anything&state={state}", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Found, response.StatusCode);
+        Assert.Equal("https://localhost:5173/schedule-appointment", response.Headers.Location!.ToString());
+        Assert.True(response.Headers.TryGetValues("Set-Cookie", out var cookies));
+        Assert.Contains(cookies!, c => c.StartsWith("refreshToken="));
+
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        var account = await repository.FindByEmail(FakeSsoClient.NextIdentity.Email);
+
+        Assert.NotNull(account);
+        Assert.Equal(Role.Customer, account.Role);
+        Assert.Null(account.PasswordHash);
+        Assert.Equal(SsoProviders.ZPax, account.SsoProvider);
+    }
+
+    [Fact]
+    public async Task SsoCallback_with_valid_code_links_to_existing_barber_account_by_email_preserving_role_and_password()
+    {
+        const string seededPasswordHash = "seeded-password-hash";
+        await using (var context = _factory.CreateDbContext())
+        {
+            context.Accounts.Add(new Account
+            {
+                Email = FakeSsoClient.NextIdentity.Email,
+                PasswordHash = seededPasswordHash,
+                FirstName = "John",
+                LastName = "Smith",
+                Role = Role.Barber,
+            });
+            await context.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        using var client = NewSsoClient();
+        var loginResponse = await client.GetAsync("/api/auth/sso/login", TestContext.Current.CancellationToken);
+        var state = ExtractState(loginResponse);
+
+        var response = await client.GetAsync($"/api/auth/sso/callback?code=anything&state={state}", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Found, response.StatusCode);
+        Assert.Equal("https://localhost:5173/my-schedule", response.Headers.Location!.ToString());
+
+        await using var context2 = _factory.CreateDbContext();
+        var repository = new AccountRepository(context2);
+        var account = await repository.FindByEmail(FakeSsoClient.NextIdentity.Email);
+
+        Assert.NotNull(account);
+        Assert.Equal(Role.Barber, account.Role);
+        Assert.Equal(seededPasswordHash, account.PasswordHash);
+    }
+
+    [Fact]
+    public async Task SsoCallback_missing_state_cookie_redirects_to_login_with_error_and_creates_no_account()
+    {
+        using var client = NewSsoClient();
+
+        var response = await client.GetAsync("/api/auth/sso/callback?code=x&state=y", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Found, response.StatusCode);
+        Assert.Equal("https://localhost:5173/login?error=sso_failed", response.Headers.Location!.ToString());
+
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        Assert.Null(await repository.FindByEmail(FakeSsoClient.NextIdentity.Email));
+    }
+
+    [Fact]
+    public async Task SsoCallback_mismatched_state_redirects_to_login_with_error_and_creates_no_account()
+    {
+        using var client = NewSsoClient();
+        await client.GetAsync("/api/auth/sso/login", TestContext.Current.CancellationToken);
+
+        var response = await client.GetAsync("/api/auth/sso/callback?code=x&state=a-different-state", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Found, response.StatusCode);
+        Assert.Equal("https://localhost:5173/login?error=sso_failed", response.Headers.Location!.ToString());
+
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        Assert.Null(await repository.FindByEmail(FakeSsoClient.NextIdentity.Email));
+    }
+
+    [Fact]
+    public async Task SsoCallback_missing_code_redirects_to_login_with_error()
+    {
+        using var client = NewSsoClient();
+        var loginResponse = await client.GetAsync("/api/auth/sso/login", TestContext.Current.CancellationToken);
+        var state = ExtractState(loginResponse);
+
+        var response = await client.GetAsync($"/api/auth/sso/callback?state={state}", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Found, response.StatusCode);
+        Assert.Equal("https://localhost:5173/login?error=sso_failed", response.Headers.Location!.ToString());
+
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        Assert.Null(await repository.FindByEmail(FakeSsoClient.NextIdentity.Email));
+    }
+
+    [Fact]
+    public async Task SsoCallback_state_already_consumed_by_a_concurrent_request_redirects_to_login_with_error()
+    {
+        using var client = NewSsoClient();
+        var loginResponse = await client.GetAsync("/api/auth/sso/login", TestContext.Current.CancellationToken);
+        var state = ExtractState(loginResponse);
+
+        // Simulate a concurrent request that already consumed this state server-side,
+        // ahead of this attempt's cookie-deletion response ever reaching the browser.
+        var stateStore = _factory.Services.GetRequiredService<ISsoStateStore>();
+        Assert.True(stateStore.TryConsume(state));
+
+        var response = await client.GetAsync($"/api/auth/sso/callback?code=anything&state={state}", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Found, response.StatusCode);
+        Assert.Equal("https://localhost:5173/login?error=sso_failed", response.Headers.Location!.ToString());
+
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        Assert.Null(await repository.FindByEmail(FakeSsoClient.NextIdentity.Email));
+    }
+
+    [Fact]
+    public async Task SsoCallback_when_ssoClient_throws_redirects_to_login_with_error_and_creates_no_account()
+    {
+        FakeSsoClient.ThrowOnExchange = new InvalidOperationException("z-pax is unavailable");
+
+        using var client = NewSsoClient();
+        var loginResponse = await client.GetAsync("/api/auth/sso/login", TestContext.Current.CancellationToken);
+        var state = ExtractState(loginResponse);
+
+        var response = await client.GetAsync($"/api/auth/sso/callback?code=anything&state={state}", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Found, response.StatusCode);
+        Assert.Equal("https://localhost:5173/login?error=sso_failed", response.Headers.Location!.ToString());
+
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        Assert.Null(await repository.FindByEmail(FakeSsoClient.NextIdentity.Email));
+    }
+
+    [Fact]
+    public async Task SsoCallback_reuses_ssoState_cookie_only_once()
+    {
+        using var client = NewSsoClient();
+        var loginResponse = await client.GetAsync("/api/auth/sso/login", TestContext.Current.CancellationToken);
+        var state = ExtractState(loginResponse);
+
+        var firstAttempt = await client.GetAsync($"/api/auth/sso/callback?code=anything&state={state}", TestContext.Current.CancellationToken);
+        Assert.Equal("https://localhost:5173/schedule-appointment", firstAttempt.Headers.Location!.ToString());
+
+        var secondAttempt = await client.GetAsync($"/api/auth/sso/callback?code=anything&state={state}", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Found, secondAttempt.StatusCode);
+        Assert.Equal("https://localhost:5173/login?error=sso_failed", secondAttempt.Headers.Location!.ToString());
+
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        var account = await repository.FindByEmail(FakeSsoClient.NextIdentity.Email);
+        Assert.NotNull(account);
     }
 }

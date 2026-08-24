@@ -10,7 +10,9 @@
         "ASPNETCORE_ENVIRONMENT": "Development",
         "Jwt__Key": "replace-with-a-random-string-at-least-32-characters-long",
         "AdminSeed__Email": "replace-with-admin-email@example.com",
-        "AdminSeed__Password": "replace-with-admin-password"
+        "AdminSeed__Password": "replace-with-admin-password",
+        "ZPaxSso__ClientId": "replace-with-zpax-client-id",
+        "ZPaxSso__ClientSecret": "replace-with-zpax-client-secret"
       }
     },
     "https": {
@@ -22,7 +24,9 @@
         "ASPNETCORE_ENVIRONMENT": "Development",
         "Jwt__Key": "replace-with-a-random-string-at-least-32-characters-long",
         "AdminSeed__Email": "replace-with-admin-email@example.com",
-        "AdminSeed__Password": "replace-with-admin-password"
+        "AdminSeed__Password": "replace-with-admin-password",
+        "ZPaxSso__ClientId": "replace-with-zpax-client-id",
+        "ZPaxSso__ClientSecret": "replace-with-zpax-client-secret"
       }
     }
   }

@@ -1,4 +1,5 @@
 using BarbershopApi.Data;
+using BarbershopApi.Services;
 using BarbershopApi.Tests.TestOnly;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -29,6 +30,10 @@ public class SqliteApiFactory : WebApplicationFactory<Program>
             services.RemoveAll<DbContextOptions<BarbershopDbContext>>();
             services.AddDbContext<BarbershopDbContext>(options => options.UseSqlite(ConnectionString));
             services.AddControllers().AddApplicationPart(typeof(RoleGateTestController).Assembly);
+
+            services.RemoveAll<ISsoClient>();
+            services.AddSingleton<FakeSsoClient>();
+            services.AddSingleton<ISsoClient>(sp => sp.GetRequiredService<FakeSsoClient>());
         });
     }
 
