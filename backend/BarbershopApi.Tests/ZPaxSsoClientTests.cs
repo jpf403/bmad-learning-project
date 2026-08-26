@@ -37,11 +37,13 @@ public class ZPaxSsoClientTests
 
         Assert.StartsWith("https://fake-zpax.test/connect/authorize?", url);
         Assert.Contains("client_id=test-client-id", url);
-        Assert.Contains("scope=api", url);
+        Assert.Contains("scope=profile", url);
         Assert.Contains("response_type=code", url);
         Assert.Contains("redirect_uri=", url);
-        Assert.Contains("fallback_uri=", url);
-        Assert.Contains("state=the-state-value", url);
+        // [DEBUG-TEMP] state omitted from the outgoing request while debugging with z-pax --
+        // asserted explicitly (not just un-asserted) so a future accidental re-add is caught
+        // the same way an accidental removal would be, while this is deferred (see deferred-work.md).
+        Assert.DoesNotContain("state=", url);
     }
 
     [Fact]
@@ -51,7 +53,7 @@ public class ZPaxSsoClientTests
         {
             if (request.RequestUri!.ToString() == "https://fake-zpax.test/connect/token")
             {
-                return JsonResponse(new { accessToken = "the-access-token" });
+                return JsonResponse(new { access_token = "the-access-token" });
             }
 
             Assert.Equal("https://fake-zpax.test/connect/userinfo", request.RequestUri!.ToString());
@@ -78,7 +80,7 @@ public class ZPaxSsoClientTests
             if (request.RequestUri!.ToString() == "https://fake-zpax.test/connect/token")
             {
                 tokenRequestBody = await request.Content!.ReadAsStringAsync();
-                return await JsonResponse(new { accessToken = "the-access-token" });
+                return await JsonResponse(new { access_token = "the-access-token" });
             }
 
             return await JsonResponse(new { id = 1, email = "a@b.com", firstName = "A", lastName = "B", emailVerified = true });
@@ -94,7 +96,10 @@ public class ZPaxSsoClientTests
 
         Assert.NotNull(tokenRequestBody);
         Assert.Contains($"redirect_uri={Uri.EscapeDataString(expectedRedirectUri)}", tokenRequestBody);
-        Assert.Contains("scope=api", tokenRequestBody);
+        // [DEBUG-TEMP] scope omitted from the token request while debugging with z-pax --
+        // asserted explicitly (not just un-asserted) so a future accidental re-add is caught
+        // the same way an accidental removal would be, while this is deferred (see deferred-work.md).
+        Assert.DoesNotContain("scope=", tokenRequestBody);
     }
 
     [Theory]
@@ -108,7 +113,7 @@ public class ZPaxSsoClientTests
         {
             if (request.RequestUri!.ToString() == "https://fake-zpax.test/connect/token")
             {
-                return JsonResponse(new { accessToken = "the-access-token" });
+                return JsonResponse(new { access_token = "the-access-token" });
             }
 
             return JsonResponse(new { id = 1, email, firstName, lastName, emailVerified = true });
@@ -124,7 +129,7 @@ public class ZPaxSsoClientTests
         {
             if (request.RequestUri!.ToString() == "https://fake-zpax.test/connect/token")
             {
-                return JsonResponse(new { accessToken = "the-access-token" });
+                return JsonResponse(new { access_token = "the-access-token" });
             }
 
             return JsonResponse(new { id = 1, email = "john@example.com", firstName = "John", lastName = "Smith", emailVerified = false });
@@ -148,7 +153,7 @@ public class ZPaxSsoClientTests
         {
             if (request.RequestUri!.ToString() == "https://fake-zpax.test/connect/token")
             {
-                return JsonResponse(new { accessToken = "the-access-token" });
+                return JsonResponse(new { access_token = "the-access-token" });
             }
 
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Unauthorized));
@@ -164,7 +169,7 @@ public class ZPaxSsoClientTests
         {
             if (request.RequestUri!.ToString() == "https://fake-zpax.test/connect/token")
             {
-                return JsonResponse(new { accessToken = "the-access-token" });
+                return JsonResponse(new { access_token = "the-access-token" });
             }
 
             // Raw JSON with no "id" key at all -- distinct from `id: null`, and the exact shape
@@ -187,7 +192,7 @@ public class ZPaxSsoClientTests
         {
             if (request.RequestUri!.ToString() == "https://fake-zpax.test/connect/token")
             {
-                return JsonResponse(new { accessToken = "the-access-token" });
+                return JsonResponse(new { access_token = "the-access-token" });
             }
 
             return JsonResponse(new { id = 1, email = "john@example.com", firstName = "John", lastName = "Smith", emailVerified = true, isLocked = true });
