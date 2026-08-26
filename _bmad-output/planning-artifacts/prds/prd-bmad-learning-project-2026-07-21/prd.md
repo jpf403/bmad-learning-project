@@ -2,7 +2,7 @@
 title: Barbershop Appointment Scheduler — PRD
 status: final
 created: 2026-07-21
-updated: 2026-08-19
+updated: 2026-08-26
 ---
 
 # Barbershop Appointment Scheduler — PRD
@@ -57,6 +57,7 @@ Any signed-in user — customer, barber, or admin — can sign out, ending their
 - FR44: On any z-pax sign-in where a local account already exists with a matching email, the user is signed into that existing account (whatever role and password it currently holds) rather than creating a duplicate account — linking does not disable or replace that account's existing password; the user may continue to sign in via either method afterward.
 - FR45: An account created or linked via z-pax SSO is subject to the same single-admin invariant as any other account (FR34) — it can never be or become the system's Admin account; an admin may still promote it to Barber like any other Customer/Barber account (FR18).
 - FR46: Once signed in via z-pax, a user's session, role gating, and access to every existing feature (booking, self-service Account editing, etc.) behave identically to a standard email/password session — SSO is an alternate entry point to the same account model, not a separate one.
+- FR47: A signed-in user who authenticated via z-pax SSO sees the myzPAX cross-app navigation banner (hosted `banner.js` script) on every page, showing the other myzPAX-suite apps they're entitled to. The banner is supplied the app's z-pax SSO access token (captured once at sign-in, held in memory only) and this app's registered launcher id; if no z-pax token is available — a password-only session, or one where the token has since gone stale — the banner degrades to its own built-in minimal state rather than a broken panel. This is a UI/navigation feature only: it does not affect authentication, session, or role-gating behavior (FR46 still holds).
 
 ### Booking (shared by all roles)
 - FR5: Any signed-in user can access the Schedule Appointment page. A signed-out user clicking a Schedule/booking CTA (e.g., on the home page) is redirected to the Login page instead.

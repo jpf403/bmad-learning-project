@@ -174,6 +174,7 @@ This document provides the complete epic and story breakdown for the Barbershop 
 - UX-DR18: Implement the accessibility floor — WCAG 2.2 AA across the whole app; full keyboard operability for every custom-built interactive element (Tab focus order, Enter/Space activation, visible focus ring) alongside what Radix already provides for free on the three Radix-backed surfaces; role-based nav hiding must be real DOM removal; no state relies on color alone.
 - UX-DR19: Implement responsive breakpoint behavior — desktop ≥1024px (nav inline, content capped at 1120px), tablet 640–1023px (narrowed gutters, nav collapses to a menu button only once links would wrap), mobile <640px (single-column stacking throughout, no hover-only affordances).
 - UX-DR20: Resolve two flagged open UX items before building the components that depend on them — owner UX (Sally), per Architecture's Deferred section: (a) a form-validation/error color for password-mismatch states (interim default is plain text, no color), and (b) the exact tablet breakpoint pixel value (currently named, not sized).
+- UX-DR21: Mount the myzPAX banner (`MyzpaxBanner.init`) for SSO-authenticated sessions only, positioned directly below the existing Nav bar on every authenticated page. Use `position: 'static'` (flows with the page, consistent with this app's otherwise non-sticky layout) and the vendor's default `style: 'aurora'`/`layout: 'panel'` — the widget renders inside a closed Shadow DOM and cannot be restyled by this app's design tokens, so no new component build is needed, only placement. No new State Pattern (EXPERIENCE.md/UX-DR17) is required for the widget's own degraded/fail-safe state — that behavior is owned and handled entirely by the vendor script, not this app's design system.
 
 ### FR Coverage Map
 
@@ -217,6 +218,7 @@ FR43: Epic 4 - New account creation from SSO identity
 FR44: Epic 4 - Existing-account linking by email
 FR45: Epic 4 - SSO accounts subject to single-admin invariant
 FR46: Epic 4 - SSO session behaves identically to password session
+FR47: Epic 4 - myzPAX cross-app navigation banner
 
 ## Epic List
 
@@ -234,8 +236,8 @@ The admin can search, create, edit, and delete customer/barber accounts from a d
 **FRs covered:** FR16, FR17, FR18, FR19, FR34, FR35, FR40, FR41
 
 ### Epic 4: Single Sign-On (z-pax)
-A visitor can sign in using their z-pax account as an alternative to email/password — first-time SSO sign-in creates a Customer account automatically from z-pax's identity, a matching email links to an existing account without disturbing its password, and the resulting session behaves identically to a standard login in every other respect.
-**FRs covered:** FR42, FR43, FR44, FR45, FR46
+A visitor can sign in using their z-pax account as an alternative to email/password — first-time SSO sign-in creates a Customer account automatically from z-pax's identity, a matching email links to an existing account without disturbing its password, and the resulting session behaves identically to a standard login in every other respect. An SSO-authenticated session also sees the myzPAX cross-app navigation banner on every page.
+**FRs covered:** FR42, FR43, FR44, FR45, FR46, FR47
 
 ## Epic 1: Account Access & Site Foundation
 
@@ -770,7 +772,7 @@ So that I can remove accounts that are no longer needed.
 
 ## Epic 4: Single Sign-On (z-pax)
 
-A visitor can sign in using their z-pax account as an alternative to email/password — first-time SSO sign-in creates a Customer account automatically from z-pax's identity, a matching email links to an existing account without disturbing its password, and the resulting session behaves identically to a standard login in every other respect.
+A visitor can sign in using their z-pax account as an alternative to email/password — first-time SSO sign-in creates a Customer account automatically from z-pax's identity, a matching email links to an existing account without disturbing its password, and the resulting session behaves identically to a standard login in every other respect. An SSO-authenticated session also sees the myzPAX cross-app navigation banner on every page.
 
 ### Story 4.1: Account Schema & SSO-Aware Repository
 
@@ -855,3 +857,39 @@ So that I can choose either sign-in method.
 **Given** any viewport width
 **When** the Login page renders with the new SSO option
 **Then** the layout remains responsive with no broken/overflowing elements (FR22)
+
+### Story 4.4: myzPAX Cross-App Navigation Banner
+
+As an SSO-authenticated user,
+I want to see the other myzPAX apps I have access to right from this app,
+So that I can move between the tools in the suite without a separate portal.
+
+**Acceptance Criteria:**
+
+**Given** a successful z-pax SSO sign-in (Story 4.2's callback)
+**When** the backend resolves the local account
+**Then** the z-pax access token obtained during the identity exchange is also set in a short-lived (2-minute), single-use HttpOnly+Secure+SameSite=Strict cookie (`zpaxAccessToken`, path `/api/auth/sso`) alongside the existing refresh-token cookie (FR47, AD-19)
+
+**Given** the `GET /api/auth/sso/zpax-token` endpoint
+**When** called by an authenticated session that has a pending `zpaxAccessToken` cookie
+**Then** it returns the token once in the response body and deletes the cookie; a subsequent call, or a password-only session, returns 404 (FR47, AD-19)
+
+**Given** the frontend session bootstrap (`AuthContext`)
+**When** it completes
+**Then** it calls `GET /api/auth/sso/zpax-token` once; on success, the returned z-pax access token is held in memory alongside the app's own access token — never persisted (FR47, AD-19)
+
+**Given** a signed-in session holding a z-pax access token in memory
+**When** any authenticated page renders
+**Then** the myzPAX banner (`banner.js`, loaded from `https://dev.zpax-banner.myzpax.com/banner/v1/banner.js`) mounts directly below the Nav bar via `MyzpaxBanner.init({ getToken, currentAppId: 'barbershop_demo', position: 'static' })`, where `getToken` returns whatever z-pax access token is currently held in memory (UX-DR21)
+
+**Given** a signed-in session with no z-pax access token in memory (a password-only login, or an SSO session whose token has already gone stale or been consumed)
+**When** any authenticated page renders
+**Then** the banner script is not mounted at all — no wasted external request, no partial widget (FR47)
+
+**Given** the `currentAppId` value used above (`barbershop_demo`)
+**When** this story is implemented
+**Then** it's confirmed against z-pax's actual launcher-registry entry for this app before merge — flagged going in as unverified
+
+**Given** automated tests should never depend on a live external service (mirrors AD-4)
+**When** this story is implemented
+**Then** the new endpoint's cookie-present / cookie-absent / already-consumed paths are covered by xUnit + `WebApplicationFactory`, and the frontend's conditional-mount and `getToken`-wiring logic are covered by Vitest with the banner script itself stubbed — never loading the real external script in tests (NFR4, AD-4)
