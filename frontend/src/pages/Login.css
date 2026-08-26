@@ -39,6 +39,23 @@
   margin: 0;
 }
 
+.login__divider {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  color: var(--color-text-muted);
+  font-family: var(--font-family-base);
+  font-size: var(--typography-body-sm-size);
+}
+
+.login__divider::before,
+.login__divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+}
+
 @media (min-width: 640px) {
   .login {
     padding: var(--spacing-16) var(--spacing-gutter-desktop);

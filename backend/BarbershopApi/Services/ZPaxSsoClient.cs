@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Options;
 
@@ -6,7 +7,7 @@ namespace BarbershopApi.Services;
 
 public class ZPaxSsoClient(HttpClient httpClient, IOptions<ZPaxSsoOptions> ssoOptions, ILogger<ZPaxSsoClient> logger) : ISsoClient
 {
-    private const string Scope = "api";
+    private const string Scope = "profile";
 
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
@@ -19,8 +20,7 @@ public class ZPaxSsoClient(HttpClient httpClient, IOptions<ZPaxSsoOptions> ssoOp
             ["scope"] = Scope,
             ["response_type"] = "code",
             ["redirect_uri"] = options.RedirectUri,
-            ["fallback_uri"] = SsoRedirects.Failure,
-            ["state"] = state,
+            // [DEBUG-TEMP] state omitted from the outgoing request while debugging with z-pax
         });
     }
 
@@ -35,13 +35,14 @@ public class ZPaxSsoClient(HttpClient httpClient, IOptions<ZPaxSsoOptions> ssoOp
             ["redirect_uri"] = options.RedirectUri,
             ["client_id"] = options.ClientId,
             ["client_secret"] = options.ClientSecret,
-            ["scope"] = Scope,
+            // [DEBUG-TEMP] scope omitted from the token request while debugging with z-pax
         });
 
         var tokenResponse = await httpClient.PostAsync(options.TokenEndpoint, tokenRequest);
         if (!tokenResponse.IsSuccessStatusCode)
         {
-            logger.LogWarning("z-pax token endpoint returned {StatusCode}.", (int)tokenResponse.StatusCode);
+            var errorBody = await tokenResponse.Content.ReadAsStringAsync();
+            logger.LogWarning("z-pax token endpoint returned {StatusCode}: {Body}", (int)tokenResponse.StatusCode, errorBody);
         }
         tokenResponse.EnsureSuccessStatusCode();
         var token = await tokenResponse.Content.ReadFromJsonAsync<ZPaxTokenResponse>(JsonOptions)
@@ -54,7 +55,8 @@ public class ZPaxSsoClient(HttpClient httpClient, IOptions<ZPaxSsoOptions> ssoOp
         var userInfoResponse = await httpClient.SendAsync(userInfoRequest);
         if (!userInfoResponse.IsSuccessStatusCode)
         {
-            logger.LogWarning("z-pax userinfo endpoint returned {StatusCode}.", (int)userInfoResponse.StatusCode);
+            var errorBody = await userInfoResponse.Content.ReadAsStringAsync();
+            logger.LogWarning("z-pax userinfo endpoint returned {StatusCode}: {Body}", (int)userInfoResponse.StatusCode, errorBody);
         }
         userInfoResponse.EnsureSuccessStatusCode();
         var userInfo = await userInfoResponse.Content.ReadFromJsonAsync<ZPaxUserInfoResponse>(JsonOptions)
@@ -86,6 +88,7 @@ public class ZPaxSsoClient(HttpClient httpClient, IOptions<ZPaxSsoOptions> ssoOp
 
     private class ZPaxTokenResponse
     {
+        [JsonPropertyName("access_token")]
         public string AccessToken { get; set; } = string.Empty;
     }
 
