@@ -880,7 +880,7 @@ So that I can move between the tools in the suite without a separate portal.
 
 **Given** a signed-in session holding a z-pax access token in memory
 **When** any authenticated page renders
-**Then** the myzPAX banner (`banner.js`, loaded from `https://dev.zpax-banner.myzpax.com/banner/v1/banner.js`) mounts directly below the Nav bar via `MyzpaxBanner.init({ getToken, currentAppId: 'barbershop_demo', position: 'static' })`, where `getToken` returns whatever z-pax access token is currently held in memory (UX-DR21)
+**Then** the myzPAX banner (`banner.js`, loaded from `https://dev.zpax-banner.myzpax.com/banner/v1/banner.js`) mounts directly above the Nav bar via `MyzpaxBanner.init({ getToken, currentAppId: 'barbershop_demo', position: 'static' })`, where `getToken` returns whatever z-pax access token is currently held in memory (UX-DR21)
 
 **Given** a signed-in session with no z-pax access token in memory (a password-only login, or an SSO session whose token has already gone stale or been consumed)
 **When** any authenticated page renders
