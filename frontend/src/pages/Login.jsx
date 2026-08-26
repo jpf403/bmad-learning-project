@@ -108,13 +108,19 @@ export default function Login() {
           </Button>
         </form>
 
-        <div className="login__divider">
-          <span>or</span>
-        </div>
+        <div className="login__sso">
+          <div
+            className="login__divider"
+            role="separator"
+            aria-orientation="horizontal"
+          >
+            <span>or</span>
+          </div>
 
-        <Button variant="secondary" type="button" onClick={handleSsoLogin}>
-          Sign in with z-pax
-        </Button>
+          <Button variant="secondary" type="button" onClick={handleSsoLogin}>
+            Sign in with z-pax
+          </Button>
+        </div>
       </FormSection>
     </div>
   )

@@ -40,7 +40,10 @@ public class ZPaxSsoClientTests
         Assert.Contains("scope=profile", url);
         Assert.Contains("response_type=code", url);
         Assert.Contains("redirect_uri=", url);
-        // [DEBUG-TEMP] state omitted from the outgoing request while debugging with z-pax
+        // [DEBUG-TEMP] state omitted from the outgoing request while debugging with z-pax --
+        // asserted explicitly (not just un-asserted) so a future accidental re-add is caught
+        // the same way an accidental removal would be, while this is deferred (see deferred-work.md).
+        Assert.DoesNotContain("state=", url);
     }
 
     [Fact]
@@ -93,7 +96,10 @@ public class ZPaxSsoClientTests
 
         Assert.NotNull(tokenRequestBody);
         Assert.Contains($"redirect_uri={Uri.EscapeDataString(expectedRedirectUri)}", tokenRequestBody);
-        // [DEBUG-TEMP] scope omitted from the token request while debugging with z-pax
+        // [DEBUG-TEMP] scope omitted from the token request while debugging with z-pax --
+        // asserted explicitly (not just un-asserted) so a future accidental re-add is caught
+        // the same way an accidental removal would be, while this is deferred (see deferred-work.md).
+        Assert.DoesNotContain("scope=", tokenRequestBody);
     }
 
     [Theory]

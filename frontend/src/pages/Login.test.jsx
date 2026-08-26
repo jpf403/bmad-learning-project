@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
+import { StrictMode } from 'react'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router'
@@ -238,14 +239,18 @@ describe('Login', () => {
     delete window.location
     window.location = { ...originalLocation, href: '' }
 
-    const user = userEvent.setup()
-    renderLogin()
+    try {
+      const user = userEvent.setup()
+      renderLogin()
 
-    await user.click(screen.getByRole('button', { name: 'Sign in with z-pax' }))
+      await user.click(
+        screen.getByRole('button', { name: 'Sign in with z-pax' }),
+      )
 
-    expect(window.location.href).toBe(`${API_BASE_URL}/api/auth/sso/login`)
-
-    window.location = originalLocation
+      expect(window.location.href).toBe(`${API_BASE_URL}/api/auth/sso/login`)
+    } finally {
+      window.location = originalLocation
+    }
   })
 
   it('renders the SSO failure message when the URL has ?error=sso_failed', () => {
@@ -256,6 +261,33 @@ describe('Login', () => {
     expect(
       screen.getByText('Sign-in with z-pax failed. Please try again.'),
     ).toBeInTheDocument()
+  })
+
+  // Wrapped in StrictMode to match main.jsx's real production tree -- this
+  // codebase has previously found dev-only double-invoked effects masking
+  // bugs that only StrictMode's mount/cleanup/mount cycle exposes (see
+  // MySchedule.test.jsx), and this story adds a second mount effect
+  // (clearing ?error=sso_failed) alongside the existing one.
+  it('renders the SSO failure message exactly once under StrictMode (dev double-invoked effects)', () => {
+    render(
+      <StrictMode>
+        <AuthProvider>
+          <MemoryRouter
+            initialEntries={[
+              { pathname: '/login', search: '?error=sso_failed' },
+            ]}
+          >
+            <Routes>
+              <Route path="/login" element={<Login />} />
+            </Routes>
+          </MemoryRouter>
+        </AuthProvider>
+      </StrictMode>,
+    )
+
+    expect(
+      screen.getAllByText('Sign-in with z-pax failed. Please try again.'),
+    ).toHaveLength(1)
   })
 
   it('does not render an SSO error when no error query param is present', () => {

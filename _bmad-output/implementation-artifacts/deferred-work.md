@@ -1,5 +1,9 @@
 # Deferred Work
 
+## Deferred from: code review of story-4.3-sign-in-with-zpax-login-page-ui (2026-08-26)
+
+- **CSRF/state-validation bypass in the SSO callback flow.** `AuthController.SsoCallback`'s cookie-state comparison and `ssoStateStore.TryConsume(state)` check were deleted outright (not stubbed) after live testing against real z-pax credentials, and `ZPaxSsoClient.BuildAuthorizationUrl` no longer sends `state` in the outgoing authorize request — a real login-CSRF gap (an attacker's own authorization code could be relayed through a victim's browser to log them into the attacker's linked account). 4 `AuthControllerTests.cs` tests (`SsoCallback_missing_state_cookie_...`, `_mismatched_state_...`, `_state_already_consumed_...`, `_reuses_ssoState_cookie_only_once`) are `[Fact(Skip = "[DEBUG-TEMP] ...")]`'d rather than deleted, and the corresponding `state=`/`scope=` assertions in `ZPaxSsoClientTests.cs` are commented out, so both are ready to re-enable unchanged once state validation is restored. Confirmed by Jack (2026-08-26 code review) as his own direction. **Accepted temporarily given local-only, no-production-deploy scope (NFR7); must be restored before any deployment beyond local dev.** [backend/BarbershopApi/Controllers/AuthController.cs:140-198, backend/BarbershopApi/Services/ZPaxSsoClient.cs:14-25]
+
 ## Deferred from: code review of story-4.2-zpax-oauth-login-flow (2026-08-24)
 
 - `Secure=true` cookies are incompatible with the `http` launchSettings profile — pre-existing pattern from the original `Login` endpoint's `refreshToken` cookie (Story 1.5); this diff only extends the same convention to the new `ZPaxSso` env vars, so a dev running the `http` launch profile would silently get `sso_failed` on every SSO attempt, same as they already would on password login's refresh cookie. [backend/BarbershopApi/Properties/launchSettings.example.json, backend/BarbershopApi/Controllers/AuthController.cs:114]

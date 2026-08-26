@@ -4,7 +4,7 @@ baseline_commit: 4ba2e3d
 
 # Story 4.3: "Sign in with z-pax" Login Page UI
 
-Status: review
+Status: done
 
 ## Story
 
@@ -49,6 +49,16 @@ so that I can choose either sign-in method.
 - [x] **Task 5: Verify CI green and branch/PR**
   - [x] Branch as `story/4.3-sign-in-with-zpax-login-page-ui` from `main`. (Already checked out at kickoff.)
   - [ ] Push and confirm both CI jobs (Backend .NET, Frontend Vite/React) green before merging (AD-11). This story makes no backend changes — backend job should pass through unaffected. **Left for Jack** — per standing project practice, push/PR/CI verification steps are his to run and approve individually, not performed by the dev agent.
+
+### Review Findings
+
+- [x] [Review][Defer] CSRF/state-validation bypass in SSO callback [backend/BarbershopApi/Controllers/AuthController.cs:140-198, backend/BarbershopApi/Services/ZPaxSsoClient.cs:14-25] — deferred: confirmed by Jack as his own direction; accepted temporarily given local-only, no-production-deploy scope (NFR7); must be restored before any deployment beyond local dev. Logged in `deferred-work.md`.
+- [x] [Review][Patch] Sign-in with z-pax button renders with zero visual gap from the form (AC #1 not actually met) [frontend/src/pages/Login.jsx:110-117] — fixed: wrapped divider+button in a new `.login__sso` flex container (`gap: var(--spacing-4)`, `margin-top: var(--spacing-4)`) in Login.jsx/Login.css.
+- [x] [Review][Patch] CSRF/state-bypass gap not logged in deferred-work.md despite established project convention [_bmad-output/implementation-artifacts/deferred-work.md] — fixed: entry added (see "Deferred from: code review of story-4.3...").
+- [x] [Review][Patch] Tests around the SSO state bypass were weakened (Skip/comment) instead of asserting current behavior [backend/BarbershopApi.Tests/AuthControllerTests.cs, backend/BarbershopApi.Tests/ZPaxSsoClientTests.cs] — fixed: `ZPaxSsoClientTests.cs`'s two commented-out assertions replaced with explicit `Assert.DoesNotContain("state=", url)` / `Assert.DoesNotContain("scope=", tokenRequestBody)`. `AuthControllerTests.cs`'s 4 `Skip`'d tests left as-is (correctly skipped — the logic they test no longer exists).
+- [x] [Review][Patch] window.location test mock has no try/finally — can leak across tests on failure [frontend/src/pages/Login.test.jsx:236-249] — fixed: click+assert wrapped in try/finally.
+- [x] [Review][Patch] New error-clearing useEffect untested under StrictMode, unlike this codebase's established convention [frontend/src/pages/Login.jsx:35-40] — fixed: added a StrictMode-wrapped regression test in Login.test.jsx (mirrors MySchedule.test.jsx's pattern).
+- [x] [Review][Patch] Login divider has no semantic separator role for screen readers [frontend/src/pages/Login.jsx:111-113] — fixed: added `role="separator" aria-orientation="horizontal"` to the divider.
 
 ## Dev Notes
 
