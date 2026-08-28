@@ -73,6 +73,7 @@ public class AuthController(
         var accountId = int.Parse(User.FindFirstValue(JwtRegisteredClaimNames.Sub)!);
         await authService.Logout(accountId);
         Response.Cookies.Delete("refreshToken");
+        Response.Cookies.Delete("zpaxAccessToken", SsoStateCookieDeleteOptions);
         return NoContent();
     }
 

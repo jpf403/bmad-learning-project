@@ -440,6 +440,22 @@ public class AuthControllerTests : IDisposable
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
+    [Fact]
+    public async Task Logout_clears_any_pending_zpaxAccessToken_cookie()
+    {
+        using var client = _factory.CreateClient();
+        await client.PostAsJsonAsync("/api/auth/register", NewRequest(), TestContext.Current.CancellationToken);
+        var loginResponse = await client.PostAsJsonAsync("/api/auth/login", NewLoginRequest(), TestContext.Current.CancellationToken);
+        var session = await loginResponse.Content.ReadFromJsonAsync<LoginResponse>(LoginResponseJsonOptions, TestContext.Current.CancellationToken);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/logout");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session!.AccessToken);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.True(response.Headers.TryGetValues("Set-Cookie", out var cookies));
+        Assert.Contains(cookies!, c => c.StartsWith("zpaxAccessToken="));
+    }
+
     private HttpClient NewSsoClient() => _factory.CreateClient(new WebApplicationFactoryClientOptions
     {
         AllowAutoRedirect = false,

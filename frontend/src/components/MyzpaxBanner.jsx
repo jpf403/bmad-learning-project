@@ -23,13 +23,25 @@ export default function MyzpaxBanner() {
     }
     initializedRef.current = true
 
-    loadScript(BANNER_SCRIPT_SRC, () => {
-      window.MyzpaxBanner.init({
-        getToken: () => tokenRef.current,
-        currentAppId: CURRENT_APP_ID,
-        position: 'static',
-      })
-    })
+    loadScript(
+      BANNER_SCRIPT_SRC,
+      () => {
+        if (!window.MyzpaxBanner?.init) {
+          console.error(
+            'myzPAX banner script loaded but did not define window.MyzpaxBanner.',
+          )
+          return
+        }
+        window.MyzpaxBanner.init({
+          getToken: () => tokenRef.current,
+          currentAppId: CURRENT_APP_ID,
+          position: 'static',
+        })
+      },
+      () => {
+        console.error('myzPAX banner script failed to load.')
+      },
+    )
   }, [token])
 
   return null

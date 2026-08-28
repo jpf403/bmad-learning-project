@@ -48,6 +48,12 @@ public class ZPaxSsoClient(HttpClient httpClient, IOptions<ZPaxSsoOptions> ssoOp
         var token = await tokenResponse.Content.ReadFromJsonAsync<ZPaxTokenResponse>(JsonOptions)
             ?? throw new InvalidOperationException("z-pax token endpoint returned an empty response.");
 
+        if (string.IsNullOrWhiteSpace(token.AccessToken))
+        {
+            logger.LogWarning("z-pax token endpoint response is missing an access token.");
+            throw new InvalidOperationException("z-pax token endpoint response is missing an access token.");
+        }
+
         using var userInfoRequest = new HttpRequestMessage(HttpMethod.Get, options.UserInfoEndpoint);
         userInfoRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.AccessToken);
         userInfoRequest.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));

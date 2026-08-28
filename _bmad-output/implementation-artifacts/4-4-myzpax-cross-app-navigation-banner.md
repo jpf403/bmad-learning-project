@@ -4,7 +4,7 @@ baseline_commit: e16d396
 
 # Story 4.4: myzPAX Cross-App Navigation Banner
 
-Status: review
+Status: done
 
 ## Story
 
@@ -74,8 +74,8 @@ so that I can move between the tools in the suite without a separate portal.
   - [x] Tests: new `frontend/src/components/MyzpaxBanner.test.jsx` — (a) renders nothing / calls no script-loading seam when `user` is `null` or `user.zpaxAccessToken` is falsy; (b) when a token is present, asserts the stubbed loader is invoked and, once "loaded," `MyzpaxBanner.init` is called with `currentAppId: 'barbershop_demo'` and `position: 'static'`, and that calling the passed `getToken()` returns the current token; (c) a `StrictMode`-wrapped regression test asserting `init` is called exactly once (mirror the pattern Story 4.3 already established for its own StrictMode effect regression test in `Login.test.jsx`).
   - [x] `frontend/src/App.test.jsx`: no required change (App.jsx's own wiring is a one-line addition; `MyzpaxBanner.test.jsx` is the real coverage) — only touch it if a mounted-but-untokened `AuthProvider` in the existing tests would otherwise throw from `MyzpaxBanner` reading `useAuth()` before `ready` is true; if so, confirm `MyzpaxBanner` treats "no user yet" identically to "no token" (render `null`, do nothing) rather than crashing during the loading window.
 
-- [ ] **Task 6: Verify `currentAppId` against z-pax's launcher registry** (AC: #6)
-  - [ ] This is **not a code task** — flag explicitly for Jack: confirm `barbershop_demo` is this app's actual registered `currentAppId` in z-pax's launcher registry before the story is merged. Do not assume it's correct and do not silently change it — if Jack confirms a different value, update the literal in `MyzpaxBanner.jsx` (and nowhere else — it's used in exactly one place).
+- [x] **Task 6: Verify `currentAppId` against z-pax's launcher registry** (AC: #6)
+  - [x] This is **not a code task** — flag explicitly for Jack: confirm `barbershop_demo` is this app's actual registered `currentAppId` in z-pax's launcher registry before the story is merged. Do not assume it's correct and do not silently change it — if Jack confirms a different value, update the literal in `MyzpaxBanner.jsx` (and nowhere else — it's used in exactly one place). **Confirmed by Jack (2026-08-28)** — `barbershop_demo` matches z-pax's registered `currentAppId` for this app; no code change needed.
 
 - [x] **Task 7: Check `deferred-work.md`**
   - [x] Re-read `_bmad-output/implementation-artifacts/deferred-work.md` in full at kickoff. The most recent entry (Story 4.3's review, 2026-08-26) covers the CSRF/state-validation bypass in `AuthController.SsoCallback`/`ZPaxSsoClient` — this story doesn't touch that code path (state validation, `BuildAuthorizationUrl`) at all, only the *success* tail of `SsoCallback` and a brand-new endpoint; **checked, still not applicable, remains deferred** (it is explicitly out of scope per the sprint-change-proposal).
@@ -83,7 +83,7 @@ so that I can move between the tools in the suite without a separate portal.
 
 - [x] **Task 8: Verify CI green and branch/PR**
   - [x] Branch as `story/4.4-myzpax-cross-app-navigation-banner` from `main`. (Already checked out at kickoff.)
-  - [ ] Push and confirm both CI jobs (Backend .NET, Frontend Vite/React) green before merging (AD-11). **Left for Jack** — per standing project practice, push/PR/CI verification steps are his to run and approve individually, not performed by the dev agent.
+  - [x] Push and confirm both CI jobs (Backend .NET, Frontend Vite/React) green before merging (AD-11). **Confirmed by Jack (2026-08-28)** — both CI jobs green on the pushed branch.
 
 ## Dev Notes
 
@@ -188,3 +188,13 @@ Claude Sonnet 5 (claude-sonnet-5)
 
 - 2026-08-26: Implemented Tasks 1–5 and 7 (backend token hand-off cookie + pickup endpoint, frontend bootstrap pickup, conditional banner mount) via red→green TDD per task. Full backend/frontend suites green, lint/format clean. Task 6 (currentAppId registry confirmation) and part of Task 8 (CI push/PR) intentionally left for Jack.
 - 2026-08-27: [Bug fix, found by Jack during manual review] Signing out left the myzPAX banner visibly stranded on screen. Root cause: the vendor widget has no documented teardown/destroy call, and `NavBar.jsx`'s Logout handler only ever did a client-side `navigate('/')`, which never removes DOM/script state the vendor's `init()` injected outside React's control. Fix: `handleLogout` now does a full-page navigation (`window.location.href = '/'`) instead, guaranteeing all such state is cleared on sign-out. Added `NavBar.test.jsx` coverage asserting a full navigation (not a route change) happens on Logout.
+
+### Review Findings
+
+- [x] [Review][Decision] AC #6's `currentAppId` registry confirmation — **Resolved:** confirmed correct by Jack (2026-08-28); no code change needed. See Task 6 above.
+- [x] [Review][Patch] Logout doesn't clear the pending `zpaxAccessToken` cookie [backend/BarbershopApi/Controllers/AuthController.cs:69-77] — fixed: `Logout()` now also deletes `zpaxAccessToken`. Test: `AuthControllerTests.Logout_clears_any_pending_zpaxAccessToken_cookie`.
+- [x] [Review][Patch] `loadScript` has no failure handling and `MyzpaxBanner` assumes the vendor global exists after load [frontend/src/lib/loadScript.js:1-7, frontend/src/components/MyzpaxBanner.jsx:24-32] — fixed: `loadScript` now takes an `onError` callback, and `MyzpaxBanner` guards `window.MyzpaxBanner?.init` before calling it, logging via `console.error` on either failure instead of throwing. Tests: two new cases in `MyzpaxBanner.test.jsx`.
+- [x] [Review][Patch] `ZPaxSsoClient` doesn't validate `token.AccessToken` is present before use [backend/BarbershopApi/Services/ZPaxSsoClient.cs:48,86] — fixed: throws `InvalidOperationException` (matching the existing userinfo-field-validation pattern) when the token response omits `access_token`. Test: `ZPaxSsoClientTests.ExchangeCodeForIdentity_throws_when_token_response_omits_access_token`.
+- [x] [Review][Defer] Single-use pickup guarantee has a TOCTOU race under genuinely concurrent requests [backend/BarbershopApi/Controllers/AuthController.cs:209-221] — deferred, needs a server-side atomic one-time-token store to fix properly; not reachable via StrictMode's double-effect-invoke (verified), only via truly simultaneous requests (e.g. two open tabs), and worst realistic case is a harmless same-account duplicate delivery.
+
+**Post-review verification:** `dotnet test` — 294 passed, 4 pre-existing skips, 0 failed. `npx vitest run` — 201 passed. `npx eslint .` and `npx prettier --check .` — both clean.

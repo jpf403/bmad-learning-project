@@ -76,6 +76,7 @@ describe('MyzpaxBanner', () => {
     expect(loadScript).toHaveBeenCalledWith(
       'https://dev.zpax-banner.myzpax.com/banner/v1/banner.js',
       expect.any(Function),
+      expect.any(Function),
     )
     expect(window.MyzpaxBanner.init).toHaveBeenCalledTimes(1)
     expect(window.MyzpaxBanner.init).toHaveBeenCalledWith({
@@ -86,6 +87,25 @@ describe('MyzpaxBanner', () => {
 
     const { getToken } = window.MyzpaxBanner.init.mock.calls[0][0]
     expect(getToken()).toBe('the-zpax-access-token')
+  })
+
+  it('logs an error and does not throw when the banner script fails to load', () => {
+    loadScript.mockImplementation((_src, _onLoad, onError) => onError())
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    expect(() => renderBanner(SIGNED_IN_WITH_TOKEN)).not.toThrow()
+
+    expect(window.MyzpaxBanner.init).not.toHaveBeenCalled()
+    expect(consoleError).toHaveBeenCalled()
+  })
+
+  it('logs an error and does not throw when the loaded script does not define window.MyzpaxBanner', () => {
+    delete window.MyzpaxBanner
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    expect(() => renderBanner(SIGNED_IN_WITH_TOKEN)).not.toThrow()
+
+    expect(consoleError).toHaveBeenCalled()
   })
 
   it('initializes the banner exactly once under StrictMode double-invoked effects', () => {
