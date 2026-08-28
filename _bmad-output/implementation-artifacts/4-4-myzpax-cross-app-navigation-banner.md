@@ -4,7 +4,7 @@ baseline_commit: e16d396
 
 # Story 4.4: myzPAX Cross-App Navigation Banner
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -25,20 +25,20 @@ so that I can move between the tools in the suite without a separate portal.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Surface the raw z-pax access token out of the identity exchange** (AC: #1)
-  - [ ] `backend/BarbershopApi/Services/ISsoClient.cs`: add a 5th field to the `SsoIdentity` record — `SsoIdentity(string Email, string FirstName, string LastName, string SubjectId, string AccessToken)`. This is a pure data-shape extension; the interface method signature (`ExchangeCodeForIdentity(string code)`) is unchanged.
-  - [ ] `backend/BarbershopApi/Services/ZPaxSsoClient.cs`: in `ExchangeCodeForIdentity`, the token response is already deserialized into `token` (the local variable holding `ZPaxTokenResponse`) before the `SsoIdentity` is constructed at the bottom of the method — thread `token.AccessToken` into the new field on the returned `SsoIdentity`.
-  - [ ] `backend/BarbershopApi.Tests/TestOnly/FakeSsoClient.cs`: extend the `NextIdentity` default (`new("john@example.com", "John", "Smith", "1001")`) with a 5th fake token argument, e.g. `"fake-zpax-access-token"`.
-  - [ ] `backend/BarbershopApi.Tests/ZPaxSsoClientTests.cs`: `ExchangeCodeForIdentity_maps_token_and_userinfo_responses_to_SsoIdentity` (line ~50) constructs an expected `SsoIdentity` for comparison — add the access-token assertion there.
+- [x] **Task 1: Surface the raw z-pax access token out of the identity exchange** (AC: #1)
+  - [x] `backend/BarbershopApi/Services/ISsoClient.cs`: add a 5th field to the `SsoIdentity` record — `SsoIdentity(string Email, string FirstName, string LastName, string SubjectId, string AccessToken)`. This is a pure data-shape extension; the interface method signature (`ExchangeCodeForIdentity(string code)`) is unchanged.
+  - [x] `backend/BarbershopApi/Services/ZPaxSsoClient.cs`: in `ExchangeCodeForIdentity`, the token response is already deserialized into `token` (the local variable holding `ZPaxTokenResponse`) before the `SsoIdentity` is constructed at the bottom of the method — thread `token.AccessToken` into the new field on the returned `SsoIdentity`.
+  - [x] `backend/BarbershopApi.Tests/TestOnly/FakeSsoClient.cs`: extend the `NextIdentity` default (`new("john@example.com", "John", "Smith", "1001")`) with a 5th fake token argument, e.g. `"fake-zpax-access-token"`.
+  - [x] `backend/BarbershopApi.Tests/ZPaxSsoClientTests.cs`: `ExchangeCodeForIdentity_maps_token_and_userinfo_responses_to_SsoIdentity` (line ~50) constructs an expected `SsoIdentity` for comparison — add the access-token assertion there.
 
-- [ ] **Task 2: Hand the z-pax access token to the frontend via a short-lived cookie** (AC: #1)
-  - [ ] `backend/BarbershopApi/Controllers/AuthController.cs`, `SsoCallback`: `identity` (the `SsoIdentity` resolved from `ssoClient.ExchangeCodeForIdentity(code)`) is already in scope when the method appends the `refreshToken` cookie before its final redirect — append a second cookie there: name `"zpaxAccessToken"`, value `identity.AccessToken`, `HttpOnly = true`, `Secure = true`, `SameSite = SameSiteMode.Strict`, `Path = SsoStateCookiePath` (the existing `"/api/auth/sso"` constant already used for `ssoState` — reuse it, don't invent a second path constant), `Expires = DateTimeOffset.UtcNow.AddMinutes(2)`.
-  - [ ] Only set this cookie on the success path (right before the `Redirect($"https://localhost:5173/{landingRoute}")` return) — every earlier `return Redirect(SsoRedirects.Failure)` branch must NOT set it.
-  - [ ] Tests (`AuthControllerTests.cs`): extend `SsoCallback_with_valid_code_and_state_creates_new_customer_account_and_redirects_to_schedule_appointment` and `SsoCallback_with_valid_code_links_to_existing_barber_account_by_email_preserving_role_and_password` (or add a new dedicated test) to assert a `Set-Cookie` header for `zpaxAccessToken=` is present with `httponly`, `secure`, `samesite=strict`, and `path=/api/auth/sso` — same assertion shape already used for the `ssoState` cookie in `SsoLogin_...` (~line 465-470).
+- [x] **Task 2: Hand the z-pax access token to the frontend via a short-lived cookie** (AC: #1)
+  - [x] `backend/BarbershopApi/Controllers/AuthController.cs`, `SsoCallback`: `identity` (the `SsoIdentity` resolved from `ssoClient.ExchangeCodeForIdentity(code)`) is already in scope when the method appends the `refreshToken` cookie before its final redirect — append a second cookie there: name `"zpaxAccessToken"`, value `identity.AccessToken`, `HttpOnly = true`, `Secure = true`, `SameSite = SameSiteMode.Strict`, `Path = SsoStateCookiePath` (the existing `"/api/auth/sso"` constant already used for `ssoState` — reuse it, don't invent a second path constant), `Expires = DateTimeOffset.UtcNow.AddMinutes(2)`.
+  - [x] Only set this cookie on the success path (right before the `Redirect($"https://localhost:5173/{landingRoute}")` return) — every earlier `return Redirect(SsoRedirects.Failure)` branch must NOT set it.
+  - [x] Tests (`AuthControllerTests.cs`): extend `SsoCallback_with_valid_code_and_state_creates_new_customer_account_and_redirects_to_schedule_appointment` and `SsoCallback_with_valid_code_links_to_existing_barber_account_by_email_preserving_role_and_password` (or add a new dedicated test) to assert a `Set-Cookie` header for `zpaxAccessToken=` is present with `httponly`, `secure`, `samesite=strict`, and `path=/api/auth/sso` — same assertion shape already used for the `ssoState` cookie in `SsoLogin_...` (~line 465-470).
 
-- [ ] **Task 3: `GET /api/auth/sso/zpax-token` pickup endpoint** (AC: #2)
-  - [ ] New DTO `backend/BarbershopApi/Dtos/ZpaxTokenResponse.cs`: `public record ZpaxTokenResponse(string ZpaxAccessToken);` — matches this codebase's existing one-record-per-response-shape convention (`RefreshResponse`, `MeResponse`); System.Text.Json's default camelCase policy (already configured project-wide, see `RefreshResponse.AccessToken` → wire `accessToken`) turns this into `{ "zpaxAccessToken": "..." }`.
-  - [ ] `AuthController.cs`: new action, placed after `SsoCallback` (keeps the SSO group together):
+- [x] **Task 3: `GET /api/auth/sso/zpax-token` pickup endpoint** (AC: #2)
+  - [x] New DTO `backend/BarbershopApi/Dtos/ZpaxTokenResponse.cs`: `public record ZpaxTokenResponse(string ZpaxAccessToken);` — matches this codebase's existing one-record-per-response-shape convention (`RefreshResponse`, `MeResponse`); System.Text.Json's default camelCase policy (already configured project-wide, see `RefreshResponse.AccessToken` → wire `accessToken`) turns this into `{ "zpaxAccessToken": "..." }`.
+  - [x] `AuthController.cs`: new action, placed after `SsoCallback` (keeps the SSO group together):
     ```csharp
     [HttpGet("sso/zpax-token")]
     [Authorize]
@@ -55,35 +55,35 @@ so that I can move between the tools in the suite without a separate portal.
     }
     ```
     `[Authorize]` reuses the exact same JWT-bearer + `SessionLivenessMiddleware` pipeline already protecting `/me` — no new auth wiring needed. No rate-limit policy is required here (this isn't a credential-guessing surface like login/password-change — AD-5 doesn't apply).
-  - [ ] Tests (`AuthControllerTests.cs`): four new cases —
+  - [x] Tests (`AuthControllerTests.cs`): four new cases —
     1. Authenticated call right after a successful `SsoCallback` (cookie pending) → 200, body `{ zpaxAccessToken: <the token from FakeSsoClient's identity> }`.
     2. A second authenticated call immediately after → 404 (cookie already consumed/deleted).
     3. An authenticated call from a plain password-login session (never went through SSO, so no cookie was ever set) → 404.
     4. No bearer token at all → 401 (mirrors the existing `Me`/`Logout` unauthenticated-call pattern elsewhere in this file, if not already implicitly covered by a shared auth test).
 
-- [ ] **Task 4: Frontend session bootstrap picks up the z-pax token once** (AC: #3)
-  - [ ] `frontend/src/api/AuthApi.js`: add `getZpaxToken(accessToken)`, modeled directly on the existing `getCurrentUser(accessToken)` in the same file — `fetch(`${API_BASE_URL}/api/auth/sso/zpax-token`, { credentials: 'include', headers: { Authorization: `Bearer ${accessToken}` } })`. A 404 is an **expected, non-error** outcome here (no z-pax token pending) — return `{ ok: false, status: response.status }` for any non-2xx exactly like `getCurrentUser` already does; the caller (AuthContext) treats `ok: false` as "no banner," not as a failure to surface.
-  - [ ] `frontend/src/context/AuthContext.jsx`, inside `bootstrap()`: after `meResult.ok` and `setUser({...})` currently runs, call `getZpaxToken(refreshResult.accessToken)` and fold its result into the same `setUser` object: `zpaxAccessToken: zpaxResult.ok ? zpaxResult.zpaxAccessToken : null`. Keep this inside the existing `if (meResult.ok) { ... }` branch (no `zpaxAccessToken` fetch if `/me` itself failed) and respect the existing `cancelled` guard before the final `setUser` call, same as the current code already does for `meResult`.
-  - [ ] `frontend/src/context/AuthContext.test.jsx`: the 3 existing tests that stub `fetch` (rehydrate-success, refresh-fails, malformed-/me-body) each throw `Unexpected fetch: ${url}` for any unhandled URL — since bootstrap now issues a 3rd fetch, extend each `fetch` mock's `if (url...)` chain to also handle `/api/auth/sso/zpax-token` (return `{ ok: false, status: 404 }` for these three, since none of them represent a real SSO session). Add a **new** test asserting a successful token pickup ends up on the context — extend the `AuthProbe` test helper to also render `user?.zpaxAccessToken` and assert it shows up after all three fetches resolve.
+- [x] **Task 4: Frontend session bootstrap picks up the z-pax token once** (AC: #3)
+  - [x] `frontend/src/api/AuthApi.js`: add `getZpaxToken(accessToken)`, modeled directly on the existing `getCurrentUser(accessToken)` in the same file — `fetch(`${API_BASE_URL}/api/auth/sso/zpax-token`, { credentials: 'include', headers: { Authorization: `Bearer ${accessToken}` } })`. A 404 is an **expected, non-error** outcome here (no z-pax token pending) — return `{ ok: false, status: response.status }` for any non-2xx exactly like `getCurrentUser` already does; the caller (AuthContext) treats `ok: false` as "no banner," not as a failure to surface.
+  - [x] `frontend/src/context/AuthContext.jsx`, inside `bootstrap()`: after `meResult.ok` and `setUser({...})` currently runs, call `getZpaxToken(refreshResult.accessToken)` and fold its result into the same `setUser` object: `zpaxAccessToken: zpaxResult.ok ? zpaxResult.zpaxAccessToken : null`. Keep this inside the existing `if (meResult.ok) { ... }` branch (no `zpaxAccessToken` fetch if `/me` itself failed) and respect the existing `cancelled` guard before the final `setUser` call, same as the current code already does for `meResult`.
+  - [x] `frontend/src/context/AuthContext.test.jsx`: the 3 existing tests that stub `fetch` (rehydrate-success, refresh-fails, malformed-/me-body) each throw `Unexpected fetch: ${url}` for any unhandled URL — since bootstrap now issues a 3rd fetch, extend each `fetch` mock's `if (url...)` chain to also handle `/api/auth/sso/zpax-token` (return `{ ok: false, status: 404 }` for these three, since none of them represent a real SSO session). Add a **new** test asserting a successful token pickup ends up on the context — extend the `AuthProbe` test helper to also render `user?.zpaxAccessToken` and assert it shows up after all three fetches resolve.
 
-- [ ] **Task 5: Conditional banner mount below the Nav bar** (AC: #4, #5)
-  - [ ] New component `frontend/src/components/MyzpaxBanner.jsx`. Renders `null` whenever `user?.zpaxAccessToken` is falsy (AC #5 — no script tag, no network request at all in that case). When a token is present, mount the vendor script exactly once and call `window.MyzpaxBanner.init({ getToken, currentAppId: 'barbershop_demo', position: 'static' })` once it loads, where `getToken` reads the *current* in-memory token (not a stale value captured at first mount) so it stays correct if the value the widget was initialized with is later invalidated by the vendor's own degradation path. Placement is **above** the Nav bar (AC #4) — this is purely a JSX-ordering call in Task 5's `App.jsx` wiring below; nothing about the component itself changes based on where it's mounted.
-  - [ ] Extract the actual `<script>`-injection into its own small function (e.g. a local `mountBannerScript(src, onload)` helper, or a separate tiny module under `frontend/src/lib/`) so tests can substitute it entirely — AC #7 and AD-4 both require that **no test ever causes jsdom to attempt loading the real `https://dev.zpax-banner.myzpax.com/...` URL**. This is this story's own design call (no existing precedent for a vendor-script-loading seam anywhere in this codebase) — pick whichever shape reads most naturally once you're in the file, but the point is: the production component must not be untestable by construction.
-  - [ ] Guard against a double-mount under React's `StrictMode` double-invoke of effects (the codebase already has this exact class of bug in mind — see Previous Story Intelligence below): don't call `init` a second time (or inject a second `<script>` tag) if the effect re-runs.
-  - [ ] Wire `<MyzpaxBanner />` into `frontend/src/App.jsx` directly **above** `<NavBar />` — i.e. as the first child inside `<AuthProvider>`, before `<NavBar />`, still above `<main>`. This requires `useAuth()`, so it must render inside the provider tree, same as `NavBar` already does.
-  - [ ] Tests: new `frontend/src/components/MyzpaxBanner.test.jsx` — (a) renders nothing / calls no script-loading seam when `user` is `null` or `user.zpaxAccessToken` is falsy; (b) when a token is present, asserts the stubbed loader is invoked and, once "loaded," `MyzpaxBanner.init` is called with `currentAppId: 'barbershop_demo'` and `position: 'static'`, and that calling the passed `getToken()` returns the current token; (c) a `StrictMode`-wrapped regression test asserting `init` is called exactly once (mirror the pattern Story 4.3 already established for its own StrictMode effect regression test in `Login.test.jsx`).
-  - [ ] `frontend/src/App.test.jsx`: no required change (App.jsx's own wiring is a one-line addition; `MyzpaxBanner.test.jsx` is the real coverage) — only touch it if a mounted-but-untokened `AuthProvider` in the existing tests would otherwise throw from `MyzpaxBanner` reading `useAuth()` before `ready` is true; if so, confirm `MyzpaxBanner` treats "no user yet" identically to "no token" (render `null`, do nothing) rather than crashing during the loading window.
+- [x] **Task 5: Conditional banner mount below the Nav bar** (AC: #4, #5)
+  - [x] New component `frontend/src/components/MyzpaxBanner.jsx`. Renders `null` whenever `user?.zpaxAccessToken` is falsy (AC #5 — no script tag, no network request at all in that case). When a token is present, mount the vendor script exactly once and call `window.MyzpaxBanner.init({ getToken, currentAppId: 'barbershop_demo', position: 'static' })` once it loads, where `getToken` reads the *current* in-memory token (not a stale value captured at first mount) so it stays correct if the value the widget was initialized with is later invalidated by the vendor's own degradation path. Placement is **above** the Nav bar (AC #4) — this is purely a JSX-ordering call in Task 5's `App.jsx` wiring below; nothing about the component itself changes based on where it's mounted.
+  - [x] Extract the actual `<script>`-injection into its own small function (e.g. a local `mountBannerScript(src, onload)` helper, or a separate tiny module under `frontend/src/lib/`) so tests can substitute it entirely — AC #7 and AD-4 both require that **no test ever causes jsdom to attempt loading the real `https://dev.zpax-banner.myzpax.com/...` URL**. This is this story's own design call (no existing precedent for a vendor-script-loading seam anywhere in this codebase) — pick whichever shape reads most naturally once you're in the file, but the point is: the production component must not be untestable by construction.
+  - [x] Guard against a double-mount under React's `StrictMode` double-invoke of effects (the codebase already has this exact class of bug in mind — see Previous Story Intelligence below): don't call `init` a second time (or inject a second `<script>` tag) if the effect re-runs.
+  - [x] Wire `<MyzpaxBanner />` into `frontend/src/App.jsx` directly **above** `<NavBar />` — i.e. as the first child inside `<AuthProvider>`, before `<NavBar />`, still above `<main>`. This requires `useAuth()`, so it must render inside the provider tree, same as `NavBar` already does.
+  - [x] Tests: new `frontend/src/components/MyzpaxBanner.test.jsx` — (a) renders nothing / calls no script-loading seam when `user` is `null` or `user.zpaxAccessToken` is falsy; (b) when a token is present, asserts the stubbed loader is invoked and, once "loaded," `MyzpaxBanner.init` is called with `currentAppId: 'barbershop_demo'` and `position: 'static'`, and that calling the passed `getToken()` returns the current token; (c) a `StrictMode`-wrapped regression test asserting `init` is called exactly once (mirror the pattern Story 4.3 already established for its own StrictMode effect regression test in `Login.test.jsx`).
+  - [x] `frontend/src/App.test.jsx`: no required change (App.jsx's own wiring is a one-line addition; `MyzpaxBanner.test.jsx` is the real coverage) — only touch it if a mounted-but-untokened `AuthProvider` in the existing tests would otherwise throw from `MyzpaxBanner` reading `useAuth()` before `ready` is true; if so, confirm `MyzpaxBanner` treats "no user yet" identically to "no token" (render `null`, do nothing) rather than crashing during the loading window.
 
-- [ ] **Task 6: Verify `currentAppId` against z-pax's launcher registry** (AC: #6)
-  - [ ] This is **not a code task** — flag explicitly for Jack: confirm `barbershop_demo` is this app's actual registered `currentAppId` in z-pax's launcher registry before the story is merged. Do not assume it's correct and do not silently change it — if Jack confirms a different value, update the literal in `MyzpaxBanner.jsx` (and nowhere else — it's used in exactly one place).
+- [x] **Task 6: Verify `currentAppId` against z-pax's launcher registry** (AC: #6)
+  - [x] This is **not a code task** — flag explicitly for Jack: confirm `barbershop_demo` is this app's actual registered `currentAppId` in z-pax's launcher registry before the story is merged. Do not assume it's correct and do not silently change it — if Jack confirms a different value, update the literal in `MyzpaxBanner.jsx` (and nowhere else — it's used in exactly one place). **Confirmed by Jack (2026-08-28)** — `barbershop_demo` matches z-pax's registered `currentAppId` for this app; no code change needed.
 
-- [ ] **Task 7: Check `deferred-work.md`**
-  - [ ] Re-read `_bmad-output/implementation-artifacts/deferred-work.md` in full at kickoff. The most recent entry (Story 4.3's review, 2026-08-26) covers the CSRF/state-validation bypass in `AuthController.SsoCallback`/`ZPaxSsoClient` — this story doesn't touch that code path (state validation, `BuildAuthorizationUrl`) at all, only the *success* tail of `SsoCallback` and a brand-new endpoint; **note as "checked, still not applicable, remains deferred"** rather than fixing speculatively (it is explicitly out of scope per the sprint-change-proposal).
-  - [ ] No other open item touches `AuthController.cs`, `ZPaxSsoClient.cs`, `AuthContext.jsx`, or `App.jsx`.
+- [x] **Task 7: Check `deferred-work.md`**
+  - [x] Re-read `_bmad-output/implementation-artifacts/deferred-work.md` in full at kickoff. The most recent entry (Story 4.3's review, 2026-08-26) covers the CSRF/state-validation bypass in `AuthController.SsoCallback`/`ZPaxSsoClient` — this story doesn't touch that code path (state validation, `BuildAuthorizationUrl`) at all, only the *success* tail of `SsoCallback` and a brand-new endpoint; **checked, still not applicable, remains deferred** (it is explicitly out of scope per the sprint-change-proposal).
+  - [x] No other open item touches `AuthController.cs`, `ZPaxSsoClient.cs`, `AuthContext.jsx`, or `App.jsx`.
 
-- [ ] **Task 8: Verify CI green and branch/PR**
-  - [ ] Branch as `story/4.4-myzpax-cross-app-navigation-banner` from `main`.
-  - [ ] Push and confirm both CI jobs (Backend .NET, Frontend Vite/React) green before merging (AD-11). **Left for Jack** — per standing project practice, push/PR/CI verification steps are his to run and approve individually, not performed by the dev agent.
+- [x] **Task 8: Verify CI green and branch/PR**
+  - [x] Branch as `story/4.4-myzpax-cross-app-navigation-banner` from `main`. (Already checked out at kickoff.)
+  - [x] Push and confirm both CI jobs (Backend .NET, Frontend Vite/React) green before merging (AD-11). **Confirmed by Jack (2026-08-28)** — both CI jobs green on the pushed branch.
 
 ## Dev Notes
 
@@ -145,10 +145,56 @@ Recent commits: `e16d396` (Epic 4 doc update for the banner — this story's bas
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Sonnet 5 (claude-sonnet-5)
 
 ### Debug Log References
 
+- `dotnet test BarbershopApi.Tests/BarbershopApi.Tests.csproj` — 292 passed, 4 skipped (pre-existing `[DEBUG-TEMP]` CSRF-bypass skips, unrelated to this story), 0 failed.
+- `npx vitest run` (frontend) — 21 test files, 198 tests passed.
+- `npx eslint .` and `npx prettier --check .` (frontend) — both clean. One lint error was hit and fixed during Task 5 (`react-hooks/refs`: a ref was being mutated during render in `MyzpaxBanner.jsx`; moved the `tokenRef.current = token` assignment into its own `useEffect([token])` instead of assigning inline during render).
+- Empirically verified (via a throwaway test, since removed) that the SSO callback's pre-existing `refreshToken` cookie is *not* narrowed to the `/api/auth/sso` path by the browser's/`.NET`'s default-cookie-path behavior — a theoretical concern raised while reviewing `AuthController.SsoCallback`, ruled out before writing Task 3's tests around it. No code change resulted; not logged to `deferred-work.md` since nothing was actually found.
+
 ### Completion Notes List
 
+- Tasks 1–5, 7 complete: TDD red→green for every task, no regressions in the full backend (292/296, 4 pre-existing skips) or frontend (198/198) suites, and clean `eslint`/`prettier --check`.
+- **Task 6 intentionally left unchecked — needs Jack's action before merge.** AC #6 requires confirming `barbershop_demo` against z-pax's actual launcher-registry `currentAppId` entry; this is not something the dev agent can verify. The literal lives in exactly one place: `frontend/src/components/MyzpaxBanner.jsx`'s `CURRENT_APP_ID` constant — update it there (and only there) if z-pax's registry disagrees.
+- Task 8: branch was already `story/4.4-myzpax-cross-app-navigation-banner` off `main` at kickoff (checked). Push/PR/CI verification left for Jack per standing project practice (matches Stories 3.1–4.3's identical pattern).
+- Task 7: re-read `deferred-work.md` in full; the only recent entry touching this area (Story 4.3's CSRF/state-validation bypass) is unrelated to this story's diff (success-tail-only + new endpoint) — checked, remains deferred, not touched.
+
 ### File List
+
+**New:**
+- `backend/BarbershopApi/Dtos/ZpaxTokenResponse.cs`
+- `frontend/src/components/MyzpaxBanner.jsx`
+- `frontend/src/components/MyzpaxBanner.test.jsx`
+- `frontend/src/lib/loadScript.js`
+
+**Modified:**
+- `backend/BarbershopApi/Services/ISsoClient.cs`
+- `backend/BarbershopApi/Services/ZPaxSsoClient.cs`
+- `backend/BarbershopApi/Controllers/AuthController.cs`
+- `backend/BarbershopApi.Tests/TestOnly/FakeSsoClient.cs`
+- `backend/BarbershopApi.Tests/ZPaxSsoClientTests.cs`
+- `backend/BarbershopApi.Tests/AuthControllerTests.cs`
+- `frontend/src/api/AuthApi.js`
+- `frontend/src/context/AuthContext.jsx`
+- `frontend/src/context/AuthContext.test.jsx`
+- `frontend/src/App.jsx`
+- `frontend/src/components/NavBar.jsx`
+- `frontend/src/components/NavBar.test.jsx`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+
+## Change Log
+
+- 2026-08-26: Implemented Tasks 1–5 and 7 (backend token hand-off cookie + pickup endpoint, frontend bootstrap pickup, conditional banner mount) via red→green TDD per task. Full backend/frontend suites green, lint/format clean. Task 6 (currentAppId registry confirmation) and part of Task 8 (CI push/PR) intentionally left for Jack.
+- 2026-08-27: [Bug fix, found by Jack during manual review] Signing out left the myzPAX banner visibly stranded on screen. Root cause: the vendor widget has no documented teardown/destroy call, and `NavBar.jsx`'s Logout handler only ever did a client-side `navigate('/')`, which never removes DOM/script state the vendor's `init()` injected outside React's control. Fix: `handleLogout` now does a full-page navigation (`window.location.href = '/'`) instead, guaranteeing all such state is cleared on sign-out. Added `NavBar.test.jsx` coverage asserting a full navigation (not a route change) happens on Logout.
+
+### Review Findings
+
+- [x] [Review][Decision] AC #6's `currentAppId` registry confirmation — **Resolved:** confirmed correct by Jack (2026-08-28); no code change needed. See Task 6 above.
+- [x] [Review][Patch] Logout doesn't clear the pending `zpaxAccessToken` cookie [backend/BarbershopApi/Controllers/AuthController.cs:69-77] — fixed: `Logout()` now also deletes `zpaxAccessToken`. Test: `AuthControllerTests.Logout_clears_any_pending_zpaxAccessToken_cookie`.
+- [x] [Review][Patch] `loadScript` has no failure handling and `MyzpaxBanner` assumes the vendor global exists after load [frontend/src/lib/loadScript.js:1-7, frontend/src/components/MyzpaxBanner.jsx:24-32] — fixed: `loadScript` now takes an `onError` callback, and `MyzpaxBanner` guards `window.MyzpaxBanner?.init` before calling it, logging via `console.error` on either failure instead of throwing. Tests: two new cases in `MyzpaxBanner.test.jsx`.
+- [x] [Review][Patch] `ZPaxSsoClient` doesn't validate `token.AccessToken` is present before use [backend/BarbershopApi/Services/ZPaxSsoClient.cs:48,86] — fixed: throws `InvalidOperationException` (matching the existing userinfo-field-validation pattern) when the token response omits `access_token`. Test: `ZPaxSsoClientTests.ExchangeCodeForIdentity_throws_when_token_response_omits_access_token`.
+- [x] [Review][Defer] Single-use pickup guarantee has a TOCTOU race under genuinely concurrent requests [backend/BarbershopApi/Controllers/AuthController.cs:209-221] — deferred, needs a server-side atomic one-time-token store to fix properly; not reachable via StrictMode's double-effect-invoke (verified), only via truly simultaneous requests (e.g. two open tabs), and worst realistic case is a harmless same-account duplicate delivery.
+
+**Post-review verification:** `dotnet test` — 294 passed, 4 pre-existing skips, 0 failed. `npx vitest run` — 201 passed. `npx eslint .` and `npx prettier --check .` — both clean.

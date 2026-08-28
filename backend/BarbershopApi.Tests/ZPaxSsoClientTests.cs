@@ -69,6 +69,7 @@ public class ZPaxSsoClientTests
         Assert.Equal("John", identity.FirstName);
         Assert.Equal("Smith", identity.LastName);
         Assert.Equal("42", identity.SubjectId);
+        Assert.Equal("the-access-token", identity.AccessToken);
     }
 
     [Fact]
@@ -133,6 +134,27 @@ public class ZPaxSsoClientTests
             }
 
             return JsonResponse(new { id = 1, email = "john@example.com", firstName = "John", lastName = "Smith", emailVerified = false });
+        });
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => NewClient(handler).ExchangeCodeForIdentity("the-code"));
+    }
+
+    [Fact]
+    public async Task ExchangeCodeForIdentity_throws_when_token_response_omits_access_token()
+    {
+        var handler = new FakeHttpMessageHandler(request =>
+        {
+            if (request.RequestUri!.ToString() == "https://fake-zpax.test/connect/token")
+            {
+                // Raw JSON with no "access_token" key at all -- distinct from an empty string,
+                // and the exact shape that would otherwise silently default to string.Empty.
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("{}", Encoding.UTF8, "application/json"),
+                });
+            }
+
+            throw new InvalidOperationException("userinfo endpoint should never be called when the access token is missing");
         });
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => NewClient(handler).ExchangeCodeForIdentity("the-code"));

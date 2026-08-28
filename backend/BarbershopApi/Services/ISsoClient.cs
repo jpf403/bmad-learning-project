@@ -1,6 +1,6 @@
 namespace BarbershopApi.Services;
 
-public record SsoIdentity(string Email, string FirstName, string LastName, string SubjectId);
+public record SsoIdentity(string Email, string FirstName, string LastName, string SubjectId, string AccessToken);
 
 public interface ISsoClient
 {

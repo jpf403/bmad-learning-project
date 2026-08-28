@@ -228,6 +228,34 @@ describe('NavBar', () => {
         await screen.findByRole('button', { name: 'Sign In' }),
       ).toBeInTheDocument()
     })
+
+    // A full browser navigation (not client-side routing) on logout, so any
+    // third-party global state/DOM a signed-in page injected outside React's
+    // control -- e.g. the myzPAX banner script, which has no documented
+    // teardown call -- is guaranteed gone rather than left stranded on screen.
+    it('does a full-page navigation to / on Logout, not a client-side route change', async () => {
+      vi.spyOn(globalThis, 'fetch').mockImplementation((url) => {
+        if (url.toString().endsWith('/api/auth/logout')) {
+          return Promise.resolve({ ok: true })
+        }
+        return Promise.resolve({ ok: false, status: 401 })
+      })
+      const originalLocation = window.location
+      delete window.location
+      window.location = { ...originalLocation, href: '' }
+
+      try {
+        const user = userEvent.setup()
+        renderNavBar({ signedIn: true })
+
+        await user.click(screen.getByRole('button', { name: 'Account menu' }))
+        await user.click(await screen.findByText('Logout'))
+
+        expect(window.location.href).toBe('/')
+      } finally {
+        window.location = originalLocation
+      }
+    })
   })
 
   describe('collapsed navigation menu', () => {

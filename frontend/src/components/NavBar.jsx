@@ -33,7 +33,11 @@ export default function NavBar() {
   const handleLogout = async () => {
     await logoutAccount(user.accessToken)
     logout()
-    navigate('/')
+    // Full-page navigation, not client-side routing -- guarantees any
+    // third-party global state/DOM injected outside React's control (e.g.
+    // the myzPAX banner script, which has no documented teardown call) is
+    // gone rather than left stranded on screen after signing out.
+    window.location.href = '/'
   }
 
   const visibleLinks = [
