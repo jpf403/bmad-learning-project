@@ -4,7 +4,7 @@ namespace BarbershopApi.Tests.TestOnly;
 
 public class FakeSsoClient : ISsoClient
 {
-    public SsoIdentity NextIdentity { get; set; } = new("john@example.com", "John", "Smith", "1001");
+    public SsoIdentity NextIdentity { get; set; } = new("john@example.com", "John", "Smith", "1001", "fake-zpax-access-token");
     public Exception? ThrowOnExchange { get; set; }
 
     public string BuildAuthorizationUrl(string state) =>

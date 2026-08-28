@@ -193,7 +193,30 @@ public class AuthController(
             Expires = DateTimeOffset.UtcNow.AddDays(15),
         });
 
+        Response.Cookies.Append("zpaxAccessToken", identity.AccessToken, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true,
+            SameSite = SameSiteMode.Strict,
+            Path = SsoStateCookiePath,
+            Expires = DateTimeOffset.UtcNow.AddMinutes(2),
+        });
+
         var landingRoute = account.Role == Role.Customer ? "schedule-appointment" : "my-schedule";
         return Redirect($"https://localhost:5173/{landingRoute}");
+    }
+
+    [HttpGet("sso/zpax-token")]
+    [Authorize]
+    public IActionResult ZpaxToken()
+    {
+        var token = Request.Cookies["zpaxAccessToken"];
+        if (string.IsNullOrEmpty(token))
+        {
+            return NotFound();
+        }
+
+        Response.Cookies.Delete("zpaxAccessToken", SsoStateCookieDeleteOptions);
+        return Ok(new ZpaxTokenResponse(token));
     }
 }

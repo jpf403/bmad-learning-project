@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { getCurrentUser, refreshSession } from '../api/AuthApi'
+import { getCurrentUser, getZpaxToken, refreshSession } from '../api/AuthApi'
 
 const AuthContext = createContext(null)
 
@@ -20,9 +20,12 @@ export function AuthProvider({ children }) {
       const meResult = await getCurrentUser(refreshResult.accessToken)
       if (cancelled) return
       if (meResult.ok) {
+        const zpaxResult = await getZpaxToken(refreshResult.accessToken)
+        if (cancelled) return
         setUser({
           accessToken: refreshResult.accessToken,
           ...meResult.identity,
+          zpaxAccessToken: zpaxResult.ok ? zpaxResult.zpaxAccessToken : null,
         })
       }
       setReady(true)

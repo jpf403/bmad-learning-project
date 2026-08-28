@@ -5,8 +5,12 @@ import { AuthProvider, useAuth } from './AuthContext'
 function AuthProbe() {
   const { user, ready } = useAuth()
   if (!ready) return <div>Loading</div>
+  if (!user) return <div>Ready: signed-out</div>
   return (
-    <div>Ready: {user ? `${user.email} (${user.role})` : 'signed-out'}</div>
+    <div>
+      Ready: {user.email} ({user.role}) zpax:
+      {user.zpaxAccessToken ?? 'none'}
+    </div>
   )
 }
 
@@ -35,6 +39,9 @@ describe('AuthContext', () => {
           }),
         })
       }
+      if (url.toString().endsWith('/api/auth/sso/zpax-token')) {
+        return Promise.resolve({ ok: false, status: 404 })
+      }
       throw new Error(`Unexpected fetch: ${url}`)
     })
 
@@ -47,7 +54,49 @@ describe('AuthContext', () => {
     expect(screen.getByText('Loading')).toBeInTheDocument()
 
     expect(
-      await screen.findByText('Ready: john@example.com (Customer)'),
+      await screen.findByText('Ready: john@example.com (Customer) zpax:none'),
+    ).toBeInTheDocument()
+  })
+
+  it('holds the z-pax access token in memory when the pickup endpoint returns one', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((url) => {
+      if (url.toString().endsWith('/api/auth/refresh')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ accessToken: 'new-access-token' }),
+        })
+      }
+      if (url.toString().endsWith('/api/auth/me')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            id: 1,
+            email: 'john@example.com',
+            firstName: 'John',
+            lastName: 'Smith',
+            role: 'Customer',
+          }),
+        })
+      }
+      if (url.toString().endsWith('/api/auth/sso/zpax-token')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ zpaxAccessToken: 'the-zpax-access-token' }),
+        })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    )
+
+    expect(
+      await screen.findByText(
+        'Ready: john@example.com (Customer) zpax:the-zpax-access-token',
+      ),
     ).toBeInTheDocument()
   })
 

@@ -69,6 +69,7 @@ public class ZPaxSsoClientTests
         Assert.Equal("John", identity.FirstName);
         Assert.Equal("Smith", identity.LastName);
         Assert.Equal("42", identity.SubjectId);
+        Assert.Equal("the-access-token", identity.AccessToken);
     }
 
     [Fact]

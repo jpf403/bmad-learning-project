@@ -483,6 +483,11 @@ public class AuthControllerTests : IDisposable
         Assert.Equal("https://localhost:5173/schedule-appointment", response.Headers.Location!.ToString());
         Assert.True(response.Headers.TryGetValues("Set-Cookie", out var cookies));
         Assert.Contains(cookies!, c => c.StartsWith("refreshToken="));
+        Assert.Contains(cookies!, c => c.StartsWith($"zpaxAccessToken={FakeSsoClient.NextIdentity.AccessToken}") &&
+            c.Contains("httponly", StringComparison.OrdinalIgnoreCase) &&
+            c.Contains("secure", StringComparison.OrdinalIgnoreCase) &&
+            c.Contains("samesite=strict", StringComparison.OrdinalIgnoreCase) &&
+            c.Contains("path=/api/auth/sso", StringComparison.OrdinalIgnoreCase));
 
         await using var context = _factory.CreateDbContext();
         var repository = new AccountRepository(context);
@@ -519,6 +524,12 @@ public class AuthControllerTests : IDisposable
 
         Assert.Equal(HttpStatusCode.Found, response.StatusCode);
         Assert.Equal("https://localhost:5173/my-schedule", response.Headers.Location!.ToString());
+        Assert.True(response.Headers.TryGetValues("Set-Cookie", out var cookies));
+        Assert.Contains(cookies!, c => c.StartsWith($"zpaxAccessToken={FakeSsoClient.NextIdentity.AccessToken}") &&
+            c.Contains("httponly", StringComparison.OrdinalIgnoreCase) &&
+            c.Contains("secure", StringComparison.OrdinalIgnoreCase) &&
+            c.Contains("samesite=strict", StringComparison.OrdinalIgnoreCase) &&
+            c.Contains("path=/api/auth/sso", StringComparison.OrdinalIgnoreCase));
 
         await using var context2 = _factory.CreateDbContext();
         var repository = new AccountRepository(context2);
@@ -637,5 +648,77 @@ public class AuthControllerTests : IDisposable
         var repository = new AccountRepository(context);
         var account = await repository.FindByEmail(FakeSsoClient.NextIdentity.Email);
         Assert.NotNull(account);
+    }
+
+    [Fact]
+    public async Task ZpaxToken_right_after_SsoCallback_returns_200_with_token_and_consumes_cookie()
+    {
+        using var client = NewSsoClient();
+        var loginResponse = await client.GetAsync("/api/auth/sso/login", TestContext.Current.CancellationToken);
+        var state = ExtractState(loginResponse);
+        await client.GetAsync($"/api/auth/sso/callback?code=anything&state={state}", TestContext.Current.CancellationToken);
+
+        using var scope = _factory.Services.CreateScope();
+        var authService = scope.ServiceProvider.GetRequiredService<IAuthService>();
+        var identity = FakeSsoClient.NextIdentity;
+        var (_, accessToken, _) = await authService.LoginViaSso(identity.Email, identity.FirstName, identity.LastName, identity.SubjectId);
+
+        using var zpaxRequest = new HttpRequestMessage(HttpMethod.Get, "/api/auth/sso/zpax-token");
+        zpaxRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        var response = await client.SendAsync(zpaxRequest, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<ZpaxTokenResponse>(LoginResponseJsonOptions, TestContext.Current.CancellationToken);
+        Assert.NotNull(body);
+        Assert.Equal(identity.AccessToken, body.ZpaxAccessToken);
+    }
+
+    [Fact]
+    public async Task ZpaxToken_second_call_after_first_consumption_returns_404()
+    {
+        using var client = NewSsoClient();
+        var loginResponse = await client.GetAsync("/api/auth/sso/login", TestContext.Current.CancellationToken);
+        var state = ExtractState(loginResponse);
+        await client.GetAsync($"/api/auth/sso/callback?code=anything&state={state}", TestContext.Current.CancellationToken);
+
+        using var scope = _factory.Services.CreateScope();
+        var authService = scope.ServiceProvider.GetRequiredService<IAuthService>();
+        var identity = FakeSsoClient.NextIdentity;
+        var (_, accessToken, _) = await authService.LoginViaSso(identity.Email, identity.FirstName, identity.LastName, identity.SubjectId);
+
+        using var firstRequest = new HttpRequestMessage(HttpMethod.Get, "/api/auth/sso/zpax-token");
+        firstRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        await client.SendAsync(firstRequest, TestContext.Current.CancellationToken);
+
+        using var secondRequest = new HttpRequestMessage(HttpMethod.Get, "/api/auth/sso/zpax-token");
+        secondRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        var response = await client.SendAsync(secondRequest, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ZpaxToken_from_a_password_only_session_with_no_pending_cookie_returns_404()
+    {
+        using var client = _factory.CreateClient();
+        await client.PostAsJsonAsync("/api/auth/register", NewRequest(), TestContext.Current.CancellationToken);
+        var loginResponse = await client.PostAsJsonAsync("/api/auth/login", NewLoginRequest(), TestContext.Current.CancellationToken);
+        var session = await loginResponse.Content.ReadFromJsonAsync<LoginResponse>(LoginResponseJsonOptions, TestContext.Current.CancellationToken);
+
+        using var zpaxRequest = new HttpRequestMessage(HttpMethod.Get, "/api/auth/sso/zpax-token");
+        zpaxRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session!.AccessToken);
+        var response = await client.SendAsync(zpaxRequest, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ZpaxToken_without_bearer_token_returns_401()
+    {
+        using var client = _factory.CreateClient();
+
+        var response = await client.GetAsync("/api/auth/sso/zpax-token", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 }

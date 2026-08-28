@@ -1,5 +1,6 @@
 import { Routes, Route } from 'react-router'
 import { AuthProvider } from './context/AuthContext'
+import MyzpaxBanner from './components/MyzpaxBanner'
 import NavBar from './components/NavBar'
 import Footer from './components/Footer'
 import RequireRole from './components/RequireRole'
@@ -17,6 +18,7 @@ function App() {
   return (
     <AuthProvider>
       <div className="app-shell">
+        <MyzpaxBanner />
         <NavBar />
 
         <main>
