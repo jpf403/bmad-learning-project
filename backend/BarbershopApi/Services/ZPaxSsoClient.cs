@@ -7,7 +7,7 @@ namespace BarbershopApi.Services;
 
 public class ZPaxSsoClient(HttpClient httpClient, IOptions<ZPaxSsoOptions> ssoOptions, ILogger<ZPaxSsoClient> logger) : ISsoClient
 {
-    private const string Scope = "profile";
+    private const string Scope = "openid profile";
 
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
@@ -89,13 +89,31 @@ public class ZPaxSsoClient(HttpClient httpClient, IOptions<ZPaxSsoOptions> ssoOp
             throw new InvalidOperationException("z-pax account is locked.");
         }
 
-        return new SsoIdentity(userInfo.Email, userInfo.FirstName, userInfo.LastName, userInfo.Id.Value.ToString(), token.AccessToken);
+        return new SsoIdentity(userInfo.Email, userInfo.FirstName, userInfo.LastName, userInfo.Id.Value.ToString(), token.AccessToken, token.IdToken ?? string.Empty);
+    }
+
+    public string BuildLogoutUrl(string idTokenHint)
+    {
+        var options = ssoOptions.Value;
+        // Toggle for manual testing: the plain fallback below (commented) omits
+        // post_logout_redirect_uri entirely -- confirmed to actually end the z-pax
+        // session, just lands on z-pax's own broken/unconfigured 405 page afterward.
+        // This active version tries ZPaxSso:LogoutRedirectUri as the post-logout target instead.
+        return QueryHelpers.AddQueryString(options.LogoutEndpoint, new Dictionary<string, string?>
+        {
+            ["id_token_hint"] = idTokenHint,
+            ["post_logout_redirect_uri"] = options.LogoutRedirectUri,
+        });
+        //return QueryHelpers.AddQueryString(options.LogoutEndpoint, "id_token_hint", idTokenHint);
     }
 
     private class ZPaxTokenResponse
     {
         [JsonPropertyName("access_token")]
         public string AccessToken { get; set; } = string.Empty;
+
+        [JsonPropertyName("id_token")]
+        public string? IdToken { get; set; }
     }
 
     private class ZPaxUserInfoResponse

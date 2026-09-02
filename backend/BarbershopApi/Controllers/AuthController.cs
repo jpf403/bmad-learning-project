@@ -141,12 +141,22 @@ public class AuthController(
     [HttpGet("sso/callback")]
     public async Task<IActionResult> SsoCallback(string? code, string? state)
     {
+        var hadActiveLoginAttempt = Request.Cookies.ContainsKey("ssoState");
         Response.Cookies.Delete("ssoState", SsoStateCookieDeleteOptions);
 
         // [DEBUG-TEMP] state validation bypassed while debugging with z-pax (no state sent on the outgoing request)
 
         if (string.IsNullOrEmpty(code))
         {
+            if (!hadActiveLoginAttempt)
+            {
+                // No code and no login attempt in flight -- most likely z-pax's own
+                // /connect/logout landing here via post_logout_redirect_uri (same
+                // value as login's redirect_uri) after ending the SSO session,
+                // rather than a failed sign-in. Land cleanly, no error banner.
+                return Redirect(SsoRedirects.Login);
+            }
+
             logger.LogWarning("SSO callback rejected: missing authorization code.");
             return Redirect(SsoRedirects.Failure);
         }
@@ -203,8 +213,34 @@ public class AuthController(
             Expires = DateTimeOffset.UtcNow.AddMinutes(2),
         });
 
+        if (!string.IsNullOrEmpty(identity.IdToken))
+        {
+            Response.Cookies.Append("zpaxIdToken", identity.IdToken, new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.Strict,
+                Path = SsoStateCookiePath,
+                Expires = DateTimeOffset.UtcNow.AddDays(15),
+            });
+        }
+
         var landingRoute = account.Role == Role.Customer ? "schedule-appointment" : "my-schedule";
         return Redirect($"https://localhost:5173/{landingRoute}");
+    }
+
+    [HttpGet("sso/logout")]
+    public IActionResult SsoLogout()
+    {
+        var idToken = Request.Cookies["zpaxIdToken"];
+        Response.Cookies.Delete("zpaxIdToken", SsoStateCookieDeleteOptions);
+
+        if (string.IsNullOrEmpty(idToken))
+        {
+            return Redirect(SsoRedirects.Login);
+        }
+
+        return Redirect(ssoClient.BuildLogoutUrl(idToken));
     }
 
     [HttpGet("sso/zpax-token")]

@@ -234,9 +234,9 @@ public class BookingServiceTests : IDisposable
         var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
         var service = NewService(context);
         var created = await service.Create(customer.Id, barber.Id, "2026-09-01", "09:00", FixedNow);
-        await service.Cancel(created.Id, customer.Id, Role.Customer);
+        await service.Cancel(created.Id, customer.Id, Role.Customer, FixedNow);
 
-        await Assert.ThrowsAsync<AppointmentAlreadyCancelledException>(() => service.Cancel(created.Id, customer.Id, Role.Customer));
+        await Assert.ThrowsAsync<AppointmentAlreadyCancelledException>(() => service.Cancel(created.Id, customer.Id, Role.Customer, FixedNow));
     }
 
     [Fact]
@@ -317,7 +317,7 @@ public class BookingServiceTests : IDisposable
         var service = NewService(context);
         var created = await service.Create(customer.Id, barber.Id, "2026-09-01", "09:00", FixedNow);
 
-        await service.Cancel(created.Id, barber.Id, Role.Barber);
+        await service.Cancel(created.Id, barber.Id, Role.Barber, FixedNow);
     }
 
     [Fact]
@@ -344,7 +344,7 @@ public class BookingServiceTests : IDisposable
         var service = NewService(context);
         var created = await service.Create(customer.Id, barber.Id, "2026-09-01", "09:00", FixedNow);
 
-        await service.Cancel(created.Id, admin.Id, Role.Admin);
+        await service.Cancel(created.Id, admin.Id, Role.Admin, FixedNow);
     }
 
     [Fact]
@@ -504,7 +504,7 @@ public class BookingServiceTests : IDisposable
         var barber = await SeedAccount(context, "barber@example.com", Role.Barber);
         var service = NewService(context);
         var created = await service.Create(customer.Id, barber.Id, "2026-09-01", "09:00", FixedNow);
-        await service.Cancel(created.Id, customer.Id, Role.Customer);
+        await service.Cancel(created.Id, customer.Id, Role.Customer, FixedNow);
 
         var schedule = await service.GetDaySchedule(barber.Id, "2026-09-01", FixedNow);
 
