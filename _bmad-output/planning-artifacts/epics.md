@@ -908,11 +908,11 @@ So that logging out from the banner actually signs me out of this app too, not j
 
 **Given** the session has been torn down
 **When** `onLogout` completes its app-side teardown
-**Then** the browser is redirected via `window.location.assign` to the same URL the "Sign in with z-pax" button uses (`GET /api/auth/sso/login`) (FR48)
+**Then** the browser is redirected via `window.location.assign` to a new backend endpoint, `GET /api/auth/sso/logout`, which reads this app's `zpaxIdToken` cookie and redirects the browser on to z-pax's real end-session endpoint (`GET https://dapi.auth.myzpax.com/connect/logout?id_token_hint=...&post_logout_redirect_uri=...`) (FR48)
 
-**Given** that redirect target is unverified against z-pax's actual session-termination behavior
-**When** this story is implemented
-**Then** it's manually verified end-to-end with a live z-pax SSO session before the story is marked done — if the visitor lands back in the app still signed in, the fallback is to find z-pax's real end-session endpoint and swap the config value; flagged going in as unverified, same as Story 4.4's `currentAppId` (FR48)
+**Given** that redirect target was unverified against z-pax's actual session-termination behavior
+**When** this story was implemented
+**Then** it was manually verified end-to-end with a live z-pax SSO session before the story was marked done — the original plan (redirecting back through `GET /api/auth/sso/login`) was tried first and found not to end the z-pax session; the real fix above was built from z-pax's own logout-endpoint docs and live-verified to end the session and land cleanly on the registered post-logout redirect page, same verification discipline as Story 4.4's `currentAppId` (FR48)
 
 **Given** the existing in-app "Logout" menu item (`NavBar.jsx`)
 **When** this story is implemented

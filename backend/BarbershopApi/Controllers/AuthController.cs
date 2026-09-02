@@ -74,6 +74,7 @@ public class AuthController(
         await authService.Logout(accountId);
         Response.Cookies.Delete("refreshToken");
         Response.Cookies.Delete("zpaxAccessToken", SsoStateCookieDeleteOptions);
+        Response.Cookies.Delete("zpaxIdToken", SsoStateCookieDeleteOptions);
         return NoContent();
     }
 
@@ -150,10 +151,12 @@ public class AuthController(
         {
             if (!hadActiveLoginAttempt)
             {
-                // No code and no login attempt in flight -- most likely z-pax's own
-                // /connect/logout landing here via post_logout_redirect_uri (same
-                // value as login's redirect_uri) after ending the SSO session,
-                // rather than a failed sign-in. Land cleanly, no error banner.
+                // No code and no login attempt in flight. ZPaxSso:LogoutRedirectUri
+                // points at z-pax's own page (not back here), so this isn't the
+                // post-logout redirect -- kept as a defensive catch-all for any
+                // other benign no-code arrival (e.g. a stale bookmark), landing
+                // cleanly rather than surfacing a failure banner for something
+                // that was never a login attempt to begin with.
                 return Redirect(SsoRedirects.Login);
             }
 
@@ -223,6 +226,10 @@ public class AuthController(
                 Path = SsoStateCookiePath,
                 Expires = DateTimeOffset.UtcNow.AddDays(15),
             });
+        }
+        else
+        {
+            Response.Cookies.Delete("zpaxIdToken", SsoStateCookieDeleteOptions);
         }
 
         var landingRoute = account.Role == Role.Customer ? "schedule-appointment" : "my-schedule";

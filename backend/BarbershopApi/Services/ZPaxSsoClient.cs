@@ -89,22 +89,25 @@ public class ZPaxSsoClient(HttpClient httpClient, IOptions<ZPaxSsoOptions> ssoOp
             throw new InvalidOperationException("z-pax account is locked.");
         }
 
+        if (string.IsNullOrEmpty(token.IdToken))
+        {
+            logger.LogWarning("z-pax token endpoint response is missing an id_token.");
+        }
+
         return new SsoIdentity(userInfo.Email, userInfo.FirstName, userInfo.LastName, userInfo.Id.Value.ToString(), token.AccessToken, token.IdToken ?? string.Empty);
     }
 
     public string BuildLogoutUrl(string idTokenHint)
     {
         var options = ssoOptions.Value;
-        // Toggle for manual testing: the plain fallback below (commented) omits
-        // post_logout_redirect_uri entirely -- confirmed to actually end the z-pax
-        // session, just lands on z-pax's own broken/unconfigured 405 page afterward.
-        // This active version tries ZPaxSso:LogoutRedirectUri as the post-logout target instead.
+        // ZPaxSso:LogoutRedirectUri is registered with z-pax as this app's logout
+        // redirect and live-verified end-to-end (2026-09-02): the visitor's z-pax
+        // session ends and the browser lands cleanly on that page, no error page.
         return QueryHelpers.AddQueryString(options.LogoutEndpoint, new Dictionary<string, string?>
         {
             ["id_token_hint"] = idTokenHint,
             ["post_logout_redirect_uri"] = options.LogoutRedirectUri,
         });
-        //return QueryHelpers.AddQueryString(options.LogoutEndpoint, "id_token_hint", idTokenHint);
     }
 
     private class ZPaxTokenResponse

@@ -456,6 +456,22 @@ public class AuthControllerTests : IDisposable
         Assert.Contains(cookies!, c => c.StartsWith("zpaxAccessToken="));
     }
 
+    [Fact]
+    public async Task Logout_clears_any_pending_zpaxIdToken_cookie()
+    {
+        using var client = _factory.CreateClient();
+        await client.PostAsJsonAsync("/api/auth/register", NewRequest(), TestContext.Current.CancellationToken);
+        var loginResponse = await client.PostAsJsonAsync("/api/auth/login", NewLoginRequest(), TestContext.Current.CancellationToken);
+        var session = await loginResponse.Content.ReadFromJsonAsync<LoginResponse>(LoginResponseJsonOptions, TestContext.Current.CancellationToken);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/logout");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session!.AccessToken);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.True(response.Headers.TryGetValues("Set-Cookie", out var cookies));
+        Assert.Contains(cookies!, c => c.StartsWith("zpaxIdToken="));
+    }
+
     private HttpClient NewSsoClient() => _factory.CreateClient(new WebApplicationFactoryClientOptions
     {
         AllowAutoRedirect = false,
@@ -784,5 +800,31 @@ public class AuthControllerTests : IDisposable
 
         Assert.Equal(HttpStatusCode.Found, response.StatusCode);
         Assert.Equal("https://localhost:5173/login", response.Headers.Location!.ToString());
+    }
+
+    [Fact]
+    public async Task SsoCallback_clears_a_stale_zpaxIdToken_cookie_when_a_later_login_has_no_id_token()
+    {
+        using var client = NewSsoClient();
+        var firstLogin = await client.GetAsync("/api/auth/sso/login", TestContext.Current.CancellationToken);
+        var firstState = ExtractState(firstLogin);
+        await client.GetAsync($"/api/auth/sso/callback?code=anything&state={firstState}", TestContext.Current.CancellationToken);
+
+        var originalIdentity = FakeSsoClient.NextIdentity;
+        FakeSsoClient.NextIdentity = originalIdentity with { IdToken = string.Empty };
+        try
+        {
+            var secondLogin = await client.GetAsync("/api/auth/sso/login", TestContext.Current.CancellationToken);
+            var secondState = ExtractState(secondLogin);
+            var response = await client.GetAsync($"/api/auth/sso/callback?code=anything&state={secondState}", TestContext.Current.CancellationToken);
+
+            Assert.True(response.Headers.TryGetValues("Set-Cookie", out var cookies));
+            Assert.Contains(cookies!, c => c.StartsWith("zpaxIdToken=") &&
+                c.Contains("expires=", StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            FakeSsoClient.NextIdentity = originalIdentity;
+        }
     }
 }

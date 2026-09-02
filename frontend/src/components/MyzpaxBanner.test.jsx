@@ -138,6 +138,64 @@ describe('MyzpaxBanner', () => {
     }
   })
 
+  it('skips the app logout fetch when there is no app access token', async () => {
+    render(
+      <AuthProvider>
+        <SignInOnMount user={{ ...SIGNED_IN_WITH_TOKEN, accessToken: null }}>
+          <MyzpaxBanner />
+        </SignInOnMount>
+      </AuthProvider>,
+    )
+
+    const originalLocation = window.location
+    delete window.location
+    window.location = { ...originalLocation, assign: vi.fn() }
+
+    try {
+      const { onLogout } = window.MyzpaxBanner.init.mock.calls[0][0]
+      await onLogout()
+
+      expect(globalThis.fetch).not.toHaveBeenCalledWith(
+        `${API_BASE_URL}/api/auth/logout`,
+        expect.anything(),
+      )
+      expect(window.location.assign).toHaveBeenCalledWith(
+        `${API_BASE_URL}/api/auth/sso/logout`,
+      )
+    } finally {
+      window.location = originalLocation
+    }
+  })
+
+  it('ignores a re-entrant onLogout call while one is already in flight', async () => {
+    render(
+      <AuthProvider>
+        <SignInOnMount user={SIGNED_IN_WITH_TOKEN}>
+          <MyzpaxBanner />
+        </SignInOnMount>
+      </AuthProvider>,
+    )
+
+    const originalLocation = window.location
+    delete window.location
+    window.location = { ...originalLocation, assign: vi.fn() }
+
+    try {
+      const { onLogout } = window.MyzpaxBanner.init.mock.calls[0][0]
+      const first = onLogout()
+      const second = onLogout()
+      await Promise.all([first, second])
+
+      const logoutCalls = globalThis.fetch.mock.calls.filter(
+        ([url]) => url === `${API_BASE_URL}/api/auth/logout`,
+      )
+      expect(logoutCalls).toHaveLength(1)
+      expect(window.location.assign).toHaveBeenCalledTimes(1)
+    } finally {
+      window.location = originalLocation
+    }
+  })
+
   it('logs an error and does not throw when the banner script fails to load', () => {
     loadScript.mockImplementation((_src, _onLoad, onError) => onError())
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})

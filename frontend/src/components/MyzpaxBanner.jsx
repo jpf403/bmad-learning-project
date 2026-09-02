@@ -14,7 +14,9 @@ export default function MyzpaxBanner() {
 
   const tokenRef = useRef(token)
   const accessTokenRef = useRef(user?.accessToken ?? null)
+  const logoutRef = useRef(logout)
   const initializedRef = useRef(false)
+  const loggingOutRef = useRef(false)
 
   useEffect(() => {
     tokenRef.current = token
@@ -23,6 +25,10 @@ export default function MyzpaxBanner() {
   useEffect(() => {
     accessTokenRef.current = user?.accessToken ?? null
   }, [user?.accessToken])
+
+  useEffect(() => {
+    logoutRef.current = logout
+  }, [logout])
 
   useEffect(() => {
     if (!token || initializedRef.current) {
@@ -44,8 +50,14 @@ export default function MyzpaxBanner() {
           currentAppId: CURRENT_APP_ID,
           position: 'static',
           onLogout: async () => {
-            await logoutAccount(accessTokenRef.current)
-            logout()
+            if (loggingOutRef.current) {
+              return
+            }
+            loggingOutRef.current = true
+            if (accessTokenRef.current) {
+              await logoutAccount(accessTokenRef.current)
+            }
+            logoutRef.current()
             window.location.assign(`${API_BASE_URL}/api/auth/sso/logout`)
           },
         })
@@ -54,7 +66,7 @@ export default function MyzpaxBanner() {
         console.error('myzPAX banner script failed to load.')
       },
     )
-  }, [token, logout])
+  }, [token])
 
   return null
 }
