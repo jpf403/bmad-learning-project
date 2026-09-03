@@ -1,7 +1,7 @@
 .nav-bar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
   gap: var(--spacing-4);
   height: 64px;
   padding: 0 var(--spacing-gutter-desktop);
@@ -10,6 +10,11 @@
 }
 
 .nav-bar__logo {
+  /* Explicit column (not auto-placement) so this stays in column 1 even
+     when .nav-bar__links is display:none below 1024px -- otherwise grid
+     auto-placement would slide .nav-bar__actions into the middle track. */
+  grid-column: 1;
+  justify-self: start;
   font-family: var(--font-family-base);
   font-size: var(--typography-h3-size);
   font-weight: var(--typography-h3-weight);
@@ -19,6 +24,11 @@
 .nav-bar__links {
   display: flex;
   align-items: center;
+  grid-column: 2;
+  /* No-op today since this column is sized to the list's own content width
+     (no slack to center within) -- centering actually comes from the two
+     equal flanking columns above. Kept in case that sizing ever changes. */
+  justify-self: center;
   gap: var(--spacing-6);
   list-style: none;
   margin: 0;
@@ -46,6 +56,8 @@
 .nav-bar__actions {
   display: flex;
   align-items: center;
+  grid-column: 3;
+  justify-self: end;
   gap: var(--spacing-3);
 }
 
@@ -96,6 +108,7 @@
 
 @media (max-width: 639px) {
   .nav-bar {
+    display: flex;
     flex-direction: column;
     align-items: stretch;
     height: auto;
@@ -106,6 +119,22 @@
   .nav-bar__actions {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  /* Signed in, the actions area is just the hamburger + a compact profile
+     icon -- both fixed 40x40 -- so there's no overflow risk that needs the
+     full column-stack treatment above; keep it as one row at full height,
+     same as every wider breakpoint. Signed out, Sign In/Register are kept
+     full-width and stacked (deliberate larger tap targets), untouched. */
+  .nav-bar--signed-in {
+    flex-direction: row;
+    align-items: center;
+    height: 64px;
+  }
+
+  .nav-bar--signed-in .nav-bar__actions {
+    flex-direction: row;
+    align-items: center;
   }
 }
 
