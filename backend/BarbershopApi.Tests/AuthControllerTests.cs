@@ -577,7 +577,7 @@ public class AuthControllerTests : IDisposable
         Assert.Equal(seededPasswordHash, account.PasswordHash);
     }
 
-    [Fact(Skip = "[DEBUG-TEMP] state/CSRF validation temporarily bypassed in AuthController.SsoCallback while debugging with z-pax")]
+    [Fact]
     public async Task SsoCallback_missing_state_cookie_redirects_to_login_with_error_and_creates_no_account()
     {
         using var client = NewSsoClient();
@@ -592,7 +592,7 @@ public class AuthControllerTests : IDisposable
         Assert.Null(await repository.FindByEmail(FakeSsoClient.NextIdentity.Email));
     }
 
-    [Fact(Skip = "[DEBUG-TEMP] state/CSRF validation temporarily bypassed in AuthController.SsoCallback while debugging with z-pax")]
+    [Fact]
     public async Task SsoCallback_mismatched_state_redirects_to_login_with_error_and_creates_no_account()
     {
         using var client = NewSsoClient();
@@ -639,7 +639,7 @@ public class AuthControllerTests : IDisposable
         Assert.Equal("https://localhost:5173/login", response.Headers.Location!.ToString());
     }
 
-    [Fact(Skip = "[DEBUG-TEMP] state/CSRF validation temporarily bypassed in AuthController.SsoCallback while debugging with z-pax")]
+    [Fact]
     public async Task SsoCallback_state_already_consumed_by_a_concurrent_request_redirects_to_login_with_error()
     {
         using var client = NewSsoClient();
@@ -680,7 +680,7 @@ public class AuthControllerTests : IDisposable
         Assert.Null(await repository.FindByEmail(FakeSsoClient.NextIdentity.Email));
     }
 
-    [Fact(Skip = "[DEBUG-TEMP] state/CSRF validation temporarily bypassed in AuthController.SsoCallback while debugging with z-pax")]
+    [Fact]
     public async Task SsoCallback_reuses_ssoState_cookie_only_once()
     {
         using var client = NewSsoClient();

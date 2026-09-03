@@ -20,7 +20,7 @@ public class ZPaxSsoClient(HttpClient httpClient, IOptions<ZPaxSsoOptions> ssoOp
             ["scope"] = Scope,
             ["response_type"] = "code",
             ["redirect_uri"] = options.RedirectUri,
-            // [DEBUG-TEMP] state omitted from the outgoing request while debugging with z-pax
+            ["state"] = state,
         });
     }
 

@@ -142,25 +142,36 @@ public class AuthController(
     [HttpGet("sso/callback")]
     public async Task<IActionResult> SsoCallback(string? code, string? state)
     {
-        var hadActiveLoginAttempt = Request.Cookies.ContainsKey("ssoState");
+        var cookieState = Request.Cookies["ssoState"];
+        var hadActiveLoginAttempt = cookieState is not null;
         Response.Cookies.Delete("ssoState", SsoStateCookieDeleteOptions);
 
-        // [DEBUG-TEMP] state validation bypassed while debugging with z-pax (no state sent on the outgoing request)
+        if (string.IsNullOrEmpty(code) && !hadActiveLoginAttempt)
+        {
+            // No code and no login attempt in flight. ZPaxSso:LogoutRedirectUri
+            // points at z-pax's own page (not back here), so this isn't the
+            // post-logout redirect -- kept as a defensive catch-all for any
+            // other benign no-code arrival (e.g. a stale bookmark), landing
+            // cleanly rather than surfacing a failure banner for something
+            // that was never a login attempt to begin with.
+            return Redirect(SsoRedirects.Login);
+        }
+
+        if (string.IsNullOrEmpty(cookieState) || string.IsNullOrEmpty(state) || cookieState != state)
+        {
+            logger.LogWarning("SSO callback rejected: missing or mismatched state.");
+            return Redirect(SsoRedirects.Failure);
+        }
 
         if (string.IsNullOrEmpty(code))
         {
-            if (!hadActiveLoginAttempt)
-            {
-                // No code and no login attempt in flight. ZPaxSso:LogoutRedirectUri
-                // points at z-pax's own page (not back here), so this isn't the
-                // post-logout redirect -- kept as a defensive catch-all for any
-                // other benign no-code arrival (e.g. a stale bookmark), landing
-                // cleanly rather than surfacing a failure banner for something
-                // that was never a login attempt to begin with.
-                return Redirect(SsoRedirects.Login);
-            }
-
             logger.LogWarning("SSO callback rejected: missing authorization code.");
+            return Redirect(SsoRedirects.Failure);
+        }
+
+        if (!ssoStateStore.TryConsume(state))
+        {
+            logger.LogWarning("SSO callback rejected: state already consumed.");
             return Redirect(SsoRedirects.Failure);
         }
 

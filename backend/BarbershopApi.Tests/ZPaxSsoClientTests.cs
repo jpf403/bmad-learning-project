@@ -42,10 +42,7 @@ public class ZPaxSsoClientTests
         Assert.Equal("openid profile", QueryHelpers.ParseQuery(new Uri(url).Query)["scope"].ToString());
         Assert.Contains("response_type=code", url);
         Assert.Contains("redirect_uri=", url);
-        // [DEBUG-TEMP] state omitted from the outgoing request while debugging with z-pax --
-        // asserted explicitly (not just un-asserted) so a future accidental re-add is caught
-        // the same way an accidental removal would be, while this is deferred (see deferred-work.md).
-        Assert.DoesNotContain("state=", url);
+        Assert.Contains("state=the-state-value", url);
     }
 
     [Fact]
