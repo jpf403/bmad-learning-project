@@ -7,7 +7,7 @@ namespace BarbershopApi.Services;
 
 public class ZPaxSsoClient(HttpClient httpClient, IOptions<ZPaxSsoOptions> ssoOptions, ILogger<ZPaxSsoClient> logger) : ISsoClient
 {
-    private const string Scope = "profile";
+    private const string Scope = "openid profile";
 
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
@@ -20,7 +20,7 @@ public class ZPaxSsoClient(HttpClient httpClient, IOptions<ZPaxSsoOptions> ssoOp
             ["scope"] = Scope,
             ["response_type"] = "code",
             ["redirect_uri"] = options.RedirectUri,
-            // [DEBUG-TEMP] state omitted from the outgoing request while debugging with z-pax
+            ["state"] = state,
         });
     }
 
@@ -89,13 +89,34 @@ public class ZPaxSsoClient(HttpClient httpClient, IOptions<ZPaxSsoOptions> ssoOp
             throw new InvalidOperationException("z-pax account is locked.");
         }
 
-        return new SsoIdentity(userInfo.Email, userInfo.FirstName, userInfo.LastName, userInfo.Id.Value.ToString(), token.AccessToken);
+        if (string.IsNullOrEmpty(token.IdToken))
+        {
+            logger.LogWarning("z-pax token endpoint response is missing an id_token.");
+        }
+
+        return new SsoIdentity(userInfo.Email, userInfo.FirstName, userInfo.LastName, userInfo.Id.Value.ToString(), token.AccessToken, token.IdToken ?? string.Empty);
+    }
+
+    public string BuildLogoutUrl(string idTokenHint)
+    {
+        var options = ssoOptions.Value;
+        // ZPaxSso:LogoutRedirectUri is registered with z-pax as this app's logout
+        // redirect and live-verified end-to-end (2026-09-02): the visitor's z-pax
+        // session ends and the browser lands cleanly on that page, no error page.
+        return QueryHelpers.AddQueryString(options.LogoutEndpoint, new Dictionary<string, string?>
+        {
+            ["id_token_hint"] = idTokenHint,
+            ["post_logout_redirect_uri"] = options.LogoutRedirectUri,
+        });
     }
 
     private class ZPaxTokenResponse
     {
         [JsonPropertyName("access_token")]
         public string AccessToken { get; set; } = string.Empty;
+
+        [JsonPropertyName("id_token")]
+        public string? IdToken { get; set; }
     }
 
     private class ZPaxUserInfoResponse

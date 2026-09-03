@@ -46,7 +46,7 @@ export default function NavBar() {
   ]
 
   return (
-    <nav className="nav-bar">
+    <nav className={user ? 'nav-bar nav-bar--signed-in' : 'nav-bar'}>
       <span className="nav-bar__logo">Fake Barbershop</span>
       <ul className="nav-bar__links">
         {visibleLinks.map(({ label, to }) => (
@@ -64,38 +64,40 @@ export default function NavBar() {
           </li>
         ))}
       </ul>
-      <DropdownMenu.Root>
-        <DropdownMenu.Trigger asChild>
-          <button className="nav-bar__menu-button" aria-label="Menu">
-            <svg
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              aria-hidden="true"
-              className="nav-bar__menu-icon"
-            >
-              <path d="M3 6h18v2H3V6Zm0 5h18v2H3v-2Zm0 5h18v2H3v-2Z" />
-            </svg>
-          </button>
-        </DropdownMenu.Trigger>
-        <DropdownMenu.Portal>
-          <DropdownMenu.Content
-            className="nav-bar__menu-dropdown"
-            align="end"
-            sideOffset={8}
-          >
-            {visibleLinks.map(({ label, to }) => (
-              <DropdownMenu.Item
-                key={label}
-                className="nav-bar__dropdown-item"
-                asChild
-              >
-                <Link to={to}>{label}</Link>
-              </DropdownMenu.Item>
-            ))}
-          </DropdownMenu.Content>
-        </DropdownMenu.Portal>
-      </DropdownMenu.Root>
       <div className="nav-bar__actions">
+        {/* Must render first so it sits immediately before the account/sign-in
+            controls (visually and in tab order) whenever it's visible. */}
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild>
+            <button className="nav-bar__menu-button" aria-label="Menu">
+              <svg
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                aria-hidden="true"
+                className="nav-bar__menu-icon"
+              >
+                <path d="M3 6h18v2H3V6Zm0 5h18v2H3v-2Zm0 5h18v2H3v-2Z" />
+              </svg>
+            </button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content
+              className="nav-bar__menu-dropdown"
+              align="end"
+              sideOffset={8}
+            >
+              {visibleLinks.map(({ label, to }) => (
+                <DropdownMenu.Item
+                  key={label}
+                  className="nav-bar__dropdown-item"
+                  asChild
+                >
+                  <Link to={to}>{label}</Link>
+                </DropdownMenu.Item>
+              ))}
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
         {user ? (
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>

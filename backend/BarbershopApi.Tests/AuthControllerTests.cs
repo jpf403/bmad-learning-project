@@ -456,6 +456,22 @@ public class AuthControllerTests : IDisposable
         Assert.Contains(cookies!, c => c.StartsWith("zpaxAccessToken="));
     }
 
+    [Fact]
+    public async Task Logout_clears_any_pending_zpaxIdToken_cookie()
+    {
+        using var client = _factory.CreateClient();
+        await client.PostAsJsonAsync("/api/auth/register", NewRequest(), TestContext.Current.CancellationToken);
+        var loginResponse = await client.PostAsJsonAsync("/api/auth/login", NewLoginRequest(), TestContext.Current.CancellationToken);
+        var session = await loginResponse.Content.ReadFromJsonAsync<LoginResponse>(LoginResponseJsonOptions, TestContext.Current.CancellationToken);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/logout");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session!.AccessToken);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.True(response.Headers.TryGetValues("Set-Cookie", out var cookies));
+        Assert.Contains(cookies!, c => c.StartsWith("zpaxIdToken="));
+    }
+
     private HttpClient NewSsoClient() => _factory.CreateClient(new WebApplicationFactoryClientOptions
     {
         AllowAutoRedirect = false,
@@ -500,6 +516,11 @@ public class AuthControllerTests : IDisposable
         Assert.True(response.Headers.TryGetValues("Set-Cookie", out var cookies));
         Assert.Contains(cookies!, c => c.StartsWith("refreshToken="));
         Assert.Contains(cookies!, c => c.StartsWith($"zpaxAccessToken={FakeSsoClient.NextIdentity.AccessToken}") &&
+            c.Contains("httponly", StringComparison.OrdinalIgnoreCase) &&
+            c.Contains("secure", StringComparison.OrdinalIgnoreCase) &&
+            c.Contains("samesite=strict", StringComparison.OrdinalIgnoreCase) &&
+            c.Contains("path=/api/auth/sso", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(cookies!, c => c.StartsWith($"zpaxIdToken={FakeSsoClient.NextIdentity.IdToken}") &&
             c.Contains("httponly", StringComparison.OrdinalIgnoreCase) &&
             c.Contains("secure", StringComparison.OrdinalIgnoreCase) &&
             c.Contains("samesite=strict", StringComparison.OrdinalIgnoreCase) &&
@@ -556,7 +577,7 @@ public class AuthControllerTests : IDisposable
         Assert.Equal(seededPasswordHash, account.PasswordHash);
     }
 
-    [Fact(Skip = "[DEBUG-TEMP] state/CSRF validation temporarily bypassed in AuthController.SsoCallback while debugging with z-pax")]
+    [Fact]
     public async Task SsoCallback_missing_state_cookie_redirects_to_login_with_error_and_creates_no_account()
     {
         using var client = NewSsoClient();
@@ -571,7 +592,7 @@ public class AuthControllerTests : IDisposable
         Assert.Null(await repository.FindByEmail(FakeSsoClient.NextIdentity.Email));
     }
 
-    [Fact(Skip = "[DEBUG-TEMP] state/CSRF validation temporarily bypassed in AuthController.SsoCallback while debugging with z-pax")]
+    [Fact]
     public async Task SsoCallback_mismatched_state_redirects_to_login_with_error_and_creates_no_account()
     {
         using var client = NewSsoClient();
@@ -604,7 +625,21 @@ public class AuthControllerTests : IDisposable
         Assert.Null(await repository.FindByEmail(FakeSsoClient.NextIdentity.Email));
     }
 
-    [Fact(Skip = "[DEBUG-TEMP] state/CSRF validation temporarily bypassed in AuthController.SsoCallback while debugging with z-pax")]
+    [Fact]
+    public async Task SsoCallback_with_no_code_and_no_active_login_attempt_redirects_to_login_without_error()
+    {
+        using var client = NewSsoClient();
+
+        // No prior call to /api/auth/sso/login -- no ssoState cookie in flight, so
+        // this isn't a failed sign-in, it's presumed to be z-pax's own /connect/logout
+        // landing here via post_logout_redirect_uri after ending the SSO session.
+        var response = await client.GetAsync("/api/auth/sso/callback", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Found, response.StatusCode);
+        Assert.Equal("https://localhost:5173/login", response.Headers.Location!.ToString());
+    }
+
+    [Fact]
     public async Task SsoCallback_state_already_consumed_by_a_concurrent_request_redirects_to_login_with_error()
     {
         using var client = NewSsoClient();
@@ -645,7 +680,7 @@ public class AuthControllerTests : IDisposable
         Assert.Null(await repository.FindByEmail(FakeSsoClient.NextIdentity.Email));
     }
 
-    [Fact(Skip = "[DEBUG-TEMP] state/CSRF validation temporarily bypassed in AuthController.SsoCallback while debugging with z-pax")]
+    [Fact]
     public async Task SsoCallback_reuses_ssoState_cookie_only_once()
     {
         using var client = NewSsoClient();
@@ -736,5 +771,60 @@ public class AuthControllerTests : IDisposable
         var response = await client.GetAsync("/api/auth/sso/zpax-token", TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task SsoLogout_after_an_sso_session_redirects_to_the_zpax_logout_endpoint_and_clears_the_cookie()
+    {
+        using var client = NewSsoClient();
+        var loginResponse = await client.GetAsync("/api/auth/sso/login", TestContext.Current.CancellationToken);
+        var state = ExtractState(loginResponse);
+        await client.GetAsync($"/api/auth/sso/callback?code=anything&state={state}", TestContext.Current.CancellationToken);
+
+        var response = await client.GetAsync("/api/auth/sso/logout", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Found, response.StatusCode);
+        Assert.Equal(
+            $"https://fake-zpax.test/logout?id_token_hint={FakeSsoClient.NextIdentity.IdToken}",
+            response.Headers.Location!.ToString());
+        Assert.True(response.Headers.TryGetValues("Set-Cookie", out var cookies));
+        Assert.Contains(cookies!, c => c.StartsWith("zpaxIdToken="));
+    }
+
+    [Fact]
+    public async Task SsoLogout_with_no_pending_zpaxIdToken_cookie_redirects_to_login()
+    {
+        using var client = NewSsoClient();
+
+        var response = await client.GetAsync("/api/auth/sso/logout", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Found, response.StatusCode);
+        Assert.Equal("https://localhost:5173/login", response.Headers.Location!.ToString());
+    }
+
+    [Fact]
+    public async Task SsoCallback_clears_a_stale_zpaxIdToken_cookie_when_a_later_login_has_no_id_token()
+    {
+        using var client = NewSsoClient();
+        var firstLogin = await client.GetAsync("/api/auth/sso/login", TestContext.Current.CancellationToken);
+        var firstState = ExtractState(firstLogin);
+        await client.GetAsync($"/api/auth/sso/callback?code=anything&state={firstState}", TestContext.Current.CancellationToken);
+
+        var originalIdentity = FakeSsoClient.NextIdentity;
+        FakeSsoClient.NextIdentity = originalIdentity with { IdToken = string.Empty };
+        try
+        {
+            var secondLogin = await client.GetAsync("/api/auth/sso/login", TestContext.Current.CancellationToken);
+            var secondState = ExtractState(secondLogin);
+            var response = await client.GetAsync($"/api/auth/sso/callback?code=anything&state={secondState}", TestContext.Current.CancellationToken);
+
+            Assert.True(response.Headers.TryGetValues("Set-Cookie", out var cookies));
+            Assert.Contains(cookies!, c => c.StartsWith("zpaxIdToken=") &&
+                c.Contains("expires=", StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            FakeSsoClient.NextIdentity = originalIdentity;
+        }
     }
 }

@@ -74,6 +74,7 @@ public class AuthController(
         await authService.Logout(accountId);
         Response.Cookies.Delete("refreshToken");
         Response.Cookies.Delete("zpaxAccessToken", SsoStateCookieDeleteOptions);
+        Response.Cookies.Delete("zpaxIdToken", SsoStateCookieDeleteOptions);
         return NoContent();
     }
 
@@ -141,13 +142,36 @@ public class AuthController(
     [HttpGet("sso/callback")]
     public async Task<IActionResult> SsoCallback(string? code, string? state)
     {
+        var cookieState = Request.Cookies["ssoState"];
+        var hadActiveLoginAttempt = cookieState is not null;
         Response.Cookies.Delete("ssoState", SsoStateCookieDeleteOptions);
 
-        // [DEBUG-TEMP] state validation bypassed while debugging with z-pax (no state sent on the outgoing request)
+        if (string.IsNullOrEmpty(code) && !hadActiveLoginAttempt)
+        {
+            // No code and no login attempt in flight. ZPaxSso:LogoutRedirectUri
+            // points at z-pax's own page (not back here), so this isn't the
+            // post-logout redirect -- kept as a defensive catch-all for any
+            // other benign no-code arrival (e.g. a stale bookmark), landing
+            // cleanly rather than surfacing a failure banner for something
+            // that was never a login attempt to begin with.
+            return Redirect(SsoRedirects.Login);
+        }
+
+        if (string.IsNullOrEmpty(cookieState) || string.IsNullOrEmpty(state) || cookieState != state)
+        {
+            logger.LogWarning("SSO callback rejected: missing or mismatched state.");
+            return Redirect(SsoRedirects.Failure);
+        }
 
         if (string.IsNullOrEmpty(code))
         {
             logger.LogWarning("SSO callback rejected: missing authorization code.");
+            return Redirect(SsoRedirects.Failure);
+        }
+
+        if (!ssoStateStore.TryConsume(state))
+        {
+            logger.LogWarning("SSO callback rejected: state already consumed.");
             return Redirect(SsoRedirects.Failure);
         }
 
@@ -203,8 +227,38 @@ public class AuthController(
             Expires = DateTimeOffset.UtcNow.AddMinutes(2),
         });
 
+        if (!string.IsNullOrEmpty(identity.IdToken))
+        {
+            Response.Cookies.Append("zpaxIdToken", identity.IdToken, new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.Strict,
+                Path = SsoStateCookiePath,
+                Expires = DateTimeOffset.UtcNow.AddDays(15),
+            });
+        }
+        else
+        {
+            Response.Cookies.Delete("zpaxIdToken", SsoStateCookieDeleteOptions);
+        }
+
         var landingRoute = account.Role == Role.Customer ? "schedule-appointment" : "my-schedule";
         return Redirect($"https://localhost:5173/{landingRoute}");
+    }
+
+    [HttpGet("sso/logout")]
+    public IActionResult SsoLogout()
+    {
+        var idToken = Request.Cookies["zpaxIdToken"];
+        Response.Cookies.Delete("zpaxIdToken", SsoStateCookieDeleteOptions);
+
+        if (string.IsNullOrEmpty(idToken))
+        {
+            return Redirect(SsoRedirects.Login);
+        }
+
+        return Redirect(ssoClient.BuildLogoutUrl(idToken));
     }
 
     [HttpGet("sso/zpax-token")]

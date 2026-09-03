@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-27
-last_updated: 2026-08-28 (story 4.4 done)
+last_updated: 2026-09-02 (story 4.5 done)
 
 
 project: bmad-learning-project
@@ -82,6 +82,7 @@ development_status:
   4-2-zpax-oauth-login-flow: done
   4-3-sign-in-with-zpax-login-page-ui: done
   4-4-myzpax-cross-app-navigation-banner: done
+  4-5-myzpax-banner-logout: done
 
 action_items:
   - epic: 1
@@ -112,3 +113,7 @@ action_items:
     action: "Reviewed all open deferred-work.md items at Epic 3 close; Jack confirmed they are genuinely low-priority and not important for this project - accepted as documented known limitations, not tracked as action items"
     owner: "Jack (Project Lead)"
     status: done
+  - epic: 4
+    action: "Mobile nav dropdown menu (collapsed hamburger, <1023px) renders no visible menu items despite correct logic and 16/16 passing unit tests - root-cause as a real-browser CSS/stacking issue (jsdom can't catch it) and fix. This is the same bug class the Epic 1 retro flagged and Story 2.2 supposedly resolved - it has resurfaced, so verify the fix holds this time before closing."
+    owner: "Amelia (Dev)"
+    status: open

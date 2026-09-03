@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { StrictMode, useEffect } from 'react'
-import { render } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { AuthProvider, useAuth } from '../context/AuthContext'
 import { loadScript } from '../lib/loadScript'
+import { API_BASE_URL } from '../api/ApiConfig'
 import MyzpaxBanner from './MyzpaxBanner'
 
 vi.mock('../lib/loadScript', () => ({
@@ -18,6 +19,11 @@ function SignInOnMount({ user, children }) {
   }, [])
 
   return children
+}
+
+function AuthStateProbe() {
+  const { user } = useAuth()
+  return <div data-testid="auth-state">{user ? 'signed-in' : 'signed-out'}</div>
 }
 
 function renderBanner(user) {
@@ -83,10 +89,111 @@ describe('MyzpaxBanner', () => {
       getToken: expect.any(Function),
       currentAppId: 'barbershop_demo',
       position: 'static',
+      onLogout: expect.any(Function),
     })
 
     const { getToken } = window.MyzpaxBanner.init.mock.calls[0][0]
     expect(getToken()).toBe('the-zpax-access-token')
+  })
+
+  it('tears down the app session and redirects to the sso logout endpoint when onLogout fires', async () => {
+    render(
+      <AuthProvider>
+        <SignInOnMount user={SIGNED_IN_WITH_TOKEN}>
+          <MyzpaxBanner />
+          <AuthStateProbe />
+        </SignInOnMount>
+      </AuthProvider>,
+    )
+
+    expect(await screen.findByTestId('auth-state')).toHaveTextContent(
+      'signed-in',
+    )
+
+    const originalLocation = window.location
+    delete window.location
+    window.location = { ...originalLocation, assign: vi.fn() }
+
+    try {
+      const { onLogout } = window.MyzpaxBanner.init.mock.calls[0][0]
+      await onLogout()
+
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        `${API_BASE_URL}/api/auth/logout`,
+        expect.objectContaining({
+          method: 'POST',
+          headers: { Authorization: 'Bearer token-abc' },
+        }),
+      )
+      await waitFor(() =>
+        expect(screen.getByTestId('auth-state')).toHaveTextContent(
+          'signed-out',
+        ),
+      )
+      expect(window.location.assign).toHaveBeenCalledWith(
+        `${API_BASE_URL}/api/auth/sso/logout`,
+      )
+    } finally {
+      window.location = originalLocation
+    }
+  })
+
+  it('skips the app logout fetch when there is no app access token', async () => {
+    render(
+      <AuthProvider>
+        <SignInOnMount user={{ ...SIGNED_IN_WITH_TOKEN, accessToken: null }}>
+          <MyzpaxBanner />
+        </SignInOnMount>
+      </AuthProvider>,
+    )
+
+    const originalLocation = window.location
+    delete window.location
+    window.location = { ...originalLocation, assign: vi.fn() }
+
+    try {
+      const { onLogout } = window.MyzpaxBanner.init.mock.calls[0][0]
+      await onLogout()
+
+      expect(globalThis.fetch).not.toHaveBeenCalledWith(
+        `${API_BASE_URL}/api/auth/logout`,
+        expect.anything(),
+      )
+      expect(window.location.assign).toHaveBeenCalledWith(
+        `${API_BASE_URL}/api/auth/sso/logout`,
+      )
+    } finally {
+      window.location = originalLocation
+    }
+  })
+
+  it('ignores a re-entrant onLogout call while one is already in flight', async () => {
+    render(
+      <AuthProvider>
+        <SignInOnMount user={SIGNED_IN_WITH_TOKEN}>
+          <MyzpaxBanner />
+        </SignInOnMount>
+      </AuthProvider>,
+    )
+
+    const originalLocation = window.location
+    delete window.location
+    window.location = { ...originalLocation, assign: vi.fn() }
+
+    try {
+      const { onLogout } = window.MyzpaxBanner.init.mock.calls[0][0]
+      const first = onLogout()
+      const second = onLogout()
+      await Promise.all([first, second])
+
+      const logoutCalls = globalThis.fetch.mock.calls.filter(
+        ([url]) => url === `${API_BASE_URL}/api/auth/logout`,
+      )
+      expect(logoutCalls).toHaveLength(1)
+      expect(window.location.assign).toHaveBeenCalledTimes(1)
+    } finally {
+      window.location = originalLocation
+    }
   })
 
   it('logs an error and does not throw when the banner script fails to load', () => {

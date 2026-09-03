@@ -236,8 +236,8 @@ The admin can search, create, edit, and delete customer/barber accounts from a d
 **FRs covered:** FR16, FR17, FR18, FR19, FR34, FR35, FR40, FR41
 
 ### Epic 4: Single Sign-On (z-pax)
-A visitor can sign in using their z-pax account as an alternative to email/password — first-time SSO sign-in creates a Customer account automatically from z-pax's identity, a matching email links to an existing account without disturbing its password, and the resulting session behaves identically to a standard login in every other respect. An SSO-authenticated session also sees the myzPAX cross-app navigation banner on every page.
-**FRs covered:** FR42, FR43, FR44, FR45, FR46, FR47
+A visitor can sign in using their z-pax account as an alternative to email/password — first-time SSO sign-in creates a Customer account automatically from z-pax's identity, a matching email links to an existing account without disturbing its password, and the resulting session behaves identically to a standard login in every other respect. An SSO-authenticated session also sees the myzPAX cross-app navigation banner on every page, and signs out through the banner's own logout control rather than the app's Logout menu item.
+**FRs covered:** FR42, FR43, FR44, FR45, FR46, FR47, FR48
 
 ## Epic 1: Account Access & Site Foundation
 
@@ -772,7 +772,7 @@ So that I can remove accounts that are no longer needed.
 
 ## Epic 4: Single Sign-On (z-pax)
 
-A visitor can sign in using their z-pax account as an alternative to email/password — first-time SSO sign-in creates a Customer account automatically from z-pax's identity, a matching email links to an existing account without disturbing its password, and the resulting session behaves identically to a standard login in every other respect. An SSO-authenticated session also sees the myzPAX cross-app navigation banner on every page.
+A visitor can sign in using their z-pax account as an alternative to email/password — first-time SSO sign-in creates a Customer account automatically from z-pax's identity, a matching email links to an existing account without disturbing its password, and the resulting session behaves identically to a standard login in every other respect. An SSO-authenticated session also sees the myzPAX cross-app navigation banner on every page, and signs out through the banner's own logout control rather than the app's Logout menu item.
 
 ### Story 4.1: Account Schema & SSO-Aware Repository
 
@@ -889,6 +889,38 @@ So that I can move between the tools in the suite without a separate portal.
 **Given** the `currentAppId` value used above (`barbershop_demo`)
 **When** this story is implemented
 **Then** it's confirmed against z-pax's actual launcher-registry entry for this app before merge — flagged going in as unverified
+
+### Story 4.5: myzPAX Banner Logout
+
+As an SSO-authenticated user,
+I want the myzPAX banner's logout control to end both my z-pax session and my barbershop session together,
+So that logging out from the banner actually signs me out of this app too, not just the SSO layer.
+
+**Acceptance Criteria:**
+
+**Given** a signed-in session holding a z-pax access token in memory (Story 4.4)
+**When** `MyzpaxBanner.init` is called
+**Then** it is passed an `onLogout` callback in addition to `getToken`/`currentAppId`/`position` (FR48)
+
+**Given** the visitor triggers the banner's logout control
+**When** `onLogout` fires
+**Then** it tears down this app's session exactly as the existing NavBar Logout does — calling the app's logout endpoint to revoke the server-side refresh session, then clearing `AuthContext` — before navigating away (FR48, mirrors existing `NavBar.handleLogout`)
+
+**Given** the session has been torn down
+**When** `onLogout` completes its app-side teardown
+**Then** the browser is redirected via `window.location.assign` to a new backend endpoint, `GET /api/auth/sso/logout`, which reads this app's `zpaxIdToken` cookie and redirects the browser on to z-pax's real end-session endpoint (`GET https://dapi.auth.myzpax.com/connect/logout?id_token_hint=...&post_logout_redirect_uri=...`) (FR48)
+
+**Given** that redirect target was unverified against z-pax's actual session-termination behavior
+**When** this story was implemented
+**Then** it was manually verified end-to-end with a live z-pax SSO session before the story was marked done — the original plan (redirecting back through `GET /api/auth/sso/login`) was tried first and found not to end the z-pax session; the real fix above was built from z-pax's own logout-endpoint docs and live-verified to end the session and land cleanly on the registered post-logout redirect page, same verification discipline as Story 4.4's `currentAppId` (FR48)
+
+**Given** the existing in-app "Logout" menu item (`NavBar.jsx`)
+**When** this story is implemented
+**Then** it is left completely unchanged and remains available to every account — SSO or password — as a fallback (FR48, no regression)
+
+**Given** the new `onLogout` wiring
+**When** tested
+**Then** it's covered in `MyzpaxBanner.test.jsx` — asserting the callback clears the session and navigates to the SSO login URL — without introducing any new mocking beyond what the existing suite already stubs (AD-4)
 
 **Given** automated tests should never depend on a live external service (mirrors AD-4)
 **When** this story is implemented

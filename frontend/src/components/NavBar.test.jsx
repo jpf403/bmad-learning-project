@@ -181,6 +181,14 @@ describe('NavBar', () => {
       ).toBeInTheDocument()
     })
 
+    it('does not apply the compact signed-in layout modifier', () => {
+      const { container } = renderNavBar()
+
+      expect(container.querySelector('nav')).not.toHaveClass(
+        'nav-bar--signed-in',
+      )
+    })
+
     it('navigates to /login when Sign In is clicked', async () => {
       const user = userEvent.setup()
       renderNavBar()
@@ -209,6 +217,15 @@ describe('NavBar', () => {
       expect(
         screen.getByRole('button', { name: 'Account menu' }),
       ).toBeInTheDocument()
+    })
+
+    it('applies the compact signed-in layout modifier to the nav bar', () => {
+      const { container } = renderNavBar({ signedIn: true })
+
+      expect(container.querySelector('nav')).toHaveClass(
+        'nav-bar',
+        'nav-bar--signed-in',
+      )
     })
 
     it('clears the session and navigates to / on Logout', async () => {
@@ -259,6 +276,13 @@ describe('NavBar', () => {
   })
 
   describe('collapsed navigation menu', () => {
+    it('renders the menu button inside the actions group, next to the account controls', () => {
+      const { container } = renderNavBar()
+
+      const actions = container.querySelector('.nav-bar__actions')
+      expect(actions.querySelector('.nav-bar__menu-button')).toBeInTheDocument()
+    })
+
     it('renders a menu button that toggles a dropdown of the nav links', async () => {
       const user = userEvent.setup()
       renderNavBar()

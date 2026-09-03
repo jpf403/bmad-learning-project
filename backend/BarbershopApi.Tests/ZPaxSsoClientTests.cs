@@ -15,6 +15,8 @@ public class ZPaxSsoClientTests
         AuthorizationEndpoint = "https://fake-zpax.test/connect/authorize",
         TokenEndpoint = "https://fake-zpax.test/connect/token",
         UserInfoEndpoint = "https://fake-zpax.test/connect/userinfo",
+        LogoutEndpoint = "https://fake-zpax.test/connect/logout",
+        LogoutRedirectUri = "https://fake-zpax.test/home",
         RedirectUri = "https://localhost:7113/api/auth/sso/callback",
         ClientId = "test-client-id",
         ClientSecret = "test-client-secret",
@@ -37,13 +39,10 @@ public class ZPaxSsoClientTests
 
         Assert.StartsWith("https://fake-zpax.test/connect/authorize?", url);
         Assert.Contains("client_id=test-client-id", url);
-        Assert.Contains("scope=profile", url);
+        Assert.Equal("openid profile", QueryHelpers.ParseQuery(new Uri(url).Query)["scope"].ToString());
         Assert.Contains("response_type=code", url);
         Assert.Contains("redirect_uri=", url);
-        // [DEBUG-TEMP] state omitted from the outgoing request while debugging with z-pax --
-        // asserted explicitly (not just un-asserted) so a future accidental re-add is caught
-        // the same way an accidental removal would be, while this is deferred (see deferred-work.md).
-        Assert.DoesNotContain("state=", url);
+        Assert.Contains("state=the-state-value", url);
     }
 
     [Fact]
@@ -53,7 +52,7 @@ public class ZPaxSsoClientTests
         {
             if (request.RequestUri!.ToString() == "https://fake-zpax.test/connect/token")
             {
-                return JsonResponse(new { access_token = "the-access-token" });
+                return JsonResponse(new { access_token = "the-access-token", id_token = "the-id-token" });
             }
 
             Assert.Equal("https://fake-zpax.test/connect/userinfo", request.RequestUri!.ToString());
@@ -70,6 +69,42 @@ public class ZPaxSsoClientTests
         Assert.Equal("Smith", identity.LastName);
         Assert.Equal("42", identity.SubjectId);
         Assert.Equal("the-access-token", identity.AccessToken);
+        Assert.Equal("the-id-token", identity.IdToken);
+    }
+
+    [Fact]
+    public async Task ExchangeCodeForIdentity_returns_empty_id_token_when_token_response_omits_it()
+    {
+        var handler = new FakeHttpMessageHandler(request =>
+        {
+            if (request.RequestUri!.ToString() == "https://fake-zpax.test/connect/token")
+            {
+                // No "id_token" key at all -- e.g. if the "openid" scope were ever dropped again.
+                return JsonResponse(new { access_token = "the-access-token" });
+            }
+
+            return JsonResponse(new { id = 1, email = "john@example.com", firstName = "John", lastName = "Smith", emailVerified = true });
+        });
+
+        var identity = await NewClient(handler).ExchangeCodeForIdentity("the-code");
+
+        Assert.Equal(string.Empty, identity.IdToken);
+    }
+
+    [Fact]
+    public void BuildLogoutUrl_targets_the_logout_endpoint_with_id_token_hint_and_post_logout_redirect_uri()
+    {
+        var client = NewClient(new FakeHttpMessageHandler(_ => throw new InvalidOperationException("no HTTP call expected")));
+
+        var url = client.BuildLogoutUrl("the-id-token");
+
+        Assert.StartsWith("https://fake-zpax.test/connect/logout?", url);
+        var query = QueryHelpers.ParseQuery(new Uri(url).Query);
+        Assert.Equal("the-id-token", query["id_token_hint"].ToString());
+        // Matches ZPaxSsoClient.BuildLogoutUrl's current toggle state (ZPaxSso:LogoutRedirectUri
+        // as post_logout_redirect_uri) -- update this alongside that toggle if it's flipped back
+        // to the plain fallback (no post_logout_redirect_uri at all).
+        Assert.Equal("https://fake-zpax.test/home", query["post_logout_redirect_uri"].ToString());
     }
 
     [Fact]
