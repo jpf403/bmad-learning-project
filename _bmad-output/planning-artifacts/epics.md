@@ -219,6 +219,8 @@ FR44: Epic 4 - Existing-account linking by email
 FR45: Epic 4 - SSO accounts subject to single-admin invariant
 FR46: Epic 4 - SSO session behaves identically to password session
 FR47: Epic 4 - myzPAX cross-app navigation banner
+FR48: Epic 4 - myzPAX banner logout ends the app session too
+FR49: Epic 4 - myzPAX banner session kept alive via silent z-pax token refresh
 
 ## Epic List
 
@@ -236,8 +238,8 @@ The admin can search, create, edit, and delete customer/barber accounts from a d
 **FRs covered:** FR16, FR17, FR18, FR19, FR34, FR35, FR40, FR41
 
 ### Epic 4: Single Sign-On (z-pax)
-A visitor can sign in using their z-pax account as an alternative to email/password — first-time SSO sign-in creates a Customer account automatically from z-pax's identity, a matching email links to an existing account without disturbing its password, and the resulting session behaves identically to a standard login in every other respect. An SSO-authenticated session also sees the myzPAX cross-app navigation banner on every page, and signs out through the banner's own logout control rather than the app's Logout menu item.
-**FRs covered:** FR42, FR43, FR44, FR45, FR46, FR47, FR48
+A visitor can sign in using their z-pax account as an alternative to email/password — first-time SSO sign-in creates a Customer account automatically from z-pax's identity, a matching email links to an existing account without disturbing its password, and the resulting session behaves identically to a standard login in every other respect. An SSO-authenticated session also sees the myzPAX cross-app navigation banner on every page, kept alive past z-pax's short access-token lifetime via silent refresh, and signs out through the banner's own logout control rather than the app's Logout menu item.
+**FRs covered:** FR42, FR43, FR44, FR45, FR46, FR47, FR48, FR49
 
 ## Epic 1: Account Access & Site Foundation
 
@@ -925,3 +927,69 @@ So that logging out from the banner actually signs me out of this app too, not j
 **Given** automated tests should never depend on a live external service (mirrors AD-4)
 **When** this story is implemented
 **Then** the new endpoint's cookie-present / cookie-absent / already-consumed paths are covered by xUnit + `WebApplicationFactory`, and the frontend's conditional-mount and `getToken`-wiring logic are covered by Vitest with the banner script itself stubbed — never loading the real external script in tests (NFR4, AD-4)
+
+### Story 4.6: myzPAX Banner Token Refresh
+
+As an SSO-authenticated user,
+I want the myzPAX banner to stay alive for as long as I'm signed in,
+So that I don't lose access to the cross-app launcher just because z-pax's
+access token is short-lived.
+
+**Acceptance Criteria:**
+
+**Given** the "Sign in with z-pax" flow (Story 4.2)
+**When** the backend builds the z-pax authorization URL
+**Then** the requested scope is exactly `"openid profile offline_access"`
+(previously `"openid profile"`), so z-pax's token response includes a
+refresh token (FR49, AD-19)
+
+**Given** a successful token exchange at z-pax's token endpoint
+**When** the response includes a `refresh_token`
+**Then** it is captured (`ZPaxTokenResponse`) and, at `SsoCallback`, stored
+in a new `zpaxRefreshToken` cookie — HttpOnly+Secure+SameSite=Strict,
+scoped to `/api/auth/sso` — set alongside the existing `zpaxAccessToken`
+and `zpaxIdToken` cookies (FR49, AD-19)
+
+**Given** a signed-in session whose z-pax access token is nearing or past
+its lifetime
+**When** the frontend proactively calls a new `GET /api/auth/sso/zpax-refresh`
+endpoint (`[Authorize]`'d via this app's own session)
+**Then** the backend reads the `zpaxRefreshToken` cookie, calls z-pax's
+token endpoint with `grant_type=refresh_token` and the stored refresh
+token, and on success returns the new z-pax access token in the response
+body — overwriting the `zpaxRefreshToken` cookie if z-pax returns a
+rotated refresh token, so the next refresh doesn't use a stale one (FR49,
+AD-19)
+
+**Given** the frontend holds a z-pax access token in memory (Story 4.4)
+**When** the session is active
+**Then** it schedules a call to `GET /api/auth/sso/zpax-refresh` ahead of
+the current z-pax access-token lifetime (20 minutes today) and adopts the
+returned token transparently, with no visible interruption to the banner
+(FR49)
+
+**Given** the refresh call fails — no cookie present, or z-pax rejects the
+refresh token (e.g. its 60-minute lifetime, in effect during this story,
+has elapsed)
+**When** this happens
+**Then** the banner degrades to its own built-in fallback strip exactly as
+it does today when no token is available — no error surfaced, and this
+app's own session is completely unaffected either way (FR49)
+
+**Given** automated tests should never depend on a live external service
+(mirrors AD-4)
+**When** this story is implemented
+**Then** `FakeSsoClient` gains the new refresh method, the endpoint's
+cookie-present / cookie-absent / z-pax-rejects paths are covered by xUnit
++ `WebApplicationFactory`, and the frontend's refresh-scheduling and
+degrade-on-failure logic are covered by Vitest with fake timers (NFR4,
+AD-4)
+
+**Given** the refresh mechanism has been proven to work end-to-end with a
+live z-pax SSO session
+**When** this story is marked done
+**Then** z-pax's configuration for this app has been changed to a
+60-minute access-token lifetime and a 15-day refresh-token lifetime,
+matching this app's own token lifetimes — this alignment happens at the
+end of the story, not before, so the refresh mechanism is first proven
+against z-pax's original short-lived configuration (FR49)
