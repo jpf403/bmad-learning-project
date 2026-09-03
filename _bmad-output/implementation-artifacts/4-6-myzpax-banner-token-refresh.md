@@ -1,0 +1,162 @@
+---
+baseline_commit: 631f365
+---
+
+# Story 4.6: myzPAX Banner Token Refresh
+
+Status: ready-for-dev
+
+## Story
+
+As an SSO-authenticated user,
+I want the myzPAX banner to stay alive for as long as I'm signed in,
+so that I don't lose access to the cross-app launcher just because z-pax's access token is short-lived.
+
+## Acceptance Criteria
+
+1. **Given** the "Sign in with z-pax" flow (Story 4.2), **when** the backend builds the z-pax authorization URL, **then** the requested scope is exactly `"openid profile offline_access"` (previously `"openid profile"`), so z-pax's token response includes a refresh token (FR49, AD-19).
+2. **Given** a successful token exchange at z-pax's token endpoint, **when** the response includes a `refresh_token`, **then** it is captured (`ZPaxTokenResponse`) and, at `SsoCallback`, stored in a new `zpaxRefreshToken` cookie — HttpOnly+Secure+SameSite=Strict, scoped to `/api/auth/sso` — set alongside the existing `zpaxAccessToken` and `zpaxIdToken` cookies (FR49, AD-19).
+3. **Given** a signed-in session whose z-pax access token is nearing or past its lifetime, **when** the frontend proactively calls a new `GET /api/auth/sso/zpax-refresh` endpoint (`[Authorize]`'d via this app's own session), **then** the backend reads the `zpaxRefreshToken` cookie, calls z-pax's token endpoint with `grant_type=refresh_token` and the stored refresh token, and on success returns the new z-pax access token in the response body — overwriting the `zpaxRefreshToken` cookie if z-pax returns a rotated refresh token, so the next refresh doesn't use a stale one (FR49, AD-19).
+4. **Given** the frontend holds a z-pax access token in memory (Story 4.4), **when** the session is active, **then** it schedules a call to `GET /api/auth/sso/zpax-refresh` ahead of the current z-pax access-token lifetime (20 minutes today) and adopts the returned token transparently, with no visible interruption to the banner (FR49).
+5. **Given** the refresh call fails — no cookie present, or z-pax rejects the refresh token (e.g. its 60-minute lifetime, in effect during this story, has elapsed) — **when** this happens, **then** the banner degrades to its own built-in fallback strip exactly as it does today when no token is available — no error surfaced, and this app's own session is completely unaffected either way (FR49).
+6. **Given** automated tests should never depend on a live external service (mirrors AD-4), **when** this story is implemented, **then** `FakeSsoClient` gains the new refresh method, the endpoint's cookie-present / cookie-absent / z-pax-rejects paths are covered by xUnit + `WebApplicationFactory`, and the frontend's refresh-scheduling and degrade-on-failure logic are covered by Vitest with fake timers (NFR4, AD-4).
+7. **Given** the refresh mechanism has been proven to work end-to-end with a live z-pax SSO session, **when** this story is marked done, **then** z-pax's configuration for this app has been changed to a 60-minute access-token lifetime and a 15-day refresh-token lifetime, matching this app's own token lifetimes — this alignment happens at the end of the story, not before, so the refresh mechanism is first proven against z-pax's original short-lived configuration (FR49).
+
+## Tasks / Subtasks
+
+- [ ] **Task 1: Request `offline_access` scope** (AC: #1)
+  - [ ] `backend/BarbershopApi/Services/ZPaxSsoClient.cs:10` — change `private const string Scope = "openid profile";` to `"openid profile offline_access"`.
+  - [ ] `backend/BarbershopApi.Tests/ZPaxSsoClientTests.cs:42` — update `BuildAuthorizationUrl_includes_all_required_query_parameters`'s scope assertion from `"openid profile"` to `"openid profile offline_access"`. Write this test change first (red), then make Task 1's code change (green) — TDD per project standard.
+
+- [ ] **Task 2: Capture `refresh_token` and store it in a new `zpaxRefreshToken` cookie** (AC: #2)
+  - [ ] `ZPaxSsoClient.cs`'s private `ZPaxTokenResponse` class (line ~113): add `[JsonPropertyName("refresh_token")] public string? RefreshToken { get; set; }`, mirroring the existing `IdToken` field exactly.
+  - [ ] `backend/BarbershopApi/Services/ISsoClient.cs:3` — `SsoIdentity` record: append a 7th field, `string RefreshToken`, to the end of the positional parameter list (`Email, FirstName, LastName, SubjectId, AccessToken, IdToken, RefreshToken`). Appending at the end (not inserting) keeps every existing positional call site (`FakeSsoClient.NextIdentity`, `ZPaxSsoClient.ExchangeCodeForIdentity`'s return, and the `with { IdToken = ... }` usage in `AuthControllerTests.cs:814`) compiling unchanged except where a value must now be supplied.
+  - [ ] `ZPaxSsoClient.ExchangeCodeForIdentity` (line ~92, right after the existing `id_token` missing-value warning): add the identical warning pattern for a missing `refresh_token` (`logger.LogWarning("z-pax token endpoint response is missing a refresh_token.")` — do not throw, same rationale as `id_token`: sign-in must not hard-fail over a refresh-only concern). Pass `token.RefreshToken ?? string.Empty` as the new `SsoIdentity` argument.
+  - [ ] `backend/BarbershopApi/Controllers/AuthController.cs`'s `SsoCallback` (lines 230–244): immediately after the existing `zpaxIdToken` cookie if/else block, add an identical if/else for `zpaxRefreshToken`: if `identity.RefreshToken` is non-empty, `Response.Cookies.Append("zpaxRefreshToken", identity.RefreshToken, new CookieOptions { HttpOnly = true, Secure = true, SameSite = SameSiteMode.Strict, Path = SsoStateCookiePath, Expires = DateTimeOffset.UtcNow.AddDays(15) })` (15-day expiry — not specified exactly by the AC, chosen to match the existing `zpaxIdToken`/`refreshToken` cookie convention rather than the 2-minute single-use `zpaxAccessToken` cookie, since this token must survive across the whole session, not just a one-time pickup); else `Response.Cookies.Delete("zpaxRefreshToken", SsoStateCookieDeleteOptions)` — this second branch matters for a *second* SSO login on the same browser where z-pax's response happens to omit `refresh_token` (rare, but Story 4.5's code review round had to retrofit this exact "clear a stale cookie on a later login with no value" fix for `zpaxIdToken` after missing it the first time — build it correctly here from the start, don't repeat that gap for `zpaxRefreshToken`).
+  - [ ] `Logout()` (`AuthController.cs:69-78`) already deletes `zpaxAccessToken`/`zpaxIdToken` on standard logout (added in Story 4.5's review round after the same gap was found for `zpaxIdToken`) — add `Response.Cookies.Delete("zpaxRefreshToken", SsoStateCookieDeleteOptions);` to the same block so a leftover refresh token doesn't survive a normal in-app logout.
+
+- [ ] **Task 3: `ISsoClient.RefreshAccessToken` + `ZPaxSsoClient` implementation** (AC: #3)
+  - [ ] `ISsoClient.cs`: add `public record SsoRefreshResult(string AccessToken, string? RefreshToken);` (new refresh token only present when z-pax rotates it) and add `Task<SsoRefreshResult> RefreshAccessToken(string refreshToken);` to the `ISsoClient` interface.
+  - [ ] `ZPaxSsoClient.RefreshAccessToken(string refreshToken)`: build a `FormUrlEncodedContent` with `grant_type=refresh_token`, `refresh_token={refreshToken}`, `client_id`, `client_secret` — same shape as `ExchangeCodeForIdentity`'s existing `tokenRequest` dictionary, POST to `options.TokenEndpoint`, log-and-`EnsureSuccessStatusCode()` on failure (identical pattern to the existing token-exchange call, lines 41–47), deserialize the same private `ZPaxTokenResponse` class (already gains `RefreshToken` in Task 2), throw `InvalidOperationException` if `AccessToken` is empty (mirror line 51–55's guard). Return `new SsoRefreshResult(token.AccessToken, token.RefreshToken)`. Do **not** add a `scope` parameter to this request — mirror the minimal parameter set already used for the token-exchange call.
+  - [ ] `backend/BarbershopApi.Tests/TestOnly/FakeSsoClient.cs`: add `public SsoRefreshResult NextRefreshResult { get; set; } = new("fake-refreshed-zpax-access-token", null);` and `public Exception? ThrowOnRefresh { get; set; }`, plus `public Task<SsoRefreshResult> RefreshAccessToken(string refreshToken) { if (ThrowOnRefresh is not null) throw ThrowOnRefresh; return Task.FromResult(NextRefreshResult); }` — mirrors the existing `ThrowOnExchange`/`NextIdentity` pattern exactly. Also update the `NextIdentity` default (line 7) to supply a 7th constructor argument, e.g. `"fake-zpax-refresh-token"`.
+  - [ ] `ZPaxSsoClientTests.cs`: add `RefreshAccessToken_posts_grant_type_refresh_token_and_returns_the_new_access_token` (success path, asserting the request body via the existing `FakeHttpMessageHandler` pattern — see `ExchangeCodeForIdentity_resends_the_same_redirect_uri_used_on_the_authorize_request` for the request-body-capture idiom) and `RefreshAccessToken_throws_when_zpax_rejects_the_token` (handler returns `HttpStatusCode.BadRequest`, mirroring the existing `ExchangeCodeForIdentity` 400-handling test).
+
+- [ ] **Task 4: New endpoint `GET /api/auth/sso/zpax-refresh`** (AC: #3, #5)
+  - [ ] `AuthController.cs`: add `[HttpGet("sso/zpax-refresh")] [Authorize] public async Task<IActionResult> ZpaxRefresh()`, placed after the existing `ZpaxToken()` action.
+  - [ ] Read `Request.Cookies["zpaxRefreshToken"]`; if missing/empty, return `NotFound()` — same 404 convention `ZpaxToken()` already uses for "nothing available," so the frontend has exactly one failure shape to handle (AC #5 groups "no cookie" and "z-pax rejects" as producing the *identical* degrade behavior — giving both the same HTTP status is what makes that true at the API boundary, not just in frontend logic).
+  - [ ] Call `await ssoClient.RefreshAccessToken(token)` in a try/catch. On success: if `result.RefreshToken` is non-null, overwrite the `zpaxRefreshToken` cookie with the new value (same `CookieOptions` shape as Task 2's cookie-set) — if null, leave the existing cookie untouched (z-pax didn't rotate it). Return `Ok(new ZpaxTokenResponse(result.AccessToken))` — reuse the existing `Dtos/ZpaxTokenResponse.cs` record as-is (`{ zpaxAccessToken }`); do not add a new DTO, the wire shape is identical to `zpax-token`'s.
+  - [ ] On any exception from `RefreshAccessToken` (z-pax rejected the token): delete the now-known-bad `zpaxRefreshToken` cookie (don't let the frontend keep retrying against a dead token every interval) and return `NotFound()` — same status as the missing-cookie branch, per the unified-degrade reasoning above. Do not `[Authorize]`-bypass or leak the underlying exception to the response body.
+
+- [ ] **Task 5: Frontend — `refreshZpaxToken` API call** (AC: #3, #4)
+  - [ ] `frontend/src/api/AuthApi.js`: add `refreshZpaxToken(accessToken)`, placed after `getZpaxToken` — identical shape (`GET`, `credentials: 'include'`, `Authorization: Bearer` header, same `{ ok, zpaxAccessToken }` / `{ ok: false, status }` return contract), just targeting `${API_BASE_URL}/api/auth/sso/zpax-refresh` instead of `/zpax-token`. Copy `getZpaxToken`'s body verbatim and change the URL — don't introduce a different response-shape convention for what is, on the wire, the same DTO.
+
+- [ ] **Task 6: Frontend — schedule proactive refresh in `AuthContext`, adopt transparently, degrade on failure** (AC: #4, #5)
+  - [ ] **Do this in `AuthContext.jsx`, not `MyzpaxBanner.jsx`.** `AuthContext` already owns `user.zpaxAccessToken` state and the initial `getZpaxToken` bootstrap call; `MyzpaxBanner.jsx`'s `tokenRef` already re-syncs from `user?.zpaxAccessToken` on every change (`MyzpaxBanner.jsx:21-23`). If the refresh logic updates `user.zpaxAccessToken` through `AuthContext`, the banner picks up the new token automatically through its *existing* effect — **no change to `MyzpaxBanner.jsx` is needed for adoption.** Putting the scheduling/refetch logic in `MyzpaxBanner.jsx` instead would duplicate token-holding state across two places; don't do that.
+  - [ ] Add a setter to `AuthContext`'s exposed value, e.g. `setZpaxToken: (token) => setUser((prev) => (prev ? { ...prev, zpaxAccessToken: token } : prev))`, alongside the existing `login`/`logout`. Don't overload `login` (`setUser`) for this — it reads as a full session replacement, not a single-field patch.
+  - [ ] In `AuthProvider`, add a `useEffect` keyed on whether `user?.zpaxAccessToken` has ever become non-null (use a one-shot ref gate, e.g. `refreshStartedRef`, mirroring `MyzpaxBanner.jsx`'s `initializedRef` pattern) — start a recurring `setInterval` **once**, do not tear down and restart it on every successful refresh (that would just re-derive the same cadence with extra churn). Interval period: 15 minutes (`15 * 60 * 1000`ms) — a fixed 5-minute safety margin ahead of z-pax's current 20-minute access-token lifetime (AC #4's "ahead of the current lifetime"); this is a hardcoded constant, not derived from a token-expiry claim (no such claim is available to the frontend). This same constant stays safely ahead of the lifetime once AC #7's config change lands (60 min) — no need to make it configurable for this project's scope.
+  - [ ] Inside the interval callback, read the current access token and current zpax token via refs kept fresh by their own small effects (mirror `MyzpaxBanner.jsx`'s `tokenRef`/`accessTokenRef` staleness-avoidance pattern exactly — do not close over `user` directly, it will go stale across the long interval lifetime). Call `refreshZpaxToken(accessTokenRef.current)`. On success (`result.ok`), call `setZpaxToken(result.zpaxAccessToken)`. On failure (`!result.ok`), call `setZpaxToken(null)` **and** `clearInterval` — this is a one-shot degrade: once refresh fails once (no retry-forever), the banner falls back exactly like Story 4.4's "no token in memory" case, and there is deliberately no path back to a fresh token short of a new SSO login (matches the already-documented Deferred item "myzPAX banner re-fetch on a stale token," `ARCHITECTURE-SPINE.md`'s Deferred section — this story does not change that policy, it just adds one extra chance via the scheduled refresh before degrading).
+  - [ ] Clear the interval in the effect's cleanup function (component unmount) regardless of outcome.
+  - [ ] Do **not** start the interval at all for a password-only session (`user.zpaxAccessToken` never becomes non-null) — the one-shot ref gate above already ensures this for free, since it only arms once a real token exists.
+
+- [ ] **Task 7: Backend test coverage** (AC: #6)
+  - [ ] `AuthControllerTests.cs`: extend the existing SSO-callback cookie assertions (around line 518–523, same test that already checks `zpaxAccessToken`/`zpaxIdToken`) to also assert a `zpaxRefreshToken` cookie is set with `FakeSsoClient.NextIdentity`'s refresh token value.
+  - [ ] Add `ZpaxRefresh_with_a_valid_cookie_returns_200_with_the_new_access_token` (mirrors `ZpaxToken_right_after_SsoCallback_returns_200_with_token_and_consumes_cookie`'s setup: `NewSsoClient()`, drive `sso/login` → `sso/callback` → `LoginViaSso` to get a bearer token, then call `GET /api/auth/sso/zpax-refresh` with that bearer token and assert 200 + the `FakeSsoClient.NextRefreshResult` access token in the body).
+  - [ ] Add `ZpaxRefresh_with_no_pending_cookie_returns_404` (password-only session, same shape as `ZpaxToken_from_a_password_only_session_with_no_pending_cookie_returns_404`).
+  - [ ] Add `ZpaxRefresh_when_zpax_rejects_the_refresh_token_returns_404_and_clears_the_cookie` — set `fakeSsoClient.ThrowOnRefresh` on the DI-resolved `FakeSsoClient` instance before calling the endpoint (same DI-scope-resolution idiom already used elsewhere in this file for `FakeSsoClient.NextIdentity`/`ThrowOnExchange`), assert 404, then assert a follow-up call to `zpax-refresh` reusing the same session still returns 404 (rather than somehow succeeding on stale state) since the cookie is now cleared.
+  - [ ] Add `ZpaxRefresh_without_bearer_token_returns_401` (mirrors `ZpaxToken_without_bearer_token_returns_401`).
+
+- [ ] **Task 8: Frontend test coverage with fake timers** (AC: #6)
+  - [ ] `frontend/src/context/AuthContext.test.jsx`: add `vi.useFakeTimers({ shouldAdvanceTime: true })` in a `beforeEach` (this file currently has none — follow `ScheduleAppointment.test.jsx:116-117`'s exact pattern) with a matching `afterEach(() => vi.useRealTimers())`.
+  - [ ] Add a test: sign in with a z-pax token present, stub `fetch` so `/api/auth/sso/zpax-refresh` resolves successfully with a new token, advance fake timers by 15 minutes (`vi.advanceTimersByTimeAsync(15 * 60 * 1000)`), assert the probe (extend `AuthProbe` or add a similar inline probe) now shows the new token.
+  - [ ] Add a test: same setup but `/api/auth/sso/zpax-refresh` resolves `{ ok: false, status: 404 }`; advance timers; assert the zpax token becomes `none`/null (degrade) and that a second timer advance does not fire another `fetch` call to that endpoint (one-shot, no retry-forever).
+  - [ ] Add a test confirming a password-only session (no `zpaxAccessToken` ever obtained) never calls `/api/auth/sso/zpax-refresh` even after advancing timers well past 15 minutes.
+  - [ ] No new mocking library — reuse `vi.spyOn(globalThis, 'fetch')`, matching every existing test in this file and `MyzpaxBanner.test.jsx` (AD-4).
+
+- [ ] **Task 9: Manual live-SSO verification gate, then z-pax config alignment** (AC: #7)
+  - [ ] Jack manually verifies end-to-end against a live z-pax SSO session: the banner survives past the original 20-minute access-token lifetime without re-authenticating, and a simulated/expired-refresh-token failure degrades the banner silently with the app's own session unaffected. This is a hard gate, not optional polish — same discipline as Story 4.4's `currentAppId` verification and Story 4.5's logout-redirect verification.
+  - [ ] Only after that live verification passes: Jack changes z-pax's own app configuration to a 60-minute access-token / 15-day refresh-token lifetime (external step in z-pax's admin console, not a code change in this repo).
+
+- [ ] **Task 10: Re-check `deferred-work.md`**
+  - [ ] Already checked during story creation: the open TOCTOU race on `zpax-token`'s single-use cookie pickup (`deferred-work.md`, code review of story-4.4) is a different endpoint (`GET /api/auth/sso/zpax-token`, one-time pickup) than this story's `GET /api/auth/sso/zpax-refresh` (repeatable, not single-use) — not applicable here, don't try to "fix" it as part of this story. Re-confirm at implementation kickoff in case anything new landed since story creation, and note the outcome in Completion Notes.
+
+- [ ] **Task 11: Verify CI green; branch/PR is Jack's call**
+  - [ ] Confirm both CI jobs (Backend .NET, Frontend Vite/React) pass locally before handing off (AD-11). Per standing project convention, branch naming/push/PR creation is Jack's own step, not the dev agent's — do not create branches, commit, or open a PR without being asked.
+
+## Deferred to This Story's Review Period (not in scope for implementation)
+
+Raised during story creation (2026-09-03); explicitly not to be implemented now — surface these as discussion items when this story reaches review, alongside the already-flagged "Hiding in-app Account/Logout UI for SSO-authenticated users" decision (`ARCHITECTURE-SPINE.md` Deferred section). The premise shift driving all of these: the myzPAX banner is moving from a nice-to-have nav convenience to the sole logout surface for SSO accounts (z-pax will own logout for SSO clients; the in-app Logout control is planned for removal for SSO sessions), which changes the risk calculus around the banner degrading.
+
+1. **Unify the access-token refresh trigger, once z-pax/barbershop lifetimes are aligned (post Task 9).** Instead of two independent schedules (z-pax's fixed 15-min interval from this story vs. barbershop's refresh-on-401/page-load), refresh both together whenever either is due, now that they'd share the same 60-min nominal lifetime. Refresh-*token*-level unification (rotation, reuse-detection) stays out of scope even then — access-token scheduling only.
+2. **Edge case: z-pax's refresh token is rejected/expired while barbershop's own refresh token is still valid.** Given point 1's premise shift, this should very likely force a full barbershop logout (expire the barbershop refresh token, run the existing logout flow) rather than this story's AC #5 behavior (silently degrade the banner, leave the barbershop session untouched) — because once in-app Logout is removed for SSO users, a degraded banner may mean the user has no way to sign out at all, not just a cosmetic loss. This is a deliberate *change* to AC #5's contract for the post-alignment world, not an extension of it — flag it as such wherever it's implemented.
+3. **Confirm whether z-pax's degraded fallback strip still carries a working logout control.** Story 4.4's documented degrade behavior ("Return to myzPAX" minimal strip) was designed when the banner was cosmetic; if that fallback strip has no logout control, an SSO user could be stranded signed-in with no logout path in the merely-*degraded* state too, not only the fully-expired one covered by point 2. Needs checking against z-pax's own docs/behavior, not something this codebase controls.
+
+## Dev Notes
+
+### Architecture Compliance (must-follow, not optional)
+
+- **AD-19 addendum ("myzPAX banner token refresh (FR49)")** — the authoritative spec for this story, full paragraph in `ARCHITECTURE-SPINE.md`. Every code decision above (scope string, cookie name/attributes, endpoint name/auth, rotation-on-refresh, degrade-on-failure) is derived directly from it — don't deviate.
+- **AD-4 (no new mocking)** — backend refresh coverage must ride on the existing `FakeHttpMessageHandler` (`ZPaxSsoClientTests.cs`) and `FakeSsoClient` (`AuthControllerTests.cs`) doubles; frontend coverage rides on the existing `vi.spyOn(globalThis, 'fetch')` idiom plus Vitest's built-in fake timers (already used in `ScheduleAppointment.test.jsx`/`Calendar.test.jsx`, just not yet in this codebase's auth tests) — no new library for either.
+- **AD-3 (token transport)** — this story does not touch this app's own access/refresh token mechanics at all; `zpaxRefreshToken` is a *separate*, z-pax-scoped cookie, not a rotation of this app's own `refreshToken` cookie. Keep them conceptually and code-wise distinct.
+- **FR49** is the sole functional requirement driving this story; FR47/FR48 are cross-referenced but unmodified by this story's diff.
+
+### Design Decisions This Story Must Make (epics/architecture leave these open)
+
+- **`zpaxRefreshToken` cookie expiry (15 days)** — the architecture addendum doesn't state an exact value. This story sets it to 15 days to match the existing `zpaxIdToken`/`refreshToken` convention (a token meant to survive the whole session, not a one-time pickup). If z-pax's actual refresh-token lifetime is ever shorter than the cookie's expiry, that's harmless — z-pax will simply reject an expired token at its own token endpoint (AC #5's "z-pax rejects" path handles it), the cookie's own expiry is just an upper bound.
+- **Unifying "missing cookie" and "z-pax rejects" into the same 404 at the API boundary** — AC #5 describes both as producing the identical degrade behavior. Task 4 makes the endpoint itself return the same status (404) for both, rather than distinguishing them and pushing that distinction into frontend logic — one failure branch on the frontend, not two.
+- **Refresh cadence: fixed 15-minute `setInterval`, not derived from any token-expiry claim** — the frontend has no visibility into the z-pax access token's actual expiry timestamp (it's opaque to this app). A fixed interval safely ahead of the documented 20-minute lifetime is the simplest correct mechanism; revisit only if z-pax's lifetime configuration changes to something the 15-minute margin no longer covers.
+- **One-shot degrade, no retry-forever** — once a scheduled refresh fails, this story stops trying for the rest of that session (clears the interval). This matches the already-documented Deferred item in `ARCHITECTURE-SPINE.md` ("myzPAX banner re-fetch on a stale token") — this story adds one automatic retry cycle beyond Story 4.4's single bootstrap-time pickup, it does not commit to indefinite retry.
+
+### Previous Story Intelligence (Story 4.5)
+
+- `MyzpaxBanner.jsx` already established the `tokenRef`/`accessTokenRef`/`logoutRef` staleness-avoidance pattern for values read inside a callback set up once via a gated one-time effect (`initializedRef`) — Task 6 reuses this exact pattern for the new refresh-interval callback rather than inventing a different approach.
+- Story 4.5's code review round had to retrofit a "clear the cookie when a later login gets an empty value" fix for `zpaxIdToken` (`SsoCallback_clears_a_stale_zpaxIdToken_cookie_when_a_later_login_has_no_id_token`) *after* initially missing it — Task 2 builds the equivalent `zpaxRefreshToken` handling correctly the first time, matching the id_token code exactly.
+- Story 4.5 also had to retrofit clearing `zpaxIdToken` on standard `Logout()` after initially missing it — Task 2 adds `zpaxRefreshToken` to that same `Logout()` cleanup from the start.
+- Test fixture convention: never use a real name in test data — existing fixtures use "John Smith"/`john@example.com` (see `FakeSsoClient.NextIdentity`, `MyzpaxBanner.test.jsx`'s `SIGNED_IN_WITH_TOKEN`). Any new fixture values (fake refresh tokens, etc.) must follow the same placeholder convention.
+- Established rhythm: implement on a branch, verify both CI jobs green, PR/merge is Jack's own step (Task 11).
+
+### Git Intelligence Summary
+
+Recent commits: `cbc23b8` (Story 4.5 merged via PR #23 — includes the `id_token`/`zpaxIdToken`/`sso/logout` machinery this story extends) → `631f365` (this story's correct-course commit, adding Story 4.6 to the planning docs — this story's baseline). Established rhythm: create the story, implement on a branch, PR with a summary, merge once both CI jobs are green — branch/PR remains Jack's own step per standing project convention (see `feedback_pause_before_commit_push` — approval for one step is never approval for the next).
+
+### Testing Requirements
+
+- Backend: xUnit + `WebApplicationFactory` against a real (temp) SQLite instance, extending `ZPaxSsoClientTests.cs` and `AuthControllerTests.cs` — never mocking the DB layer (AD-4, NFR4).
+- Frontend: Vitest + jsdom + React Testing Library, extending `AuthContext.test.jsx` with fake timers (first use of fake timers in an auth-related test file in this codebase — `ScheduleAppointment.test.jsx`/`Calendar.test.jsx` already establish the pattern elsewhere).
+- No Playwright/e2e coverage expected (matches every prior Epic 4 story) — Task 9's live verification is manual, not automated, by design (mirrors Story 4.4/4.5's own unverifiable-without-a-real-z-pax-account gates).
+
+### Project Structure Notes
+
+- **Modified, not new:** `backend/BarbershopApi/Services/ZPaxSsoClient.cs`, `backend/BarbershopApi/Services/ISsoClient.cs`, `backend/BarbershopApi/Controllers/AuthController.cs`, `backend/BarbershopApi.Tests/ZPaxSsoClientTests.cs`, `backend/BarbershopApi.Tests/AuthControllerTests.cs`, `backend/BarbershopApi.Tests/TestOnly/FakeSsoClient.cs`, `frontend/src/api/AuthApi.js`, `frontend/src/context/AuthContext.jsx`, `frontend/src/context/AuthContext.test.jsx`.
+- **Not touched:** `frontend/src/components/MyzpaxBanner.jsx` (Task 6 explicitly keeps this file unchanged — see the reuse rationale above), `backend/BarbershopApi/appsettings.json` (no new config keys needed — reuses the existing `TokenEndpoint`/`ClientId`/`ClientSecret`), `backend/BarbershopApi/Dtos/ZpaxTokenResponse.cs` (reused as-is, not extended or duplicated).
+- No new files expected for this story.
+
+### References
+
+- [Source: _bmad-output/planning-artifacts/epics.md §Epic 4, §Story 4.6] — story statement, seven acceptance criteria
+- [Source: _bmad-output/planning-artifacts/sprint-change-proposal-2026-09-03.md] — full rationale: why this reopens AD-19's "refresh deliberately unused" decision, the two-phase (prove-then-align) rollout constraint, and the deferred hide-Account/Logout-UI idea (explicitly NOT part of this story)
+- [Source: _bmad-output/planning-artifacts/prds/prd-bmad-learning-project-2026-07-21/prd.md#FR49] — the functional requirement this story implements
+- [Source: _bmad-output/planning-artifacts/architecture/architecture-bmad-learning-project-2026-07-23/ARCHITECTURE-SPINE.md#AD-19] — "myzPAX banner token refresh (FR49)" addendum, the authoritative technical spec
+- [Source: backend/BarbershopApi/Services/ZPaxSsoClient.cs] — current `Scope` constant, `ExchangeCodeForIdentity`'s token-request/response handling, `BuildLogoutUrl`'s pattern this story's `RefreshAccessToken` mirrors
+- [Source: backend/BarbershopApi/Services/ISsoClient.cs] — `SsoIdentity` record and `ISsoClient` interface this story extends
+- [Source: backend/BarbershopApi/Controllers/AuthController.cs] — `SsoCallback` (lines 213-244, cookie-setting pattern), `Logout()` (lines 69-78), `ZpaxToken()` (lines 264-276, the 404-on-missing convention this story's new endpoint mirrors)
+- [Source: backend/BarbershopApi.Tests/ZPaxSsoClientTests.cs] — `FakeHttpMessageHandler` test double and existing token-exchange test patterns
+- [Source: backend/BarbershopApi.Tests/AuthControllerTests.cs:704-774] — `ZpaxToken_*` test suite, the direct pattern for this story's new `ZpaxRefresh_*` tests
+- [Source: backend/BarbershopApi.Tests/TestOnly/FakeSsoClient.cs] — existing fake double this story extends
+- [Source: frontend/src/components/MyzpaxBanner.jsx] — `tokenRef`/`accessTokenRef`/`initializedRef` staleness-avoidance pattern this story's `AuthContext` refresh scheduling reuses; also why this file itself needs NO changes
+- [Source: frontend/src/context/AuthContext.jsx] — current bootstrap/`zpaxAccessToken` handling this story extends with scheduled refresh
+- [Source: frontend/src/api/AuthApi.js] — `getZpaxToken`'s exact shape this story's `refreshZpaxToken` mirrors
+- [Source: frontend/src/context/AuthContext.test.jsx] — existing fetch-stubbing conventions to extend
+- [Source: frontend/src/pages/ScheduleAppointment.test.jsx:116-117] — `vi.useFakeTimers({ shouldAdvanceTime: true })` pattern to reuse (first fake-timer precedent in this codebase)
+- [Source: _bmad-output/implementation-artifacts/4-5-myzpax-banner-logout.md] — previous story in this epic; established the id_token/zpaxIdToken cookie pattern this story's zpaxRefreshToken cookie mirrors, and the two gaps (stale-cookie-on-later-login, missing-from-Logout) its code review had to retrofit — this story builds both correctly from the start
+- [Source: _bmad-output/implementation-artifacts/deferred-work.md] — confirmed the open `zpax-token` TOCTOU race (code review of story-4.4) is a different, single-use endpoint not touched by this story
+- [Source: project-context.md §Framework-Specific Rules (React); §Testing Rules; §Critical Don't-Miss Rules]
+
+## Dev Agent Record
+
+### Agent Model Used
+
+### Debug Log References
+
+### Completion Notes List
+
+### File List

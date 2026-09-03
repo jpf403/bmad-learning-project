@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-27
-last_updated: 2026-09-03 (story 4.6 added via correct-course)
+last_updated: 2026-09-03 (story 4.6 created, ready-for-dev)
 
 
 project: bmad-learning-project
@@ -83,7 +83,7 @@ development_status:
   4-3-sign-in-with-zpax-login-page-ui: done
   4-4-myzpax-cross-app-navigation-banner: done
   4-5-myzpax-banner-logout: done
-  4-6-myzpax-banner-token-refresh: backlog
+  4-6-myzpax-banner-token-refresh: ready-for-dev
 
 action_items:
   - epic: 1
