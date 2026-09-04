@@ -7,7 +7,7 @@ namespace BarbershopApi.Services;
 
 public class ZPaxSsoClient(HttpClient httpClient, IOptions<ZPaxSsoOptions> ssoOptions, ILogger<ZPaxSsoClient> logger) : ISsoClient
 {
-    private const string Scope = "openid profile";
+    private const string Scope = "openid profile offline_access";
 
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
@@ -94,7 +94,43 @@ public class ZPaxSsoClient(HttpClient httpClient, IOptions<ZPaxSsoOptions> ssoOp
             logger.LogWarning("z-pax token endpoint response is missing an id_token.");
         }
 
-        return new SsoIdentity(userInfo.Email, userInfo.FirstName, userInfo.LastName, userInfo.Id.Value.ToString(), token.AccessToken, token.IdToken ?? string.Empty);
+        if (string.IsNullOrEmpty(token.RefreshToken))
+        {
+            logger.LogWarning("z-pax token endpoint response is missing a refresh_token.");
+        }
+
+        return new SsoIdentity(userInfo.Email, userInfo.FirstName, userInfo.LastName, userInfo.Id.Value.ToString(), token.AccessToken, token.IdToken ?? string.Empty, token.RefreshToken ?? string.Empty);
+    }
+
+    public async Task<SsoRefreshResult> RefreshAccessToken(string refreshToken)
+    {
+        var options = ssoOptions.Value;
+
+        using var tokenRequest = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["grant_type"] = "refresh_token",
+            ["refresh_token"] = refreshToken,
+            ["client_id"] = options.ClientId,
+            ["client_secret"] = options.ClientSecret,
+        });
+
+        var tokenResponse = await httpClient.PostAsync(options.TokenEndpoint, tokenRequest);
+        if (!tokenResponse.IsSuccessStatusCode)
+        {
+            var errorBody = await tokenResponse.Content.ReadAsStringAsync();
+            logger.LogWarning("z-pax token endpoint returned {StatusCode}: {Body}", (int)tokenResponse.StatusCode, errorBody);
+        }
+        tokenResponse.EnsureSuccessStatusCode();
+        var token = await tokenResponse.Content.ReadFromJsonAsync<ZPaxTokenResponse>(JsonOptions)
+            ?? throw new InvalidOperationException("z-pax token endpoint returned an empty response.");
+
+        if (string.IsNullOrWhiteSpace(token.AccessToken))
+        {
+            logger.LogWarning("z-pax token endpoint response is missing an access token.");
+            throw new InvalidOperationException("z-pax token endpoint response is missing an access token.");
+        }
+
+        return new SsoRefreshResult(token.AccessToken, token.RefreshToken);
     }
 
     public string BuildLogoutUrl(string idTokenHint)
@@ -117,6 +153,9 @@ public class ZPaxSsoClient(HttpClient httpClient, IOptions<ZPaxSsoOptions> ssoOp
 
         [JsonPropertyName("id_token")]
         public string? IdToken { get; set; }
+
+        [JsonPropertyName("refresh_token")]
+        public string? RefreshToken { get; set; }
     }
 
     private class ZPaxUserInfoResponse

@@ -525,6 +525,11 @@ public class AuthControllerTests : IDisposable
             c.Contains("secure", StringComparison.OrdinalIgnoreCase) &&
             c.Contains("samesite=strict", StringComparison.OrdinalIgnoreCase) &&
             c.Contains("path=/api/auth/sso", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(cookies!, c => c.StartsWith($"zpaxRefreshToken={FakeSsoClient.NextIdentity.RefreshToken}") &&
+            c.Contains("httponly", StringComparison.OrdinalIgnoreCase) &&
+            c.Contains("secure", StringComparison.OrdinalIgnoreCase) &&
+            c.Contains("samesite=strict", StringComparison.OrdinalIgnoreCase) &&
+            c.Contains("path=/api/auth/sso", StringComparison.OrdinalIgnoreCase));
 
         await using var context = _factory.CreateDbContext();
         var repository = new AccountRepository(context);
@@ -769,6 +774,82 @@ public class AuthControllerTests : IDisposable
         using var client = _factory.CreateClient();
 
         var response = await client.GetAsync("/api/auth/sso/zpax-token", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ZpaxRefresh_with_a_valid_cookie_returns_200_with_the_new_access_token()
+    {
+        using var client = NewSsoClient();
+        var loginResponse = await client.GetAsync("/api/auth/sso/login", TestContext.Current.CancellationToken);
+        var state = ExtractState(loginResponse);
+        await client.GetAsync($"/api/auth/sso/callback?code=anything&state={state}", TestContext.Current.CancellationToken);
+
+        using var scope = _factory.Services.CreateScope();
+        var authService = scope.ServiceProvider.GetRequiredService<IAuthService>();
+        var identity = FakeSsoClient.NextIdentity;
+        var (_, bearerToken, _) = await authService.LoginViaSso(identity.Email, identity.FirstName, identity.LastName, identity.SubjectId);
+
+        using var refreshRequest = new HttpRequestMessage(HttpMethod.Get, "/api/auth/sso/zpax-refresh");
+        refreshRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
+        var response = await client.SendAsync(refreshRequest, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<ZpaxTokenResponse>(LoginResponseJsonOptions, TestContext.Current.CancellationToken);
+        Assert.NotNull(body);
+        Assert.Equal(FakeSsoClient.NextRefreshResult.AccessToken, body.ZpaxAccessToken);
+    }
+
+    [Fact]
+    public async Task ZpaxRefresh_with_no_pending_cookie_returns_404()
+    {
+        using var client = _factory.CreateClient();
+        await client.PostAsJsonAsync("/api/auth/register", NewRequest(), TestContext.Current.CancellationToken);
+        var loginResponse = await client.PostAsJsonAsync("/api/auth/login", NewLoginRequest(), TestContext.Current.CancellationToken);
+        var session = await loginResponse.Content.ReadFromJsonAsync<LoginResponse>(LoginResponseJsonOptions, TestContext.Current.CancellationToken);
+
+        using var refreshRequest = new HttpRequestMessage(HttpMethod.Get, "/api/auth/sso/zpax-refresh");
+        refreshRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session!.AccessToken);
+        var response = await client.SendAsync(refreshRequest, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ZpaxRefresh_when_zpax_rejects_the_refresh_token_returns_404_and_clears_the_cookie()
+    {
+        using var client = NewSsoClient();
+        var loginResponse = await client.GetAsync("/api/auth/sso/login", TestContext.Current.CancellationToken);
+        var state = ExtractState(loginResponse);
+        await client.GetAsync($"/api/auth/sso/callback?code=anything&state={state}", TestContext.Current.CancellationToken);
+
+        using var scope = _factory.Services.CreateScope();
+        var authService = scope.ServiceProvider.GetRequiredService<IAuthService>();
+        var identity = FakeSsoClient.NextIdentity;
+        var (_, bearerToken, _) = await authService.LoginViaSso(identity.Email, identity.FirstName, identity.LastName, identity.SubjectId);
+
+        FakeSsoClient.ThrowOnRefresh = new InvalidOperationException("z-pax rejected the refresh token");
+
+        using var firstRequest = new HttpRequestMessage(HttpMethod.Get, "/api/auth/sso/zpax-refresh");
+        firstRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
+        var firstResponse = await client.SendAsync(firstRequest, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NotFound, firstResponse.StatusCode);
+
+        using var secondRequest = new HttpRequestMessage(HttpMethod.Get, "/api/auth/sso/zpax-refresh");
+        secondRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
+        var secondResponse = await client.SendAsync(secondRequest, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NotFound, secondResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task ZpaxRefresh_without_bearer_token_returns_401()
+    {
+        using var client = _factory.CreateClient();
+
+        var response = await client.GetAsync("/api/auth/sso/zpax-refresh", TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }

@@ -75,6 +75,7 @@ public class AuthController(
         Response.Cookies.Delete("refreshToken");
         Response.Cookies.Delete("zpaxAccessToken", SsoStateCookieDeleteOptions);
         Response.Cookies.Delete("zpaxIdToken", SsoStateCookieDeleteOptions);
+        Response.Cookies.Delete("zpaxRefreshToken", SsoStateCookieDeleteOptions);
         return NoContent();
     }
 
@@ -243,6 +244,22 @@ public class AuthController(
             Response.Cookies.Delete("zpaxIdToken", SsoStateCookieDeleteOptions);
         }
 
+        if (!string.IsNullOrEmpty(identity.RefreshToken))
+        {
+            Response.Cookies.Append("zpaxRefreshToken", identity.RefreshToken, new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.Strict,
+                Path = SsoStateCookiePath,
+                Expires = DateTimeOffset.UtcNow.AddDays(15),
+            });
+        }
+        else
+        {
+            Response.Cookies.Delete("zpaxRefreshToken", SsoStateCookieDeleteOptions);
+        }
+
         var landingRoute = account.Role == Role.Customer ? "schedule-appointment" : "my-schedule";
         return Redirect($"https://localhost:5173/{landingRoute}");
     }
@@ -273,5 +290,40 @@ public class AuthController(
 
         Response.Cookies.Delete("zpaxAccessToken", SsoStateCookieDeleteOptions);
         return Ok(new ZpaxTokenResponse(token));
+    }
+
+    [HttpGet("sso/zpax-refresh")]
+    [Authorize]
+    public async Task<IActionResult> ZpaxRefresh()
+    {
+        var refreshToken = Request.Cookies["zpaxRefreshToken"];
+        if (string.IsNullOrEmpty(refreshToken))
+        {
+            return NotFound();
+        }
+
+        try
+        {
+            var result = await ssoClient.RefreshAccessToken(refreshToken);
+            if (result.RefreshToken is not null)
+            {
+                Response.Cookies.Append("zpaxRefreshToken", result.RefreshToken, new CookieOptions
+                {
+                    HttpOnly = true,
+                    Secure = true,
+                    SameSite = SameSiteMode.Strict,
+                    Path = SsoStateCookiePath,
+                    Expires = DateTimeOffset.UtcNow.AddDays(15),
+                });
+            }
+
+            return Ok(new ZpaxTokenResponse(result.AccessToken));
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "z-pax token refresh failed; treating the refresh token as invalid.");
+            Response.Cookies.Delete("zpaxRefreshToken", SsoStateCookieDeleteOptions);
+            return NotFound();
+        }
     }
 }

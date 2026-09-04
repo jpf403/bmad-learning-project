@@ -39,7 +39,7 @@ public class ZPaxSsoClientTests
 
         Assert.StartsWith("https://fake-zpax.test/connect/authorize?", url);
         Assert.Contains("client_id=test-client-id", url);
-        Assert.Equal("openid profile", QueryHelpers.ParseQuery(new Uri(url).Query)["scope"].ToString());
+        Assert.Equal("openid profile offline_access", QueryHelpers.ParseQuery(new Uri(url).Query)["scope"].ToString());
         Assert.Contains("response_type=code", url);
         Assert.Contains("redirect_uri=", url);
         Assert.Contains("state=the-state-value", url);
@@ -256,6 +256,33 @@ public class ZPaxSsoClientTests
         });
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => NewClient(handler).ExchangeCodeForIdentity("the-code"));
+    }
+
+    [Fact]
+    public async Task RefreshAccessToken_posts_grant_type_refresh_token_and_returns_the_new_access_token()
+    {
+        string? tokenRequestBody = null;
+        var handler = new FakeHttpMessageHandler(async request =>
+        {
+            tokenRequestBody = await request.Content!.ReadAsStringAsync();
+            return await JsonResponse(new { access_token = "the-refreshed-access-token", refresh_token = "the-rotated-refresh-token" });
+        });
+
+        var result = await NewClient(handler).RefreshAccessToken("the-old-refresh-token");
+
+        Assert.Equal("the-refreshed-access-token", result.AccessToken);
+        Assert.Equal("the-rotated-refresh-token", result.RefreshToken);
+        Assert.NotNull(tokenRequestBody);
+        Assert.Contains("grant_type=refresh_token", tokenRequestBody);
+        Assert.Contains("refresh_token=the-old-refresh-token", tokenRequestBody);
+    }
+
+    [Fact]
+    public async Task RefreshAccessToken_throws_when_zpax_rejects_the_token()
+    {
+        var handler = new FakeHttpMessageHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest)));
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => NewClient(handler).RefreshAccessToken("the-old-refresh-token"));
     }
 
     private class FakeHttpMessageHandler(Func<HttpRequestMessage, Task<HttpResponseMessage>> responder) : HttpMessageHandler
