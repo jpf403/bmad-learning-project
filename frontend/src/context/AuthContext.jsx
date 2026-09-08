@@ -8,7 +8,7 @@ import {
 
 const AuthContext = createContext(null)
 
-const ZPAX_REFRESH_INTERVAL_MS = 15 * 60 * 1000
+const ZPAX_REFRESH_INTERVAL_MS = 55 * 60 * 1000
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
@@ -34,6 +34,10 @@ export function AuthProvider({ children }) {
       const result = await refreshZpaxToken(accessTokenRef.current)
       if (result.ok) {
         setZpaxToken(result.zpaxAccessToken)
+      } else if (result.status === 401) {
+        clearInterval(intervalId)
+        setUser(null)
+        window.location.assign('/login')
       } else {
         setZpaxToken(null)
         clearInterval(intervalId)
@@ -68,6 +72,9 @@ export function AuthProvider({ children }) {
           if (cancelled) return
           if (zpaxRefreshResult.ok) {
             zpaxAccessToken = zpaxRefreshResult.zpaxAccessToken
+          } else if (zpaxRefreshResult.status === 401) {
+            window.location.assign('/login')
+            return
           }
         }
         setUser({

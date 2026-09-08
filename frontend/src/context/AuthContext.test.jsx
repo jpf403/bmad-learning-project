@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { AuthProvider, useAuth } from './AuthContext'
 
+// Mirrors AuthContext.jsx's ZPAX_REFRESH_INTERVAL_MS -- a 5-minute safety
+// margin ahead of z-pax's 60-minute access-token lifetime.
+const ZPAX_REFRESH_INTERVAL_MS = 55 * 60 * 1000
+
 function AuthProbe() {
   const { user, ready } = useAuth()
   if (!ready) return <div>Loading</div>
@@ -111,6 +115,54 @@ describe('AuthContext', () => {
         'Ready: john@example.com (Customer) zpax:the-bootstrap-refreshed-token',
       ),
     ).toBeInTheDocument()
+  })
+
+  it('forces a full sign-out and redirects to /login when the bootstrap fallback refresh gets a 401', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((url) => {
+      if (url.toString().endsWith('/api/auth/refresh')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ accessToken: 'new-access-token' }),
+        })
+      }
+      if (url.toString().endsWith('/api/auth/me')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            id: 1,
+            email: 'john@example.com',
+            firstName: 'John',
+            lastName: 'Smith',
+            role: 'Customer',
+          }),
+        })
+      }
+      if (url.toString().endsWith('/api/auth/sso/zpax-token')) {
+        return Promise.resolve({ ok: false, status: 404 })
+      }
+      if (url.toString().endsWith('/api/auth/sso/zpax-refresh')) {
+        return Promise.resolve({ ok: false, status: 401 })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+
+    const originalLocation = window.location
+    delete window.location
+    window.location = { ...originalLocation, assign: vi.fn() }
+
+    try {
+      render(
+        <AuthProvider>
+          <AuthProbe />
+        </AuthProvider>,
+      )
+
+      await vi.waitFor(() =>
+        expect(window.location.assign).toHaveBeenCalledWith('/login'),
+      )
+    } finally {
+      window.location = originalLocation
+    }
   })
 
   it('holds the z-pax access token in memory when the pickup endpoint returns one', async () => {
@@ -243,7 +295,7 @@ describe('AuthContext', () => {
       ),
     ).toBeInTheDocument()
 
-    await vi.advanceTimersByTimeAsync(15 * 60 * 1000)
+    await vi.advanceTimersByTimeAsync(ZPAX_REFRESH_INTERVAL_MS)
 
     expect(
       await screen.findByText(
@@ -297,7 +349,7 @@ describe('AuthContext', () => {
     ).toBeInTheDocument()
 
     const fetchSpy = vi.mocked(globalThis.fetch)
-    await vi.advanceTimersByTimeAsync(15 * 60 * 1000)
+    await vi.advanceTimersByTimeAsync(ZPAX_REFRESH_INTERVAL_MS)
 
     expect(
       await screen.findByText('Ready: john@example.com (Customer) zpax:none'),
@@ -308,12 +360,70 @@ describe('AuthContext', () => {
     ).length
     expect(refreshCallCount).toBe(1)
 
-    await vi.advanceTimersByTimeAsync(15 * 60 * 1000)
+    await vi.advanceTimersByTimeAsync(ZPAX_REFRESH_INTERVAL_MS)
 
     const refreshCallCountAfterSecondInterval = fetchSpy.mock.calls.filter(
       (call) => call[0].toString().endsWith('/api/auth/sso/zpax-refresh'),
     ).length
     expect(refreshCallCountAfterSecondInterval).toBe(1)
+  })
+
+  it('forces a full sign-out and redirects to /login when the scheduled refresh gets a 401 (z-pax rejected the refresh token)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((url) => {
+      if (url.toString().endsWith('/api/auth/refresh')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ accessToken: 'new-access-token' }),
+        })
+      }
+      if (url.toString().endsWith('/api/auth/me')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            id: 1,
+            email: 'john@example.com',
+            firstName: 'John',
+            lastName: 'Smith',
+            role: 'Customer',
+          }),
+        })
+      }
+      if (url.toString().endsWith('/api/auth/sso/zpax-token')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ zpaxAccessToken: 'the-zpax-access-token' }),
+        })
+      }
+      if (url.toString().endsWith('/api/auth/sso/zpax-refresh')) {
+        return Promise.resolve({ ok: false, status: 401 })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+
+    const originalLocation = window.location
+    delete window.location
+    window.location = { ...originalLocation, assign: vi.fn() }
+
+    try {
+      render(
+        <AuthProvider>
+          <AuthProbe />
+        </AuthProvider>,
+      )
+
+      expect(
+        await screen.findByText(
+          'Ready: john@example.com (Customer) zpax:the-zpax-access-token',
+        ),
+      ).toBeInTheDocument()
+
+      await vi.advanceTimersByTimeAsync(ZPAX_REFRESH_INTERVAL_MS)
+
+      expect(await screen.findByText('Ready: signed-out')).toBeInTheDocument()
+      expect(window.location.assign).toHaveBeenCalledWith('/login')
+    } finally {
+      window.location = originalLocation
+    }
   })
 
   it('never schedules further zpax-refresh calls for a password-only session, beyond the one bootstrap fallback attempt', async () => {
@@ -361,7 +471,7 @@ describe('AuthContext', () => {
     ).length
     expect(refreshCallCountAfterBootstrap).toBe(1)
 
-    await vi.advanceTimersByTimeAsync(20 * 60 * 1000)
+    await vi.advanceTimersByTimeAsync(ZPAX_REFRESH_INTERVAL_MS + 5 * 60 * 1000)
 
     const refreshCallCountAfterInterval = fetchSpy.mock.calls.filter((call) =>
       call[0].toString().endsWith('/api/auth/sso/zpax-refresh'),

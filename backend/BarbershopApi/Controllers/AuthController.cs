@@ -52,7 +52,7 @@ public class AuthController(
                 HttpOnly = true,
                 Secure = true,
                 SameSite = SameSiteMode.Strict,
-                Expires = DateTimeOffset.UtcNow.AddDays(15),
+                Expires = DateTimeOffset.UtcNow.AddDays(21),
             });
             return Ok(new LoginResponse(accessToken, account.Id, account.Email, account.FirstName, account.LastName, account.Role));
         }
@@ -216,7 +216,7 @@ public class AuthController(
             HttpOnly = true,
             Secure = true,
             SameSite = SameSiteMode.Strict,
-            Expires = DateTimeOffset.UtcNow.AddDays(15),
+            Expires = DateTimeOffset.UtcNow.AddDays(21),
         });
 
         Response.Cookies.Append("zpaxAccessToken", identity.AccessToken, new CookieOptions
@@ -236,7 +236,7 @@ public class AuthController(
                 Secure = true,
                 SameSite = SameSiteMode.Strict,
                 Path = SsoStateCookiePath,
-                Expires = DateTimeOffset.UtcNow.AddDays(15),
+                Expires = DateTimeOffset.UtcNow.AddDays(21),
             });
         }
         else
@@ -252,7 +252,7 @@ public class AuthController(
                 Secure = true,
                 SameSite = SameSiteMode.Strict,
                 Path = SsoStateCookiePath,
-                Expires = DateTimeOffset.UtcNow.AddDays(15),
+                Expires = DateTimeOffset.UtcNow.AddDays(21),
             });
         }
         else
@@ -313,7 +313,7 @@ public class AuthController(
                     Secure = true,
                     SameSite = SameSiteMode.Strict,
                     Path = SsoStateCookiePath,
-                    Expires = DateTimeOffset.UtcNow.AddDays(15),
+                    Expires = DateTimeOffset.UtcNow.AddDays(21),
                 });
             }
 
@@ -321,9 +321,14 @@ public class AuthController(
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "z-pax token refresh failed; treating the refresh token as invalid.");
+            logger.LogWarning(ex, "z-pax refresh token rejected; forcing a full sign-out of this app's own session.");
+            var accountId = int.Parse(User.FindFirstValue(JwtRegisteredClaimNames.Sub)!);
+            await authService.Logout(accountId);
+            Response.Cookies.Delete("refreshToken");
+            Response.Cookies.Delete("zpaxAccessToken", SsoStateCookieDeleteOptions);
+            Response.Cookies.Delete("zpaxIdToken", SsoStateCookieDeleteOptions);
             Response.Cookies.Delete("zpaxRefreshToken", SsoStateCookieDeleteOptions);
-            return NotFound();
+            return Problem(statusCode: StatusCodes.Status401Unauthorized, title: "Session expired. Please sign in again.");
         }
     }
 }

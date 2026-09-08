@@ -212,7 +212,9 @@ describe('RequireRole', () => {
           }),
         })
       }
-      return Promise.resolve({ ok: false, status: 401 })
+      // zpax-token/zpax-refresh: no pending z-pax token, benign 404 (not the
+      // force-logout-signaling 401 AuthContext now treats specially).
+      return Promise.resolve({ ok: false, status: 404 })
     })
 
     render(

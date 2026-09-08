@@ -47,7 +47,7 @@ export default function MyzpaxBanner() {
         }
         window.MyzpaxBanner.init({
           getToken: () => tokenRef.current,
-          currentAppId: CURRENT_APP_ID,
+          appId: CURRENT_APP_ID,
           position: 'static',
           onLogout: async () => {
             if (loggingOutRef.current) {

@@ -93,7 +93,7 @@ This document provides the complete epic and story breakdown for the Barbershop 
 **Auth & session mechanics (AD-2, AD-3):**
 - Every protected endpoint independently re-derives Role + SessionVersion from the DB per request — never trusts the JWT role claim as-is.
 - Access token: JWT, 60-min expiry, held in memory only, sent as `Authorization: Bearer`.
-- Refresh token: JWT, 15-day expiry, carries SessionVersion, lives in an HttpOnly+Secure+SameSite=Strict cookie, never read by JS.
+- Refresh token: JWT, 21-day expiry, carries SessionVersion, lives in an HttpOnly+Secure+SameSite=Strict cookie, never read by JS.
 - `POST /api/auth/refresh` validates SessionVersion and mints a new access token; called on access-token expiry and on every fresh page load.
 - `GET /api/auth/me` returns exactly `{ id, email, firstName, lastName, role }` — the one shared "who am I" shape.
 - Fixed status codes: 401 (unauthenticated / session-invalid), 403 (authenticated, wrong role) — never invented ad hoc per controller.
@@ -968,13 +968,20 @@ the current z-pax access-token lifetime (20 minutes today) and adopts the
 returned token transparently, with no visible interruption to the banner
 (FR49)
 
-**Given** the refresh call fails — no cookie present, or z-pax rejects the
-refresh token (e.g. its 60-minute lifetime, in effect during this story,
-has elapsed)
+**Given** the refresh call fails
 **When** this happens
-**Then** the banner degrades to its own built-in fallback strip exactly as
-it does today when no token is available — no error surfaced, and this
-app's own session is completely unaffected either way (FR49)
+**Then** the outcome depends on why it failed (revised mid-story,
+2026-09-04 — this is two distinct cases, not one): (a) no
+`zpaxRefreshToken` cookie present at all (a password-only session, or one
+that never obtained one) — the banner degrades to its own built-in
+fallback strip exactly as it does today when no token is available, no
+error surfaced, this app's own session unaffected; (b) a cookie was
+present but z-pax's token endpoint actually rejected it (e.g. its
+lifetime has elapsed) — `GET /api/auth/sso/zpax-refresh` forces a full
+sign-out of this app's own session (same revocation as
+`POST /api/auth/logout`) and returns 401 so the frontend redirects to
+`/login`, rather than silently degrading the banner while leaving the
+session running (FR49)
 
 **Given** automated tests should never depend on a live external service
 (mirrors AD-4)
@@ -989,7 +996,7 @@ AD-4)
 live z-pax SSO session
 **When** this story is marked done
 **Then** z-pax's configuration for this app has been changed to a
-60-minute access-token lifetime and a 15-day refresh-token lifetime,
+60-minute access-token lifetime and a 21-day refresh-token lifetime,
 matching this app's own token lifetimes — this alignment happens at the
 end of the story, not before, so the refresh mechanism is first proven
 against z-pax's original short-lived configuration (FR49)
