@@ -30,6 +30,16 @@ export default function NavBar() {
   const currentPath = normalizePath(location.pathname)
   const { user, logout } = useAuth()
 
+  // Account editing is always off-limits for an SSO-linked account (durable
+  // server-side rule -- see AccountService.UpdateOwnProfile). Logout instead
+  // defers to the myzPAX banner's own logout control while the banner is up,
+  // re-enabling itself the moment the banner degrades (AC #5(a)) so an
+  // SSO user is never left with no way to sign out at all.
+  const isSsoLinked = Boolean(user?.isSsoLinked)
+  const bannerHealthy = Boolean(user?.zpaxAccessToken)
+  const accountDisabled = isSsoLinked
+  const logoutDisabled = isSsoLinked && bannerHealthy
+
   const handleLogout = async () => {
     await logoutAccount(user.accessToken)
     logout()
@@ -124,12 +134,14 @@ export default function NavBar() {
                 <DropdownMenu.Item
                   className="nav-bar__dropdown-item"
                   onSelect={() => navigate('/account')}
+                  disabled={accountDisabled}
                 >
                   Account
                 </DropdownMenu.Item>
                 <DropdownMenu.Item
                   className="nav-bar__dropdown-item"
                   onSelect={handleLogout}
+                  disabled={logoutDisabled}
                 >
                   Logout
                 </DropdownMenu.Item>

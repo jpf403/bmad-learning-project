@@ -31,7 +31,11 @@ function SignInThenNavigate({ user, to }) {
   return null
 }
 
-function renderGuarded({ signedIn = false, roles = ['Barber', 'Admin'] } = {}) {
+function renderGuarded({
+  signedIn = false,
+  roles = ['Barber', 'Admin'],
+  blockSso = false,
+} = {}) {
   return render(
     <AuthProvider>
       <MemoryRouter initialEntries={['/entry']}>
@@ -48,7 +52,7 @@ function renderGuarded({ signedIn = false, roles = ['Barber', 'Admin'] } = {}) {
           <Route
             path="/my-schedule"
             element={
-              <RequireRole roles={roles}>
+              <RequireRole roles={roles} blockSso={blockSso}>
                 <div>Protected Content</div>
               </RequireRole>
             }
@@ -169,6 +173,60 @@ describe('RequireRole', () => {
     expect(await screen.findByText('Login Stub')).toBeInTheDocument()
   })
 
+  it('redirects to / when blockSso is set and the fresh /me reports an SSO-linked account', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((url) => {
+      if (url.toString().endsWith('/api/auth/me')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            id: 1,
+            email: 'john@example.com',
+            firstName: 'John',
+            lastName: 'Smith',
+            role: 'Barber',
+            isSsoLinked: true,
+          }),
+        })
+      }
+      return Promise.resolve({ ok: false, status: 401 })
+    })
+
+    renderGuarded({
+      signedIn: true,
+      roles: ['Barber', 'Admin'],
+      blockSso: true,
+    })
+
+    expect(await screen.findByText('Home Stub')).toBeInTheDocument()
+  })
+
+  it('renders children when blockSso is set but the account is not SSO-linked', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((url) => {
+      if (url.toString().endsWith('/api/auth/me')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            id: 1,
+            email: 'john@example.com',
+            firstName: 'John',
+            lastName: 'Smith',
+            role: 'Barber',
+            isSsoLinked: false,
+          }),
+        })
+      }
+      return Promise.resolve({ ok: false, status: 401 })
+    })
+
+    renderGuarded({
+      signedIn: true,
+      roles: ['Barber', 'Admin'],
+      blockSso: true,
+    })
+
+    expect(await screen.findByText('Protected Content')).toBeInTheDocument()
+  })
+
   it("falls back to '/' when the wrong-role redirect target is an unrecognized role", async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation((url) => {
       if (url.toString().endsWith('/api/auth/me')) {
@@ -212,7 +270,9 @@ describe('RequireRole', () => {
           }),
         })
       }
-      return Promise.resolve({ ok: false, status: 401 })
+      // zpax-token/zpax-refresh: no pending z-pax token, benign 404 (not the
+      // force-logout-signaling 401 AuthContext now treats specially).
+      return Promise.resolve({ ok: false, status: 404 })
     })
 
     render(

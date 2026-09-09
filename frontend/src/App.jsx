@@ -30,7 +30,7 @@ function App() {
             <Route
               path="/account"
               element={
-                <RequireRole roles={['Customer', 'Barber', 'Admin']}>
+                <RequireRole roles={['Customer', 'Barber', 'Admin']} blockSso>
                   <Account />
                 </RequireRole>
               }

@@ -87,7 +87,7 @@ describe('MyzpaxBanner', () => {
     expect(window.MyzpaxBanner.init).toHaveBeenCalledTimes(1)
     expect(window.MyzpaxBanner.init).toHaveBeenCalledWith({
       getToken: expect.any(Function),
-      currentAppId: 'barbershop_demo',
+      appId: 'barbershop_demo',
       position: 'static',
       onLogout: expect.any(Function),
     })

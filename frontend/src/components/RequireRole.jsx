@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { getCurrentUser } from '../api/AuthApi'
 import { LANDING_ROUTE } from '../landingRoutes'
 
-export default function RequireRole({ roles, children }) {
+export default function RequireRole({ roles, blockSso = false, children }) {
   const { user, ready } = useAuth()
   const [check, setCheck] = useState({ status: 'pending' })
 
@@ -27,6 +27,8 @@ export default function RequireRole({ roles, children }) {
         setCheck({ status: 'unauthenticated' })
       } else if (!roles.includes(result.identity.role)) {
         setCheck({ status: 'wrong-role', role: result.identity.role })
+      } else if (blockSso && result.identity.isSsoLinked) {
+        setCheck({ status: 'sso-blocked' })
       } else {
         setCheck({ status: 'allowed' })
       }
@@ -47,5 +49,6 @@ export default function RequireRole({ roles, children }) {
     return <Navigate to="/login" replace />
   if (check.status === 'wrong-role')
     return <Navigate to={LANDING_ROUTE[check.role] ?? '/'} replace />
+  if (check.status === 'sso-blocked') return <Navigate to="/" replace />
   return children
 }

@@ -157,7 +157,7 @@ public class AuthService(
             issuer: "BarbershopApi",
             audience: TokenAudiences.Refresh,
             claims: claims,
-            expires: DateTime.UtcNow.AddDays(15),
+            expires: DateTime.UtcNow.AddDays(21),
             signingCredentials: SigningCredentials());
         return new JwtSecurityTokenHandler().WriteToken(token);
     }

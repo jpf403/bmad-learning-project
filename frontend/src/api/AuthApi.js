@@ -100,6 +100,27 @@ export async function getZpaxToken(accessToken) {
   return { ok: true, zpaxAccessToken: body.zpaxAccessToken }
 }
 
+export async function refreshZpaxToken(accessToken) {
+  let response
+  try {
+    response = await fetch(`${API_BASE_URL}/api/auth/sso/zpax-refresh`, {
+      credentials: 'include',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+  } catch {
+    return { ok: false, status: null }
+  }
+
+  if (!response.ok) {
+    return { ok: false, status: response.status }
+  }
+  const body = await response.json().catch(() => null)
+  if (body === null) {
+    return { ok: false, status: response.status }
+  }
+  return { ok: true, zpaxAccessToken: body.zpaxAccessToken }
+}
+
 export async function refreshSession() {
   let response
   try {

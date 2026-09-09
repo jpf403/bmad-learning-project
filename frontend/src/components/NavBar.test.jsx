@@ -30,8 +30,10 @@ function renderNavBar({
   signedIn = false,
   role = 'Customer',
   initialEntries = ['/'],
+  isSsoLinked = false,
+  zpaxAccessToken = null,
 } = {}) {
-  const user = { ...SIGNED_IN_USER, role }
+  const user = { ...SIGNED_IN_USER, role, isSsoLinked, zpaxAccessToken }
 
   return render(
     <AuthProvider>
@@ -244,6 +246,79 @@ describe('NavBar', () => {
       expect(
         await screen.findByRole('button', { name: 'Sign In' }),
       ).toBeInTheDocument()
+    })
+
+    describe('SSO-linked account controls', () => {
+      it('disables the Account item for an SSO-linked account, but Logout stays enabled once the banner is not healthy', async () => {
+        const user = userEvent.setup()
+        renderNavBar({
+          signedIn: true,
+          isSsoLinked: true,
+          zpaxAccessToken: null,
+        })
+
+        await user.click(screen.getByRole('button', { name: 'Account menu' }))
+
+        expect(
+          await screen.findByRole('menuitem', { name: 'Account' }),
+        ).toHaveAttribute('data-disabled')
+        expect(
+          screen.getByRole('menuitem', { name: 'Logout' }),
+        ).not.toHaveAttribute('data-disabled')
+      })
+
+      it('disables both Account and Logout for an SSO-linked account while the banner is healthy', async () => {
+        const user = userEvent.setup()
+        renderNavBar({
+          signedIn: true,
+          isSsoLinked: true,
+          zpaxAccessToken: 'the-zpax-access-token',
+        })
+
+        await user.click(screen.getByRole('button', { name: 'Account menu' }))
+
+        expect(
+          await screen.findByRole('menuitem', { name: 'Account' }),
+        ).toHaveAttribute('data-disabled')
+        expect(
+          screen.getByRole('menuitem', { name: 'Logout' }),
+        ).toHaveAttribute('data-disabled')
+      })
+
+      it('leaves Account and Logout enabled for a password-only account even with isSsoLinked unset', async () => {
+        const user = userEvent.setup()
+        renderNavBar({ signedIn: true })
+
+        await user.click(screen.getByRole('button', { name: 'Account menu' }))
+
+        expect(
+          await screen.findByRole('menuitem', { name: 'Account' }),
+        ).not.toHaveAttribute('data-disabled')
+        expect(
+          screen.getByRole('menuitem', { name: 'Logout' }),
+        ).not.toHaveAttribute('data-disabled')
+      })
+
+      it('does not navigate to /account when the disabled Account item is clicked', async () => {
+        const user = userEvent.setup()
+        renderNavBar({
+          signedIn: true,
+          isSsoLinked: true,
+          zpaxAccessToken: null,
+        })
+
+        await user.click(screen.getByRole('button', { name: 'Account menu' }))
+        await user.click(
+          await screen.findByRole('menuitem', { name: 'Account' }),
+        )
+
+        // A disabled item never selects, so the menu stays open rather than
+        // closing/navigating -- the item (and its disabled state) is still
+        // right there afterward.
+        expect(
+          screen.getByRole('menuitem', { name: 'Account' }),
+        ).toHaveAttribute('data-disabled')
+      })
     })
 
     // A full browser navigation (not client-side routing) on logout, so any

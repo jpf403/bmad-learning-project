@@ -31,6 +31,11 @@ public class AccountService(IAccountRepository accountRepository, IPasswordHashe
         var account = await accountRepository.FindById(accountId)
             ?? throw new InvalidOperationException("Account not found for an authenticated caller.");
 
+        if (account.SsoProvider is not null)
+        {
+            throw new SsoAccountProtectedException();
+        }
+
         string? newPasswordHash = null;
         if (!string.IsNullOrEmpty(newPassword))
         {
