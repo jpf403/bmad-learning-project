@@ -39,6 +39,11 @@ export default function NavBar() {
   const bannerHealthy = Boolean(user?.zpaxAccessToken)
   const accountDisabled = isSsoLinked
   const logoutDisabled = isSsoLinked && bannerHealthy
+  // The trigger itself can only be disabled when *every* item inside it is
+  // disabled -- Account is always off once linked, but Logout stays enabled
+  // as the fallback once the banner degrades, so disabling the trigger
+  // whenever isSsoLinked alone is true would also block that fallback.
+  const dropdownDisabled = accountDisabled && logoutDisabled
 
   const handleLogout = async () => {
     await logoutAccount(user.accessToken)
@@ -110,10 +115,11 @@ export default function NavBar() {
         </DropdownMenu.Root>
         {user ? (
           <DropdownMenu.Root>
-            <DropdownMenu.Trigger asChild>
+            <DropdownMenu.Trigger asChild disabled={dropdownDisabled}>
               <button
                 className="nav-bar__profile-button"
                 aria-label="Account menu"
+                disabled={dropdownDisabled}
               >
                 <svg
                   viewBox="0 0 24 24"
