@@ -35,7 +35,6 @@ public class ZPaxSsoClient(HttpClient httpClient, IOptions<ZPaxSsoOptions> ssoOp
             ["redirect_uri"] = options.RedirectUri,
             ["client_id"] = options.ClientId,
             ["client_secret"] = options.ClientSecret,
-            // [DEBUG-TEMP] scope omitted from the token request while debugging with z-pax
         });
 
         var tokenResponse = await httpClient.PostAsync(options.TokenEndpoint, tokenRequest);
@@ -99,10 +98,6 @@ public class ZPaxSsoClient(HttpClient httpClient, IOptions<ZPaxSsoOptions> ssoOp
             logger.LogWarning("z-pax token endpoint response is missing a refresh_token.");
         }
 
-        // [DEBUG-TEMP] print the raw tokens while diagnosing why zpaxIdToken/zpaxRefreshToken
-        // aren't showing up as cookies after a live SSO sign-in -- remove once resolved.
-        logger.LogInformation("[DEBUG-TEMP] z-pax token exchange response: id_token={IdToken} refresh_token={RefreshToken}", token.IdToken, token.RefreshToken);
-
         return new SsoIdentity(userInfo.Email, userInfo.FirstName, userInfo.LastName, userInfo.Id.Value.ToString(), token.AccessToken, token.IdToken ?? string.Empty, token.RefreshToken ?? string.Empty);
     }
 
@@ -133,9 +128,6 @@ public class ZPaxSsoClient(HttpClient httpClient, IOptions<ZPaxSsoOptions> ssoOp
             logger.LogWarning("z-pax token endpoint response is missing an access token.");
             throw new InvalidOperationException("z-pax token endpoint response is missing an access token.");
         }
-
-        // [DEBUG-TEMP] print the raw tokens while diagnosing z-pax's live token behavior -- remove once resolved.
-        logger.LogInformation("[DEBUG-TEMP] z-pax token refresh response: refresh_token={RefreshToken}", token.RefreshToken);
 
         return new SsoRefreshResult(token.AccessToken, token.RefreshToken);
     }

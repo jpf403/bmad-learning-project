@@ -145,6 +145,25 @@ public class AccountServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task UpdateOwnProfile_on_sso_linked_account_throws_SsoAccountProtectedException()
+    {
+        await using var context = _factory.CreateDbContext();
+        var repository = new AccountRepository(context);
+        var service = new AccountService(repository, _passwordHasher, NewBookingService(context, repository));
+        var account = NewAccount(email: "linked@example.com");
+        account.SsoProvider = "zpax";
+        account.SsoSubjectId = "sub-1001";
+        var created = await repository.Create(account);
+
+        await Assert.ThrowsAsync<SsoAccountProtectedException>(
+            () => service.UpdateOwnProfile(created.Id, "Attempted Update", "Smith", null, null));
+
+        await using var verifyContext = _factory.CreateDbContext();
+        var reloaded = await new AccountRepository(verifyContext).FindById(created.Id);
+        Assert.Equal("John", reloaded!.FirstName);
+    }
+
+    [Fact]
     public async Task UpdateOwnProfile_on_stale_RowVersion_throws_AccountConflictException()
     {
         await using var contextA = _factory.CreateDbContext();

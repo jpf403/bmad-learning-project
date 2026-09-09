@@ -54,7 +54,7 @@ public class AuthController(
                 SameSite = SameSiteMode.Strict,
                 Expires = DateTimeOffset.UtcNow.AddDays(21),
             });
-            return Ok(new LoginResponse(accessToken, account.Id, account.Email, account.FirstName, account.LastName, account.Role));
+            return Ok(new LoginResponse(accessToken, account.Id, account.Email, account.FirstName, account.LastName, account.Role, account.SsoProvider is not null));
         }
         catch (InvalidCredentialsException)
         {
@@ -84,7 +84,7 @@ public class AuthController(
     public IActionResult Me()
     {
         var account = (Account)HttpContext.Items["Account"]!;
-        return Ok(new MeResponse(account.Id, account.Email, account.FirstName, account.LastName, account.Role));
+        return Ok(new MeResponse(account.Id, account.Email, account.FirstName, account.LastName, account.Role, account.SsoProvider is not null));
     }
 
     [HttpPost("refresh")]
@@ -297,7 +297,7 @@ public class AuthController(
     public async Task<IActionResult> ZpaxRefresh()
     {
         var refreshToken = Request.Cookies["zpaxRefreshToken"];
-        if (string.IsNullOrEmpty(refreshToken))
+        if (string.IsNullOrWhiteSpace(refreshToken))
         {
             return NotFound();
         }
@@ -305,7 +305,7 @@ public class AuthController(
         try
         {
             var result = await ssoClient.RefreshAccessToken(refreshToken);
-            if (result.RefreshToken is not null)
+            if (!string.IsNullOrWhiteSpace(result.RefreshToken))
             {
                 Response.Cookies.Append("zpaxRefreshToken", result.RefreshToken, new CookieOptions
                 {

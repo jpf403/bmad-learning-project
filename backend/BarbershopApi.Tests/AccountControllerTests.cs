@@ -144,6 +144,31 @@ public class AccountControllerTests : IDisposable
     }
 
     [Fact]
+    public async Task UpdateMe_on_sso_linked_account_returns_403_and_does_not_change_the_name()
+    {
+        using var client = _factory.CreateClient();
+        var accessToken = await RegisterAndLogin(client);
+
+        await using (var context = _factory.CreateDbContext())
+        {
+            var repository = new AccountRepository(context);
+            var account = await repository.FindByEmail("john@example.com");
+            account!.SsoProvider = "zpax";
+            account.SsoSubjectId = "sub-1001";
+            await repository.Update(account);
+        }
+
+        var response = await client.SendAsync(
+            UpdateMeRequest(new { FirstName = "Attempted", LastName = "Update" }, accessToken), TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+
+        await using var verifyContext = _factory.CreateDbContext();
+        var reloaded = await new AccountRepository(verifyContext).FindByEmail("john@example.com");
+        Assert.Equal("John", reloaded!.FirstName);
+    }
+
+    [Fact]
     public async Task UpdateMe_with_new_password_allows_login_with_new_password_and_rejects_old()
     {
         using var client = _factory.CreateClient();

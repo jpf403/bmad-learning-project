@@ -271,9 +271,32 @@ public class AuthControllerTests : IDisposable
         Assert.NotNull(body);
         Assert.False(string.IsNullOrWhiteSpace(body.AccessToken));
         Assert.Equal("john@example.com", body.Email);
+        Assert.False(body.IsSsoLinked);
 
         Assert.True(response.Headers.TryGetValues("Set-Cookie", out var cookies));
         Assert.Contains(cookies!, c => c.StartsWith("refreshToken=") && c.Contains("httponly", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task Me_after_sso_callback_reports_IsSsoLinked_true()
+    {
+        using var client = NewSsoClient();
+        var loginResponse = await client.GetAsync("/api/auth/sso/login", TestContext.Current.CancellationToken);
+        var state = ExtractState(loginResponse);
+        await client.GetAsync($"/api/auth/sso/callback?code=anything&state={state}", TestContext.Current.CancellationToken);
+
+        using var scope = _factory.Services.CreateScope();
+        var authService = scope.ServiceProvider.GetRequiredService<IAuthService>();
+        var identity = FakeSsoClient.NextIdentity;
+        var (_, bearerToken, _) = await authService.LoginViaSso(identity.Email, identity.FirstName, identity.LastName, identity.SubjectId);
+
+        using var meRequest = new HttpRequestMessage(HttpMethod.Get, "/api/auth/me");
+        meRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
+        var meResponse = await client.SendAsync(meRequest, TestContext.Current.CancellationToken);
+
+        var body = await meResponse.Content.ReadFromJsonAsync<MeResponse>(LoginResponseJsonOptions, TestContext.Current.CancellationToken);
+        Assert.NotNull(body);
+        Assert.True(body.IsSsoLinked);
     }
 
     [Fact]
@@ -815,22 +838,29 @@ public class AuthControllerTests : IDisposable
         var identity = FakeSsoClient.NextIdentity;
         var (_, bearerToken, _) = await authService.LoginViaSso(identity.Email, identity.FirstName, identity.LastName, identity.SubjectId);
 
+        var originalNextRefreshResult = FakeSsoClient.NextRefreshResult;
         FakeSsoClient.NextRefreshResult = new SsoRefreshResult("fake-refreshed-zpax-access-token", "fake-rotated-refresh-token");
+        try
+        {
+            using var refreshRequest = new HttpRequestMessage(HttpMethod.Get, "/api/auth/sso/zpax-refresh");
+            refreshRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
+            var response = await client.SendAsync(refreshRequest, TestContext.Current.CancellationToken);
 
-        using var refreshRequest = new HttpRequestMessage(HttpMethod.Get, "/api/auth/sso/zpax-refresh");
-        refreshRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
-        var response = await client.SendAsync(refreshRequest, TestContext.Current.CancellationToken);
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<ZpaxTokenResponse>(LoginResponseJsonOptions, TestContext.Current.CancellationToken);
-        Assert.NotNull(body);
-        Assert.Equal("fake-refreshed-zpax-access-token", body.ZpaxAccessToken);
-        Assert.True(response.Headers.TryGetValues("Set-Cookie", out var cookies));
-        Assert.Contains(cookies!, c => c.StartsWith("zpaxRefreshToken=fake-rotated-refresh-token") &&
-            c.Contains("httponly", StringComparison.OrdinalIgnoreCase) &&
-            c.Contains("secure", StringComparison.OrdinalIgnoreCase) &&
-            c.Contains("samesite=strict", StringComparison.OrdinalIgnoreCase) &&
-            c.Contains("path=/api/auth/sso", StringComparison.OrdinalIgnoreCase));
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var body = await response.Content.ReadFromJsonAsync<ZpaxTokenResponse>(LoginResponseJsonOptions, TestContext.Current.CancellationToken);
+            Assert.NotNull(body);
+            Assert.Equal("fake-refreshed-zpax-access-token", body.ZpaxAccessToken);
+            Assert.True(response.Headers.TryGetValues("Set-Cookie", out var cookies));
+            Assert.Contains(cookies!, c => c.StartsWith("zpaxRefreshToken=fake-rotated-refresh-token") &&
+                c.Contains("httponly", StringComparison.OrdinalIgnoreCase) &&
+                c.Contains("secure", StringComparison.OrdinalIgnoreCase) &&
+                c.Contains("samesite=strict", StringComparison.OrdinalIgnoreCase) &&
+                c.Contains("path=/api/auth/sso", StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            FakeSsoClient.NextRefreshResult = originalNextRefreshResult;
+        }
     }
 
     [Fact]
@@ -885,28 +915,43 @@ public class AuthControllerTests : IDisposable
         var identity = FakeSsoClient.NextIdentity;
         var (account, bearerToken, _) = await authService.LoginViaSso(identity.Email, identity.FirstName, identity.LastName, identity.SubjectId);
 
+        var originalThrowOnRefresh = FakeSsoClient.ThrowOnRefresh;
         FakeSsoClient.ThrowOnRefresh = new InvalidOperationException("z-pax rejected the refresh token");
+        try
+        {
+            using var refreshRequest = new HttpRequestMessage(HttpMethod.Get, "/api/auth/sso/zpax-refresh");
+            refreshRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
+            var response = await client.SendAsync(refreshRequest, TestContext.Current.CancellationToken);
 
-        using var refreshRequest = new HttpRequestMessage(HttpMethod.Get, "/api/auth/sso/zpax-refresh");
-        refreshRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
-        var response = await client.SendAsync(refreshRequest, TestContext.Current.CancellationToken);
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+            Assert.True(response.Headers.TryGetValues("Set-Cookie", out var cookies));
+            Assert.Contains(cookies!, c => c.StartsWith("refreshToken=") && c.Contains("expires=", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(cookies!, c => c.StartsWith("zpaxAccessToken=") &&
+                c.Contains("expires=", StringComparison.OrdinalIgnoreCase) &&
+                c.Contains("path=/api/auth/sso", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(cookies!, c => c.StartsWith("zpaxIdToken=") &&
+                c.Contains("expires=", StringComparison.OrdinalIgnoreCase) &&
+                c.Contains("path=/api/auth/sso", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(cookies!, c => c.StartsWith("zpaxRefreshToken=") &&
+                c.Contains("expires=", StringComparison.OrdinalIgnoreCase) &&
+                c.Contains("path=/api/auth/sso", StringComparison.OrdinalIgnoreCase));
 
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        Assert.True(response.Headers.TryGetValues("Set-Cookie", out var cookies));
-        Assert.Contains(cookies!, c => c.StartsWith("refreshToken=") && c.Contains("expires=", StringComparison.OrdinalIgnoreCase));
-        Assert.Contains(cookies!, c => c.StartsWith("zpaxRefreshToken=") && c.Contains("expires=", StringComparison.OrdinalIgnoreCase));
+            await using var context = _factory.CreateDbContext();
+            var repository = new AccountRepository(context);
+            var reloaded = await repository.FindById(account.Id);
+            Assert.NotNull(reloaded);
+            Assert.Equal(account.SessionVersion + 1, reloaded.SessionVersion);
 
-        await using var context = _factory.CreateDbContext();
-        var repository = new AccountRepository(context);
-        var reloaded = await repository.FindById(account.Id);
-        Assert.NotNull(reloaded);
-        Assert.Equal(account.SessionVersion + 1, reloaded.SessionVersion);
+            using var meRequest = new HttpRequestMessage(HttpMethod.Get, "/api/auth/me");
+            meRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
+            var meResponse = await client.SendAsync(meRequest, TestContext.Current.CancellationToken);
 
-        using var meRequest = new HttpRequestMessage(HttpMethod.Get, "/api/auth/me");
-        meRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
-        var meResponse = await client.SendAsync(meRequest, TestContext.Current.CancellationToken);
-
-        Assert.Equal(HttpStatusCode.Unauthorized, meResponse.StatusCode);
+            Assert.Equal(HttpStatusCode.Unauthorized, meResponse.StatusCode);
+        }
+        finally
+        {
+            FakeSsoClient.ThrowOnRefresh = originalThrowOnRefresh;
+        }
     }
 
     [Fact]

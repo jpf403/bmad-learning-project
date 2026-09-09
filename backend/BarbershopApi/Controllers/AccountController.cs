@@ -20,7 +20,11 @@ public class AccountController(IAccountService accountService) : ControllerBase
         try
         {
             var updated = await accountService.UpdateOwnProfile(account.Id, request.FirstName, request.LastName, request.NewPassword, request.CurrentPassword);
-            return Ok(new MeResponse(updated.Id, updated.Email, updated.FirstName, updated.LastName, updated.Role));
+            return Ok(new MeResponse(updated.Id, updated.Email, updated.FirstName, updated.LastName, updated.Role, updated.SsoProvider is not null));
+        }
+        catch (SsoAccountProtectedException)
+        {
+            return Problem(statusCode: StatusCodes.Status403Forbidden, title: "Account information cannot be changed for SSO-signed-in accounts.");
         }
         catch (InvalidCurrentPasswordException)
         {
