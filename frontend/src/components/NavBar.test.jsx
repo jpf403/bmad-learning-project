@@ -249,13 +249,17 @@ describe('NavBar', () => {
     })
 
     describe('SSO-linked account controls', () => {
-      it('disables the Account item for an SSO-linked account, but Logout stays enabled once the banner is not healthy', async () => {
+      it('disables the Account item for an SSO-linked account, but Logout and the trigger stay enabled once the banner is not healthy', async () => {
         const user = userEvent.setup()
         renderNavBar({
           signedIn: true,
           isSsoLinked: true,
           zpaxAccessToken: null,
         })
+
+        expect(
+          screen.getByRole('button', { name: 'Account menu' }),
+        ).not.toBeDisabled()
 
         await user.click(screen.getByRole('button', { name: 'Account menu' }))
 
@@ -267,7 +271,7 @@ describe('NavBar', () => {
         ).not.toHaveAttribute('data-disabled')
       })
 
-      it('disables both Account and Logout for an SSO-linked account while the banner is healthy', async () => {
+      it('disables the account-menu trigger itself once every item inside it is disabled (SSO-linked, banner healthy)', async () => {
         const user = userEvent.setup()
         renderNavBar({
           signedIn: true,
@@ -275,19 +279,23 @@ describe('NavBar', () => {
           zpaxAccessToken: 'the-zpax-access-token',
         })
 
-        await user.click(screen.getByRole('button', { name: 'Account menu' }))
+        const trigger = screen.getByRole('button', { name: 'Account menu' })
+        expect(trigger).toBeDisabled()
 
-        expect(
-          await screen.findByRole('menuitem', { name: 'Account' }),
-        ).toHaveAttribute('data-disabled')
-        expect(
-          screen.getByRole('menuitem', { name: 'Logout' }),
-        ).toHaveAttribute('data-disabled')
+        await user.click(trigger)
+
+        // A disabled native button never opens the dropdown at all.
+        expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+        expect(screen.queryByRole('menuitem')).not.toBeInTheDocument()
       })
 
-      it('leaves Account and Logout enabled for a password-only account even with isSsoLinked unset', async () => {
+      it('leaves Account, Logout, and the trigger enabled for a password-only account even with isSsoLinked unset', async () => {
         const user = userEvent.setup()
         renderNavBar({ signedIn: true })
+
+        expect(
+          screen.getByRole('button', { name: 'Account menu' }),
+        ).not.toBeDisabled()
 
         await user.click(screen.getByRole('button', { name: 'Account menu' }))
 
