@@ -14,7 +14,6 @@
   gap: var(--spacing-4);
   padding: var(--spacing-12) var(--spacing-gutter-mobile);
   background: var(--color-background);
-  z-index: 1;
 }
 
 .home__headline {
@@ -55,6 +54,12 @@
   .home__hero-white {
     flex: 1 1 55%;
     padding: var(--spacing-16) var(--spacing-gutter-desktop);
+    /* Only needed once the teal panel's negative margin (below) makes it
+       overlap this panel -- keeping it out of the base rule stops it from
+       leaking into the root stacking context and covering the mobile nav's
+       portaled dropdown, which sits just below the header with no z-index
+       of its own. */
+    z-index: 1;
   }
 
   .home__hero-teal {

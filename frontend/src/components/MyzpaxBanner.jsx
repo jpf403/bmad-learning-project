@@ -58,7 +58,7 @@ export default function MyzpaxBanner() {
               await logoutAccount(accessTokenRef.current)
             }
             logoutRef.current()
-            window.location.assign(`${API_BASE_URL}/api/auth/sso/logout`)
+            // window.location.assign(`${API_BASE_URL}/api/auth/sso/logout`)
           },
         })
       },

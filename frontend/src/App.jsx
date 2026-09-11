@@ -1,5 +1,5 @@
 import { Routes, Route } from 'react-router'
-import { AuthProvider } from './context/AuthContext'
+import { AuthProvider, useAuth } from './context/AuthContext'
 import MyzpaxBanner from './components/MyzpaxBanner'
 import NavBar from './components/NavBar'
 import Footer from './components/Footer'
@@ -14,6 +14,51 @@ import MySchedule from './pages/MySchedule'
 import AdminPanel from './pages/AdminPanel'
 import './App.css'
 
+function AppRoutes() {
+  const { user } = useAuth()
+
+  return (
+    <Routes>
+      <Route path="/" element={<Home isSignedIn={Boolean(user)} />} />
+      <Route path="/about" element={<About />} />
+      <Route path="/register" element={<Register />} />
+      <Route path="/login" element={<Login />} />
+      <Route
+        path="/account"
+        element={
+          <RequireRole roles={['Customer', 'Barber', 'Admin']} blockSso>
+            <Account />
+          </RequireRole>
+        }
+      />
+      <Route
+        path="/schedule-appointment"
+        element={
+          <RequireRole roles={['Customer', 'Barber', 'Admin']}>
+            <ScheduleAppointment />
+          </RequireRole>
+        }
+      />
+      <Route
+        path="/my-schedule"
+        element={
+          <RequireRole roles={['Barber', 'Admin']}>
+            <MySchedule />
+          </RequireRole>
+        }
+      />
+      <Route
+        path="/admin"
+        element={
+          <RequireRole roles={['Admin']}>
+            <AdminPanel />
+          </RequireRole>
+        }
+      />
+    </Routes>
+  )
+}
+
 function App() {
   return (
     <AuthProvider>
@@ -22,44 +67,7 @@ function App() {
         <NavBar />
 
         <main>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/about" element={<About />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/login" element={<Login />} />
-            <Route
-              path="/account"
-              element={
-                <RequireRole roles={['Customer', 'Barber', 'Admin']} blockSso>
-                  <Account />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/schedule-appointment"
-              element={
-                <RequireRole roles={['Customer', 'Barber', 'Admin']}>
-                  <ScheduleAppointment />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/my-schedule"
-              element={
-                <RequireRole roles={['Barber', 'Admin']}>
-                  <MySchedule />
-                </RequireRole>
-              }
-            />
-            <Route
-              path="/admin"
-              element={
-                <RequireRole roles={['Admin']}>
-                  <AdminPanel />
-                </RequireRole>
-              }
-            />
-          </Routes>
+          <AppRoutes />
         </main>
 
         <Footer />
