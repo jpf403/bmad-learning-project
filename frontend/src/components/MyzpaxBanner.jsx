@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { loadScript } from '../lib/loadScript'
-import { API_BASE_URL } from '../api/ApiConfig'
 import { logoutAccount } from '../api/AuthApi'
 
 const BANNER_SCRIPT_SRC =
@@ -58,7 +57,6 @@ export default function MyzpaxBanner() {
               await logoutAccount(accessTokenRef.current)
             }
             logoutRef.current()
-            // window.location.assign(`${API_BASE_URL}/api/auth/sso/logout`)
           },
         })
       },

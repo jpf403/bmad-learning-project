@@ -96,7 +96,7 @@ describe('MyzpaxBanner', () => {
     expect(getToken()).toBe('the-zpax-access-token')
   })
 
-  it('tears down the app session and redirects to the sso logout endpoint when onLogout fires', async () => {
+  it('tears down the app session without redirecting when onLogout fires', async () => {
     render(
       <AuthProvider>
         <SignInOnMount user={SIGNED_IN_WITH_TOKEN}>
@@ -130,9 +130,7 @@ describe('MyzpaxBanner', () => {
           'signed-out',
         ),
       )
-      expect(window.location.assign).toHaveBeenCalledWith(
-        `${API_BASE_URL}/api/auth/sso/logout`,
-      )
+      expect(window.location.assign).not.toHaveBeenCalled()
     } finally {
       window.location = originalLocation
     }
@@ -159,9 +157,7 @@ describe('MyzpaxBanner', () => {
         `${API_BASE_URL}/api/auth/logout`,
         expect.anything(),
       )
-      expect(window.location.assign).toHaveBeenCalledWith(
-        `${API_BASE_URL}/api/auth/sso/logout`,
-      )
+      expect(window.location.assign).not.toHaveBeenCalled()
     } finally {
       window.location = originalLocation
     }
@@ -190,7 +186,7 @@ describe('MyzpaxBanner', () => {
         ([url]) => url === `${API_BASE_URL}/api/auth/logout`,
       )
       expect(logoutCalls).toHaveLength(1)
-      expect(window.location.assign).toHaveBeenCalledTimes(1)
+      expect(window.location.assign).not.toHaveBeenCalled()
     } finally {
       window.location = originalLocation
     }
